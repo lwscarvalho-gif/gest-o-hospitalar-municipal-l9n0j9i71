@@ -542,7 +542,7 @@ export const ModalEmissaoImpresso: React.FC<ModalEmissaoImpressoProps> = ({
 
   return (
     <Dialog open={aberto} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[92vh] flex flex-col p-0 overflow-hidden bg-white text-slate-900">
+      <DialogContent className="max-w-4xl w-[96vw] max-h-[92vh] flex flex-col p-0 overflow-hidden bg-white text-slate-900">
         {/* Cabeçalho do Modal */}
         <DialogHeader className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 shrink-0 print:hidden">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -618,7 +618,7 @@ export const ModalEmissaoImpresso: React.FC<ModalEmissaoImpressoProps> = ({
           {modoVisualizacao === 'preview' ? (
             /* VISUALIZAÇÃO A4 LEGÍVEL */
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 print:hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 print:hidden">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-blue-700 shrink-0" />
                   <span>
@@ -629,18 +629,20 @@ export const ModalEmissaoImpresso: React.FC<ModalEmissaoImpressoProps> = ({
                 <Button
                   size="sm"
                   onClick={executarImpressaoNativa}
-                  className="bg-blue-700 hover:bg-blue-800 text-white shrink-0"
+                  className="bg-blue-700 hover:bg-blue-800 text-white shrink-0 h-8 text-xs"
                 >
                   <Printer className="w-4 h-4 mr-1.5" />
                   Imprimir A4 (Ctrl+P)
                 </Button>
               </div>
 
-              {/* Folha A4 formatada */}
-              <FolhaImpressoA4
-                impresso={impressoSalvo || objetoImpressoPreview}
-                paciente={paciente}
-              />
+              {/* Folha A4 formatada com container de rolagem horizontal em telas pequenas */}
+              <div className="w-full overflow-x-auto pb-4">
+                <FolhaImpressoA4
+                  impresso={impressoSalvo || objetoImpressoPreview}
+                  paciente={paciente}
+                />
+              </div>
             </div>
           ) : (
             /* FORMULÁRIO DE EDIÇÃO CLÍNICA */

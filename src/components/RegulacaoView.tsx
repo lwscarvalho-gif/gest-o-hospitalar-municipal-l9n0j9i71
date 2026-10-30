@@ -445,9 +445,10 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
       carregarDados()
     } catch (err: any) {
       console.error('Erro ao criar solicitação:', err)
+      const msg = err?.message || 'Verifique as informações e evite duplicidades.'
       toast({
-        title: 'Falha ao gravar solicitação',
-        description: err.message || 'Verifique as informações e evite duplicidades.',
+        title: 'Falha ao Gravar Solicitação — Dados Preservados',
+        description: `${msg}. As justificativas clínicas continuam preenchidas na tela.`,
         variant: 'destructive',
       })
     } finally {
@@ -1573,11 +1574,11 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
 
       {/* MODAL 1: NOVA SOLICITAÇÃO DE REGULAÇÃO */}
       <Dialog open={modalNovaSolicitacao} onOpenChange={setModalNovaSolicitacao}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
-              <Share2 className="w-5 h-5 text-indigo-600" />
-              Nova Solicitação de Regulação Interna
+              <Share2 className="w-5 h-5 text-indigo-600 shrink-0" />
+              <span>Nova Solicitação de Regulação Interna</span>
             </DialogTitle>
             <DialogDescription className="text-xs">
               Vincule a um paciente e atendimento real. A decisão de prioridade é estritamente do
@@ -1588,13 +1589,17 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
           <form onSubmit={handleCriarSolicitacao} className="space-y-4 pt-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <Label
+                  htmlFor="reg_tipo_solic"
+                  className="text-xs font-semibold text-slate-700 block mb-1 cursor-pointer"
+                >
                   Tipo de Solicitação *
-                </label>
+                </Label>
                 <select
+                  id="reg_tipo_solic"
                   value={formTipo}
                   onChange={(e) => setFormTipo(e.target.value as any)}
-                  className="w-full h-9 rounded-md border border-slate-200 px-3 text-xs bg-white"
+                  className="w-full h-9 rounded-md border border-slate-200 px-3 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   required
                 >
                   <option value="transferencia_interna">
@@ -1608,13 +1613,17 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <Label
+                  htmlFor="reg_paciente_id"
+                  className="text-xs font-semibold text-slate-700 block mb-1 cursor-pointer"
+                >
                   Paciente Real Cadastrado *
-                </label>
+                </Label>
                 <select
+                  id="reg_paciente_id"
                   value={formPacienteId}
                   onChange={(e) => setFormPacienteId(e.target.value)}
-                  className="w-full h-9 rounded-md border border-slate-200 px-3 text-xs bg-white"
+                  className="w-full h-9 rounded-md border border-slate-200 px-3 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   required
                 >
                   <option value="">Selecione o paciente...</option>
@@ -1732,10 +1741,14 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
             {/* Recurso Solicitado do Catálogo Parametrizado (com Soft Disable) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <Label
+                  htmlFor="reg_recurso"
+                  className="text-xs font-semibold text-slate-700 block mb-1 cursor-pointer"
+                >
                   Recurso Solicitado (Catálogo Ativo) *
-                </label>
+                </Label>
                 <select
+                  id="reg_recurso"
                   value={formRecurso}
                   onChange={(e) => setFormRecurso(e.target.value as any)}
                   className="w-full h-9 rounded-md border border-slate-200 px-3 text-xs bg-white font-medium"
@@ -1751,10 +1764,14 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <Label
+                  htmlFor="reg_prioridade"
+                  className="text-xs font-semibold text-slate-700 block mb-1 cursor-pointer"
+                >
                   Prioridade Definida pelo Profissional *
-                </label>
+                </Label>
                 <select
+                  id="reg_prioridade"
                   value={formPrioridade}
                   onChange={(e) => setFormPrioridade(e.target.value as any)}
                   className="w-full h-9 rounded-md border border-slate-200 px-3 text-xs bg-white"
@@ -1771,10 +1788,14 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
             {/* Diagnóstico e CID-10 */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-2">
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <Label
+                  htmlFor="reg_diagnostico"
+                  className="text-xs font-semibold text-slate-700 block mb-1 cursor-pointer"
+                >
                   Diagnóstico Principal / Hipótese *
-                </label>
+                </Label>
                 <Input
+                  id="reg_diagnostico"
                   placeholder="Ex: Pneumonia comunitária grave, Abdome agudo..."
                   value={formDiagnostico}
                   onChange={(e) => setFormDiagnostico(e.target.value)}
@@ -1784,10 +1805,14 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <Label
+                  htmlFor="reg_cid10"
+                  className="text-xs font-semibold text-slate-700 block mb-1 cursor-pointer"
+                >
                   CID-10 (opcional)
-                </label>
+                </Label>
                 <Input
+                  id="reg_cid10"
                   placeholder="Ex: J18.9"
                   value={formCid10}
                   onChange={(e) => setFormCid10(e.target.value)}
@@ -1798,14 +1823,19 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
 
             {/* Justificativa Clínica */}
             <div>
-              <label className="text-xs font-semibold text-slate-700 block mb-1">
+              <Label
+                htmlFor="reg_justificativa"
+                className="text-xs font-semibold text-slate-700 block mb-1 cursor-pointer"
+              >
                 Justificativa Clínica e Fundamentação Técnica *
-              </label>
+              </Label>
               <Textarea
+                id="reg_justificativa"
                 placeholder="Descreva detalhadamente o quadro clínico, indicação do recurso solicitado e critérios que fundamentam a prioridade definida..."
                 value={formJustificativa}
                 onChange={(e) => setFormJustificativa(e.target.value)}
-                className="text-xs min-h-[80px]"
+                className="text-xs min-h-[110px]"
+                rows={5}
                 required
               />
             </div>
@@ -1876,7 +1906,7 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
 
       {/* MODAL 2: AVALIAÇÃO TÉCNICA DO REGULADOR (DECISÃO HUMANA: ACEITE / NEGATIVA) */}
       <Dialog open={modalAvaliacao} onOpenChange={setModalAvaliacao}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-indigo-600" />
@@ -2031,7 +2061,7 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
 
       {/* MODAL 3: EFETIVAÇÃO DA TRANSFERÊNCIA REAL (MOVIMENTAÇÃO DE LEITOS) */}
       <Dialog open={modalEfetivacao} onOpenChange={setModalEfetivacao}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
               <ArrowRightLeft className="w-5 h-5 text-emerald-600" />
@@ -2106,7 +2136,7 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
 
       {/* MODAL 4: CANCELAMENTO */}
       <Dialog open={modalCancelamento} onOpenChange={setModalCancelamento}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
               <XCircle className="w-5 h-5 text-rose-600" />

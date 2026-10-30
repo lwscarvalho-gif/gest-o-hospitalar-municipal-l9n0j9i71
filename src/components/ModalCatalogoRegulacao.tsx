@@ -564,8 +564,14 @@ export const ModalCatalogoRegulacao: React.FC<ModalCatalogoRegulacaoProps> = ({
 
             <form onSubmit={handleSalvarRecurso} className="space-y-3 pt-2 text-xs">
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Código Único *</label>
+                <Label
+                  htmlFor="cat_codigo_recurso"
+                  className="font-semibold text-slate-700 block mb-1 cursor-pointer"
+                >
+                  Código Único *
+                </Label>
                 <Input
+                  id="cat_codigo_recurso"
                   value={codigoRecurso}
                   onChange={(e) => setCodigoRecurso(e.target.value)}
                   disabled={!!itemRecursoEdit}
@@ -576,10 +582,14 @@ export const ModalCatalogoRegulacao: React.FC<ModalCatalogoRegulacaoProps> = ({
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">
+                <Label
+                  htmlFor="cat_nome_recurso"
+                  className="font-semibold text-slate-700 block mb-1 cursor-pointer"
+                >
                   Nome de Exibição *
-                </label>
+                </Label>
                 <Input
+                  id="cat_nome_recurso"
                   value={nomeRecurso}
                   onChange={(e) => setNomeRecurso(e.target.value)}
                   className="h-8"
@@ -590,8 +600,14 @@ export const ModalCatalogoRegulacao: React.FC<ModalCatalogoRegulacaoProps> = ({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Categoria *</label>
+                  <Label
+                    htmlFor="cat_categoria_rec"
+                    className="font-semibold text-slate-700 block mb-1 cursor-pointer"
+                  >
+                    Categoria *
+                  </Label>
                   <select
+                    id="cat_categoria_rec"
                     value={categoriaRecurso}
                     onChange={(e) => setCategoriaRecurso(e.target.value as any)}
                     className="w-full h-8 rounded border border-slate-200 px-2 bg-white"
@@ -604,10 +620,14 @@ export const ModalCatalogoRegulacao: React.FC<ModalCatalogoRegulacaoProps> = ({
                 </div>
 
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">
+                  <Label
+                    htmlFor="cat_tempo_alvo"
+                    className="font-semibold text-slate-700 block mb-1 cursor-pointer"
+                  >
                     Tempo Alvo (minutos)
-                  </label>
+                  </Label>
                   <Input
+                    id="cat_tempo_alvo"
                     type="number"
                     min="1"
                     value={tempoAlvoMinutos}
@@ -618,8 +638,14 @@ export const ModalCatalogoRegulacao: React.FC<ModalCatalogoRegulacaoProps> = ({
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Descrição Técnica</label>
+                <Label
+                  htmlFor="cat_desc_recurso"
+                  className="font-semibold text-slate-700 block mb-1 cursor-pointer"
+                >
+                  Descrição Técnica
+                </Label>
                 <Input
+                  id="cat_desc_recurso"
                   value={descRecurso}
                   onChange={(e) => setDescRecurso(e.target.value)}
                   className="h-8"
@@ -676,10 +702,14 @@ export const ModalCatalogoRegulacao: React.FC<ModalCatalogoRegulacaoProps> = ({
 
             <form onSubmit={handleSalvarDestino} className="space-y-3 pt-2 text-xs">
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">
+                <Label
+                  htmlFor="cat_codigo_destino"
+                  className="font-semibold text-slate-700 block mb-1 cursor-pointer"
+                >
                   Código do Destino *
-                </label>
+                </Label>
                 <Input
+                  id="cat_codigo_destino"
                   value={codigoDestino}
                   onChange={(e) => setCodigoDestino(e.target.value)}
                   disabled={!!itemDestinoEdit}
@@ -690,8 +720,14 @@ export const ModalCatalogoRegulacao: React.FC<ModalCatalogoRegulacaoProps> = ({
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Nome do Destino *</label>
+                <Label
+                  htmlFor="cat_nome_destino"
+                  className="font-semibold text-slate-700 block mb-1 cursor-pointer"
+                >
+                  Nome do Destino *
+                </Label>
                 <Input
+                  id="cat_nome_destino"
                   value={nomeDestino}
                   onChange={(e) => setNomeDestino(e.target.value)}
                   className="h-8"
@@ -702,8 +738,14 @@ export const ModalCatalogoRegulacao: React.FC<ModalCatalogoRegulacaoProps> = ({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Tipo de Unidade</label>
+                  <Label
+                    htmlFor="cat_tipo_destino"
+                    className="font-semibold text-slate-700 block mb-1 cursor-pointer"
+                  >
+                    Tipo de Unidade
+                  </Label>
                   <select
+                    id="cat_tipo_destino"
                     value={tipoDestino}
                     onChange={(e) => setTipoDestino(e.target.value as any)}
                     className="w-full h-8 rounded border border-slate-200 px-2 bg-white"
@@ -718,10 +760,14 @@ export const ModalCatalogoRegulacao: React.FC<ModalCatalogoRegulacaoProps> = ({
                 </div>
 
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">
+                  <Label
+                    htmlFor="cat_setor_vinculado"
+                    className="font-semibold text-slate-700 block mb-1 cursor-pointer"
+                  >
                     Setor Vinculado (Opcional)
-                  </label>
+                  </Label>
                   <select
+                    id="cat_setor_vinculado"
                     value={setorVinculadoId}
                     onChange={(e) => setSetorVinculadoId(e.target.value)}
                     className="w-full h-8 rounded border border-slate-200 px-2 bg-white"
@@ -738,8 +784,14 @@ export const ModalCatalogoRegulacao: React.FC<ModalCatalogoRegulacaoProps> = ({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Bloco / Ala</label>
+                  <Label
+                    htmlFor="cat_bloco_ala"
+                    className="font-semibold text-slate-700 block mb-1 cursor-pointer"
+                  >
+                    Bloco / Ala
+                  </Label>
                   <Input
+                    id="cat_bloco_ala"
                     value={blocoAla}
                     onChange={(e) => setBlocoAla(e.target.value)}
                     className="h-8"
@@ -748,10 +800,14 @@ export const ModalCatalogoRegulacao: React.FC<ModalCatalogoRegulacaoProps> = ({
                 </div>
 
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">
+                  <Label
+                    htmlFor="cat_capacidade"
+                    className="font-semibold text-slate-700 block mb-1 cursor-pointer"
+                  >
                     Capacidade Estimada
-                  </label>
+                  </Label>
                   <Input
+                    id="cat_capacidade"
                     type="number"
                     min="1"
                     value={capacidade}

@@ -206,9 +206,11 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
       }
     } catch (err: any) {
       console.error(err)
+      const msg = err?.message || 'Falha ao salvar prescrição médica no sistema.'
+      // Preserva itens do rascunho em memória para não perder dados digitados
       toast({
-        title: 'Erro ao emitir prescrição',
-        description: err.message || 'Falha ao salvar prescrição médica no sistema.',
+        title: 'Erro ao Emitir Prescrição — Rascunho Preservado',
+        description: `${msg}. Seus medicamentos digitados permanecem na tela.`,
         variant: 'destructive',
       })
     } finally {
@@ -259,12 +261,19 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5">
           {/* Fármaco / Catálogo */}
           <div className="md:col-span-5 space-y-1">
-            <Label className="text-[11px] font-semibold text-slate-700">
+            <Label
+              htmlFor="presc_farmaco_manual"
+              className="text-[11px] font-semibold text-slate-700 cursor-pointer"
+            >
               Fármaco / Medicamento *
             </Label>
             <div className="space-y-1.5">
               <Select value={itemSelecionadoId} onValueChange={handleSelecionarItemCatalogo}>
-                <SelectTrigger className="text-xs bg-slate-50/50 h-8">
+                <SelectTrigger
+                  id="presc_item_catalogo"
+                  aria-label="Selecione medicamento do catálogo"
+                  className="text-xs bg-slate-50/50 h-8"
+                >
                   <SelectValue placeholder="Selecione do catálogo da farmácia..." />
                 </SelectTrigger>
                 <SelectContent className="max-h-56">
@@ -277,6 +286,7 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
                 </SelectContent>
               </Select>
               <Input
+                id="presc_farmaco_manual"
                 placeholder="Ou digite o nome do fármaco (ex: Dipirona, Morfina, Ondansetrona)..."
                 value={farmacoManual}
                 onChange={(e) => setFarmacoManual(e.target.value)}
@@ -287,14 +297,27 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
 
           {/* Apresentação */}
           <div className="md:col-span-3 space-y-1">
-            <Label className="text-[11px] font-semibold text-slate-700">Apresentação *</Label>
+            <Label
+              htmlFor="presc_apresentacao"
+              className="text-[11px] font-semibold text-slate-700 cursor-pointer"
+            >
+              Apresentação *
+            </Label>
             <Input
+              id="presc_apresentacao"
               placeholder="Ex: Ampola 500mg/mL, Frasco 100mL..."
               value={apresentacao}
               onChange={(e) => setApresentacao(e.target.value)}
               className="text-xs h-8"
             />
+            <Label
+              htmlFor="presc_dose"
+              className="text-[11px] font-semibold text-slate-700 cursor-pointer pt-0.5 block"
+            >
+              Dose *
+            </Label>
             <Input
+              id="presc_dose"
               placeholder="Dose exata (ex: 1g, 4mg, 10 gotas)..."
               value={dose}
               onChange={(e) => setDose(e.target.value)}
@@ -304,14 +327,21 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
 
           {/* Via de Administração */}
           <div className="md:col-span-4 space-y-1">
-            <Label className="text-[11px] font-semibold text-slate-700">
+            <Label
+              htmlFor="presc_via"
+              className="text-[11px] font-semibold text-slate-700 cursor-pointer"
+            >
               Via de Administração *
             </Label>
             <Select
               value={viaAdministracao}
               onValueChange={(v) => setViaAdministracao(v as ViaAdministracaoMedicamento)}
             >
-              <SelectTrigger className="text-xs h-8 bg-slate-50/50">
+              <SelectTrigger
+                id="presc_via"
+                aria-label="Selecione a via de administração"
+                className="text-xs h-8 bg-slate-50/50"
+              >
                 <SelectValue placeholder="Selecione a via" />
               </SelectTrigger>
               <SelectContent>
@@ -323,10 +353,14 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
               </SelectContent>
             </Select>
 
-            <Label className="text-[11px] font-semibold text-slate-700 pt-1 block">
+            <Label
+              htmlFor="presc_posologia"
+              className="text-[11px] font-semibold text-slate-700 pt-1 block cursor-pointer"
+            >
               Posologia & Frequência *
             </Label>
             <Input
+              id="presc_posologia"
               placeholder="Ex: Fazer agora em bolus; Em SF 0.9% 100mL..."
               value={posologia}
               onChange={(e) => setPosologia(e.target.value)}
@@ -338,10 +372,14 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
         {/* Orientações adicionais + botão de adicionar item */}
         <div className="flex flex-col sm:flex-row items-end gap-2 pt-1 border-t border-slate-100">
           <div className="flex-1 w-full space-y-1">
-            <Label className="text-[11px] text-slate-500">
+            <Label
+              htmlFor="presc_orientacoes_enf"
+              className="text-[11px] text-slate-500 cursor-pointer"
+            >
               Orientações Específicas p/ Enfermagem (Opcional)
             </Label>
             <Input
+              id="presc_orientacoes_enf"
               placeholder="Ex: Diluir em 100mL de SF, infundir em 20 minutos, monitorar PA..."
               value={orientacoes}
               onChange={(e) => setOrientacoes(e.target.value)}
@@ -423,10 +461,14 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
           </div>
 
           <div className="space-y-1">
-            <Label className="text-[11px] font-semibold text-slate-700">
+            <Label
+              htmlFor="presc_obs_gerais"
+              className="text-[11px] font-semibold text-slate-700 cursor-pointer"
+            >
               Observações Gerais da Prescrição (Opcional)
             </Label>
             <Input
+              id="presc_obs_gerais"
               placeholder="Ex: Medicação imediata na sala de medicação / repouso do PA..."
               value={obsGerais}
               onChange={(e) => setObsGerais(e.target.value)}

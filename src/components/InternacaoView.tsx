@@ -189,9 +189,11 @@ export const InternacaoView: React.FC<{
       setModalAdmissaoAberto(false)
       carregarTudo()
     } catch (err: any) {
+      const msg = err?.message || 'Falha ao admitir paciente.'
+      // Preservação do formulário: os campos permanecem preenchidos para nova tentativa
       toast({
-        title: 'Erro',
-        description: err.message || 'Falha ao admitir paciente.',
+        title: 'Erro na Admissão — Dados Preservados',
+        description: `${msg}. Suas anotações clínicas foram preservadas na tela.`,
         variant: 'destructive',
       })
     } finally {
@@ -745,7 +747,7 @@ export const InternacaoView: React.FC<{
 
       {/* MODAL ADMISSÃO */}
       <Dialog open={modalAdmissaoAberto} onOpenChange={setModalAdmissaoAberto}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Admissão Hospitalar de Paciente</DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
@@ -755,9 +757,11 @@ export const InternacaoView: React.FC<{
 
           <form onSubmit={handleExecutarAdmissao} className="space-y-3 pt-2">
             <div className="space-y-1">
-              <Label className="text-xs">Paciente (SUS) *</Label>
+              <Label htmlFor="adm_paciente" className="text-xs cursor-pointer">
+                Paciente (SUS) *
+              </Label>
               <Select value={formAdmPaciente} onValueChange={setFormAdmPaciente}>
-                <SelectTrigger className="text-sm">
+                <SelectTrigger id="adm_paciente" className="text-sm">
                   <SelectValue placeholder="Selecione o paciente" />
                 </SelectTrigger>
                 <SelectContent className="max-h-56">
@@ -797,9 +801,11 @@ export const InternacaoView: React.FC<{
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Leito Vago *</Label>
+                <Label htmlFor="adm_leito" className="text-xs cursor-pointer">
+                  Leito Vago *
+                </Label>
                 <Select value={formAdmLeito} onValueChange={setFormAdmLeito}>
-                  <SelectTrigger className="text-sm">
+                  <SelectTrigger id="adm_leito" className="text-sm">
                     <SelectValue placeholder="Selecione o leito" />
                   </SelectTrigger>
                   <SelectContent>
@@ -815,9 +821,11 @@ export const InternacaoView: React.FC<{
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs">Médico Responsável</Label>
+                <Label htmlFor="adm_medico" className="text-xs cursor-pointer">
+                  Médico Responsável
+                </Label>
                 <Select value={formAdmMedico} onValueChange={setFormAdmMedico}>
-                  <SelectTrigger className="text-sm">
+                  <SelectTrigger id="adm_medico" className="text-sm">
                     <SelectValue placeholder="Médico do plantão" />
                   </SelectTrigger>
                   <SelectContent>
@@ -834,8 +842,11 @@ export const InternacaoView: React.FC<{
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">Motivo da Admissão *</Label>
+              <Label htmlFor="adm_motivo" className="text-xs cursor-pointer">
+                Motivo da Admissão *
+              </Label>
               <Input
+                id="adm_motivo"
                 required
                 placeholder="Ex: Crise asmática grave, pneumonia bacteriana, pós-operatório..."
                 value={formAdmMotivo}
@@ -846,8 +857,11 @@ export const InternacaoView: React.FC<{
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-2 space-y-1">
-                <Label className="text-xs">Diagnóstico Inicial</Label>
+                <Label htmlFor="adm_diagnostico" className="text-xs cursor-pointer">
+                  Diagnóstico Inicial
+                </Label>
                 <Input
+                  id="adm_diagnostico"
                   placeholder="Hipótese clínica principal"
                   value={formAdmDiag}
                   onChange={(e) => setFormAdmDiag(e.target.value)}
@@ -856,8 +870,11 @@ export const InternacaoView: React.FC<{
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs">CID-10</Label>
+                <Label htmlFor="adm_cid" className="text-xs cursor-pointer">
+                  CID-10
+                </Label>
                 <Input
+                  id="adm_cid"
                   placeholder="Ex: J18.9, I10"
                   value={formAdmCid}
                   onChange={(e) => setFormAdmCid(e.target.value)}

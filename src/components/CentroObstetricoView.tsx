@@ -399,9 +399,11 @@ export const CentroObstetricoView: React.FC<CentroObstetricoViewProps> = ({ onNa
       carregarDados()
     } catch (err: any) {
       console.error('Erro ao salvar admissão obstétrica:', err)
+      const msg = err?.message || 'Verifique os dados informados.'
+      // Preservação do texto: não limpa os campos para evitar perda do registro clínico
       toast({
-        title: 'Erro ao registrar admissão',
-        description: err.message || 'Verifique os dados informados.',
+        title: 'Falha na Admissão Obstétrica — Registro Preservado',
+        description: `${msg}. Seus dados digitados permanecem na tela.`,
         variant: 'destructive',
       })
     } finally {
@@ -451,9 +453,10 @@ export const CentroObstetricoView: React.FC<CentroObstetricoViewProps> = ({ onNa
       carregarDados()
     } catch (err: any) {
       console.error('Erro ao registrar evolução de parto:', err)
+      const msg = err?.message || 'Falha ao registrar evolução.'
       toast({
-        title: 'Erro ao registrar evolução',
-        description: err.message,
+        title: 'Erro ao Registrar Evolução — Texto Preservado',
+        description: `${msg}. Suas anotações do trabalho de parto permanecem na tela.`,
         variant: 'destructive',
       })
     } finally {
@@ -501,9 +504,10 @@ export const CentroObstetricoView: React.FC<CentroObstetricoViewProps> = ({ onNa
       abrirModalRNParaParto(partoCriado)
     } catch (err: any) {
       console.error('Erro ao registrar parto:', err)
+      const msg = err?.message || 'Falha ao registrar parto.'
       toast({
-        title: 'Erro ao registrar parto',
-        description: err.message,
+        title: 'Erro ao Registrar Parto — Registro Preservado',
+        description: `${msg}. Os dados clínicos do parto permanecem na tela.`,
         variant: 'destructive',
       })
     } finally {
@@ -557,9 +561,10 @@ export const CentroObstetricoView: React.FC<CentroObstetricoViewProps> = ({ onNa
       carregarDados()
     } catch (err: any) {
       console.error('Erro ao cadastrar recém-nascido:', err)
+      const msg = err?.message || 'Falha ao cadastrar RN.'
       toast({
-        title: 'Erro ao registrar RN',
-        description: err.message,
+        title: 'Erro ao Registrar RN — Dados Preservados',
+        description: `${msg}. Os dados biométricos permanecem na tela para correção.`,
         variant: 'destructive',
       })
     } finally {
@@ -1486,13 +1491,17 @@ export const CentroObstetricoView: React.FC<CentroObstetricoViewProps> = ({ onNa
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-700 block mb-1">
-                Observações Adicionais da Equipe
-              </label>
+              <Label
+                htmlFor="obs_admissao_obs"
+                className="text-xs font-semibold text-slate-700 block mb-1 cursor-pointer"
+              >
+                Observações Adicionais da Equipe & Conduta Inicial
+              </Label>
               <Textarea
-                placeholder="Conduta inicial, orientações fornecidas, acompanhante presente..."
-                rows={2}
-                className="text-xs resize-none"
+                id="obs_admissao_obs"
+                placeholder="Conduta inicial, orientações fornecidas, acompanhante presente, plano de parto..."
+                rows={4}
+                className="text-xs min-h-[90px]"
                 value={admObs}
                 onChange={(e) => setAdmObs(e.target.value)}
               />

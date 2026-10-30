@@ -28,7 +28,7 @@ export const FolhaImpressoA4: React.FC<FolhaImpressoA4Props> = ({ impresso, paci
   }[tipo]
 
   return (
-    <div className="impresso-a4-documento bg-white text-slate-900 font-sans p-8 sm:p-12 max-w-[210mm] min-h-[297mm] mx-auto border border-slate-300 shadow-sm flex flex-col justify-between print:border-0 print:p-0 print:shadow-none print:max-w-none print:min-h-0">
+    <div className="impresso-a4-documento bg-white text-slate-900 font-sans p-4 sm:p-10 md:p-12 w-full max-w-[210mm] min-h-[297mm] mx-auto border border-slate-300 shadow-sm flex flex-col justify-between overflow-x-auto print:border-0 print:p-0 print:shadow-none print:max-w-none print:min-h-0 print:overflow-visible">
       {/* 1. CABEÇALHO OFICIAL DO MUNICÍPIO / UNIDADE */}
       <div>
         <div className="border-b-2 border-slate-800 pb-4 mb-6">

@@ -126,6 +126,8 @@ export const ProntoAtendimentoView: React.FC<{
   const [cid10Atend, setCid10Atend] = useState('')
   const [condutaAtend, setCondutaAtend] = useState<CondutaPA>('alta')
   const [obsCondutaAtend, setObsCondutaAtend] = useState('')
+  const [erroAtendimento, setErroAtendimento] = useState<string | null>(null)
+  const [erroCarregamento, setErroCarregamento] = useState<string | null>(null)
 
   // Conduta Extra: Internação
   const [leitoInternacaoId, setLeitoInternacaoId] = useState('')
@@ -149,6 +151,7 @@ export const ProntoAtendimentoView: React.FC<{
 
   const carregarDados = async () => {
     setLoading(true)
+    setErroCarregamento(null)
     try {
       const [ats, pacs, profs, lts, sts] = await Promise.all([
         listarAtendimentosPA(),
@@ -162,11 +165,13 @@ export const ProntoAtendimentoView: React.FC<{
       setProfissionais(profs)
       setLeitos(lts)
       setSetores(sts)
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
+      const msg = err?.message || 'Falha ao carregar dados do Pronto Atendimento.'
+      setErroCarregamento(msg)
       toast({
-        title: 'Erro',
-        description: 'Falha ao carregar dados do Pronto Atendimento.',
+        title: 'Erro de Carregamento',
+        description: msg,
         variant: 'destructive',
       })
     } finally {
@@ -336,6 +341,7 @@ export const ProntoAtendimentoView: React.FC<{
   // 3. Iniciar / Abrir Atendimento Médico
   const abrirAtendimento = async (ficha: FichaProntoAtendimento) => {
     setFichaEmFoco(ficha)
+    setErroAtendimento(null)
     setEvolucaoAtend(ficha.evolucao_clinica || '')
     setDiagnosticoAtend(ficha.diagnostico || '')
     setCid10Atend(ficha.cid10 || '')
@@ -401,6 +407,7 @@ export const ProntoAtendimentoView: React.FC<{
 
     if (processando) return
     setProcessando(true)
+    setErroAtendimento(null)
     try {
       const profId =
         profissionais.find((p) => p.email === user?.email)?.id ||
@@ -440,12 +447,18 @@ export const ProntoAtendimentoView: React.FC<{
         description: descToast,
       })
 
+      setErroAtendimento(null)
       setModalAtendimentoAberto(false)
       carregarDados()
     } catch (err: any) {
+      const msg = err?.message || 'Falha ao registrar conduta no sistema.'
+      // Preservação do texto: o modal permanece aberto e o estado do formulário NÃO é resetado
+      setErroAtendimento(
+        `A gravação falhou: ${msg}. Seu texto digitado foi preservado na tela para que não haja perda do registro clínico. Verifique e tente novamente.`,
+      )
       toast({
-        title: 'Erro ao Finalizar Atendimento',
-        description: err.message || 'Falha ao processar conduta.',
+        title: 'Falha na Gravação — Texto Preservado',
+        description: msg,
         variant: 'destructive',
       })
     } finally {
@@ -542,16 +555,51 @@ export const ProntoAtendimentoView: React.FC<{
           </p>
         </div>
 
-        {podeFazerTriagem && (
+        <div className="flex items-center gap-2">
           <Button
-            onClick={abrirNovaEntrada}
-            className="bg-red-600 hover:bg-red-500 text-white text-xs sm:text-sm shadow-sm"
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={carregarDados}
+            disabled={loading}
+            className="text-xs gap-1.5 h-9"
           >
-            <UserPlus className="w-4 h-4 mr-2" />
-            Nova Entrada no PA
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Atualizar</span>
           </Button>
-        )}
+          {podeFazerTriagem && (
+            <Button
+              onClick={abrirNovaEntrada}
+              className="bg-red-600 hover:bg-red-500 text-white text-xs sm:text-sm shadow-sm h-9"
+            >
+              <UserPlus className="w-4 h-4 mr-2" />
+              Nova Entrada no PA
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Alerta de Falha de Carregamento */}
+      {erroCarregamento && (
+        <div
+          role="alert"
+          className="p-3.5 rounded-lg border border-red-300 bg-red-50 text-red-900 text-xs flex items-center justify-between gap-3 shadow-sm"
+        >
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{erroCarregamento}</span>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={carregarDados}
+            className="h-7 text-xs bg-white text-red-700 border-red-300 hover:bg-red-100"
+          >
+            Tentar Novamente
+          </Button>
+        </div>
+      )}
 
       {/* Cartões de Indicadores Rápidos */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -606,7 +654,19 @@ export const ProntoAtendimentoView: React.FC<{
 
         {/* TAB 1: FILA DINÂMICA DE PRONTO ATENDIMENTO */}
         <TabsContent value="fila" className="space-y-4 pt-2">
-          {filaAtiva.length === 0 ? (
+          {loading ? (
+            <Card className="border-slate-200 text-center py-12">
+              <CardContent className="space-y-2">
+                <RefreshCw className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
+                <p className="text-sm font-semibold text-slate-700">
+                  Carregando fila de pronto atendimento...
+                </p>
+                <p className="text-xs text-slate-400">
+                  Consultando triagens e atendimentos médicos ativos
+                </p>
+              </CardContent>
+            </Card>
+          ) : filaAtiva.length === 0 ? (
             <Card className="border-slate-200 text-center py-12">
               <CardContent className="space-y-2">
                 <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
@@ -888,8 +948,11 @@ export const ProntoAtendimentoView: React.FC<{
 
           <form onSubmit={handleSalvarEntrada} className="space-y-4 pt-2">
             <div className="space-y-1.5">
-              <Label className="text-xs">Buscar Paciente (Nome ou Cartão SUS)</Label>
+              <Label htmlFor="pa_busca_paciente" className="text-xs cursor-pointer">
+                Buscar Paciente (Nome ou Cartão SUS)
+              </Label>
               <Input
+                id="pa_busca_paciente"
                 placeholder="Digite para filtrar..."
                 value={buscaPacienteEntrada}
                 onChange={(e) => setBuscaPacienteEntrada(e.target.value)}
@@ -898,9 +961,11 @@ export const ProntoAtendimentoView: React.FC<{
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Paciente Selecionado *</Label>
+              <Label htmlFor="pa_paciente_selecionado" className="text-xs cursor-pointer">
+                Paciente Selecionado *
+              </Label>
               <Select value={pacienteSelecionadoId} onValueChange={setPacienteSelecionadoId}>
-                <SelectTrigger className="text-xs">
+                <SelectTrigger id="pa_paciente_selecionado" className="text-xs">
                   <SelectValue placeholder="Selecione o paciente" />
                 </SelectTrigger>
                 <SelectContent className="max-h-56">
@@ -914,12 +979,15 @@ export const ProntoAtendimentoView: React.FC<{
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Queixa Relatada na Recepção</Label>
+              <Label htmlFor="pa_queixa_entrada" className="text-xs cursor-pointer">
+                Queixa Relatada na Recepção
+              </Label>
               <Textarea
+                id="pa_queixa_entrada"
                 placeholder="Ex: Cefaleia intensa, dor no peito, febre..."
                 value={queixaEntrada}
                 onChange={(e) => setQueixaEntrada(e.target.value)}
-                className="text-xs"
+                className="text-xs min-h-[70px]"
                 rows={3}
               />
             </div>
@@ -1038,20 +1106,26 @@ export const ProntoAtendimentoView: React.FC<{
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Queixa Principal / Histórico do Episódio *</Label>
+              <Label htmlFor="triagem_queixa" className="text-xs cursor-pointer">
+                Queixa Principal / Histórico do Episódio *
+              </Label>
               <Textarea
+                id="triagem_queixa"
                 placeholder="Descreva a queixa com detalhamento clínico..."
                 value={queixaTriagem}
                 onChange={(e) => setQueixaTriagem(e.target.value)}
-                className="text-xs"
+                className="text-xs min-h-[60px]"
                 rows={2}
                 required
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Discriminador do Protocolo</Label>
+              <Label htmlFor="triagem_discriminador" className="text-xs cursor-pointer">
+                Discriminador do Protocolo
+              </Label>
               <Input
+                id="triagem_discriminador"
                 placeholder="Ex: Dor torácica opressiva, dispneia intensa, convulsão recente..."
                 value={discriminadorTriagem}
                 onChange={(e) => setDiscriminadorTriagem(e.target.value)}
@@ -1061,11 +1135,19 @@ export const ProntoAtendimentoView: React.FC<{
 
             {/* Sinais Vitais Iniciais */}
             <div className="border border-slate-200 p-3 rounded-lg bg-slate-50 space-y-2">
-              <Label className="text-xs font-semibold text-slate-700">Sinais Vitais Iniciais</Label>
+              <span className="text-xs font-semibold text-slate-700 block">
+                Sinais Vitais Iniciais
+              </span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div>
-                  <span className="text-[11px] text-slate-500">PA (mmHg)</span>
+                  <Label
+                    htmlFor="triagem_pa"
+                    className="text-[11px] text-slate-500 cursor-pointer block mb-0.5"
+                  >
+                    PA (mmHg)
+                  </Label>
                   <Input
+                    id="triagem_pa"
                     value={paTriagem}
                     onChange={(e) => setPaTriagem(e.target.value)}
                     placeholder="120/80"
@@ -1073,8 +1155,14 @@ export const ProntoAtendimentoView: React.FC<{
                   />
                 </div>
                 <div>
-                  <span className="text-[11px] text-slate-500">FC (bpm)</span>
+                  <Label
+                    htmlFor="triagem_fc"
+                    className="text-[11px] text-slate-500 cursor-pointer block mb-0.5"
+                  >
+                    FC (bpm)
+                  </Label>
                   <Input
+                    id="triagem_fc"
                     value={fcTriagem}
                     onChange={(e) => setFcTriagem(e.target.value)}
                     placeholder="78"
@@ -1082,8 +1170,14 @@ export const ProntoAtendimentoView: React.FC<{
                   />
                 </div>
                 <div>
-                  <span className="text-[11px] text-slate-500">Temperatura (°C)</span>
+                  <Label
+                    htmlFor="triagem_temp"
+                    className="text-[11px] text-slate-500 cursor-pointer block mb-0.5"
+                  >
+                    Temperatura (°C)
+                  </Label>
                   <Input
+                    id="triagem_temp"
                     value={tempTriagem}
                     onChange={(e) => setTempTriagem(e.target.value)}
                     placeholder="36.5"
@@ -1091,8 +1185,14 @@ export const ProntoAtendimentoView: React.FC<{
                   />
                 </div>
                 <div>
-                  <span className="text-[11px] text-slate-500">SatO2 (%)</span>
+                  <Label
+                    htmlFor="triagem_sato2"
+                    className="text-[11px] text-slate-500 cursor-pointer block mb-0.5"
+                  >
+                    SatO2 (%)
+                  </Label>
                   <Input
+                    id="triagem_sato2"
                     value={sato2Triagem}
                     onChange={(e) => setSato2Triagem(e.target.value)}
                     placeholder="98"
@@ -1129,16 +1229,16 @@ export const ProntoAtendimentoView: React.FC<{
         <DialogContent
           className={`transition-all duration-200 overflow-y-auto ${
             modalAtendimentoMaximizado
-              ? 'max-w-[98vw] w-[98vw] h-[96vh] max-h-[96vh]'
-              : 'max-w-4xl w-[95vw] max-h-[92vh]'
+              ? 'max-w-[98vw] w-[98vw] h-[96vh] max-h-[96vh] p-4 sm:p-6'
+              : 'max-w-4xl w-[95vw] max-h-[92vh] p-4 sm:p-6'
           }`}
         >
           <DialogHeader className="border-b border-slate-100 pb-2.5">
-            <div className="flex items-center justify-between gap-2 pr-6">
-              <div className="space-y-0.5">
-                <DialogTitle className="flex items-center gap-2 text-base text-slate-900 font-bold">
-                  <Stethoscope className="w-5 h-5 text-emerald-600" />
-                  Atendimento Médico / Registro de Conduta do PA
+            <div className="flex items-start sm:items-center justify-between gap-2 pr-6">
+              <div className="space-y-0.5 min-w-0">
+                <DialogTitle className="flex items-center gap-2 text-base text-slate-900 font-bold truncate">
+                  <Stethoscope className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <span>Atendimento Médico / Conduta do PA</span>
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-600">
                   Paciente:{' '}
@@ -1161,7 +1261,7 @@ export const ProntoAtendimentoView: React.FC<{
                 title={
                   modalAtendimentoMaximizado ? 'Restaurar tamanho' : 'Maximizar janela (tela cheia)'
                 }
-                className="h-8 px-2.5 text-xs text-slate-700 hover:bg-slate-100 shrink-0 gap-1.5"
+                className="h-8 px-2.5 text-xs text-slate-700 hover:bg-slate-100 shrink-0 gap-1.5 focus-visible:ring-2 focus-visible:ring-emerald-600"
               >
                 {modalAtendimentoMaximizado ? (
                   <>
@@ -1178,12 +1278,27 @@ export const ProntoAtendimentoView: React.FC<{
             </div>
           </DialogHeader>
 
+          {/* Mensagem em caso de erro na gravação: texto preservado */}
+          {erroAtendimento && (
+            <div
+              role="alert"
+              aria-live="assertive"
+              className="p-3 rounded-lg border-2 border-amber-400 bg-amber-50 text-amber-950 text-xs flex items-start gap-2.5 shadow-sm"
+            >
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-0.5 flex-1">
+                <strong className="font-bold block">Atenção Médica:</strong>
+                <span>{erroAtendimento}</span>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSalvarAtendimento} className="space-y-4 pt-2">
             {/* Botão de Solicitação de Exame no Atendimento do PA */}
-            <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50/70 border border-blue-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-blue-50/70 border border-blue-200 gap-2">
               <div className="space-y-0.5">
                 <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
-                  <FlaskConical className="w-4 h-4 text-blue-600" />
+                  <FlaskConical className="w-4 h-4 text-blue-600 shrink-0" />
                   Necessita de Exames Complementares (Urgência)?
                 </span>
                 <p className="text-[11px] text-blue-700">
@@ -1191,7 +1306,7 @@ export const ProntoAtendimentoView: React.FC<{
                   médica
                 </p>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                 <Button
                   type="button"
                   variant="outline"
@@ -1267,9 +1382,12 @@ export const ProntoAtendimentoView: React.FC<{
 
             {/* ÁREA AMPLA: EVOLUÇÃO CLÍNICA MÉDICA */}
             <div className="space-y-1.5 rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                  <Stethoscope className="w-4 h-4 text-emerald-600" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <Label
+                  htmlFor="pa_evolucao_clinica"
+                  className="text-xs font-bold text-slate-900 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Stethoscope className="w-4 h-4 text-emerald-600 shrink-0" />
                   Evolução Clínica Médica (Anamnese & Exame Físico) *
                 </Label>
                 <span className="text-[11px] text-slate-500">
@@ -1277,19 +1395,26 @@ export const ProntoAtendimentoView: React.FC<{
                 </span>
               </div>
               <Textarea
+                id="pa_evolucao_clinica"
                 placeholder="Descreva a anamnese completa, história pregressa, exame físico detalhado (GCS, pupilas, ausculta cardiopulmonar, abdome, extremidades), hipóteses diagnósticas e justificativas clínicas..."
                 value={evolucaoAtend}
                 onChange={(e) => setEvolucaoAtend(e.target.value)}
-                className="text-xs font-mono leading-relaxed"
-                rows={modalAtendimentoMaximizado ? 10 : 7}
+                className="text-xs font-mono leading-relaxed min-h-[160px]"
+                rows={modalAtendimentoMaximizado ? 14 : 9}
                 required
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Diagnóstico Principal *</Label>
+                <Label
+                  htmlFor="pa_diagnostico_principal"
+                  className="text-xs font-semibold cursor-pointer"
+                >
+                  Diagnóstico Principal *
+                </Label>
                 <Input
+                  id="pa_diagnostico_principal"
                   placeholder="Ex: Crise Hipertensiva, Amigdalite Aguda, IAM sem supra..."
                   value={diagnosticoAtend}
                   onChange={(e) => setDiagnosticoAtend(e.target.value)}
@@ -1299,8 +1424,11 @@ export const ProntoAtendimentoView: React.FC<{
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs">Código CID-10 (opcional)</Label>
+                <Label htmlFor="pa_cid10" className="text-xs cursor-pointer">
+                  Código CID-10 (opcional)
+                </Label>
                 <Input
+                  id="pa_cid10"
                   placeholder="Ex: I10, J03.9, K29.7, I21..."
                   value={cid10Atend}
                   onChange={(e) => setCid10Atend(e.target.value)}
@@ -1320,9 +1448,12 @@ export const ProntoAtendimentoView: React.FC<{
 
             {/* SEÇÃO PRÓPRIA DE CONDUTA MÉDICA */}
             <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                <Label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                  <Activity className="w-4 h-4 text-blue-600" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-2 gap-1">
+                <Label
+                  htmlFor="pa_obs_conduta"
+                  className="text-xs font-bold text-slate-900 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Activity className="w-4 h-4 text-blue-600 shrink-0" />
                   Conduta Médica & Plano Terapêutico
                 </Label>
                 <span className="text-[11px] text-slate-500">
@@ -1331,15 +1462,19 @@ export const ProntoAtendimentoView: React.FC<{
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-700">
+                <Label
+                  htmlFor="pa_obs_conduta"
+                  className="text-xs font-semibold text-slate-700 cursor-pointer"
+                >
                   Descrição Detalhada da Conduta Médica Realizada / Planejada *
                 </Label>
                 <Textarea
+                  id="pa_obs_conduta"
                   placeholder="Descreva as condutas médicas: hidratação venosa, oxigenoterapia, monitorização contínua, nebulização, repouso sob observação, pedidos de reavaliação após medicação..."
                   value={obsCondutaAtend}
                   onChange={(e) => setObsCondutaAtend(e.target.value)}
-                  className="text-xs"
-                  rows={modalAtendimentoMaximizado ? 5 : 3}
+                  className="text-xs min-h-[100px]"
+                  rows={modalAtendimentoMaximizado ? 7 : 4}
                   required
                 />
               </div>

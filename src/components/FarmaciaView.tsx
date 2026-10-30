@@ -110,9 +110,12 @@ export const FarmaciaView: React.FC = () => {
   const [dispObservacoes, setDispObservacoes] = useState('')
   const [salvandoDispensacao, setSalvandoDispensacao] = useState(false)
   const [fluxoIdempotencyKey, setFluxoIdempotencyKey] = useState('')
+  const [erroDispensacao, setErroDispensacao] = useState<string | null>(null)
+  const [erroCarregamento, setErroCarregamento] = useState<string | null>(null)
 
   const carregarDados = async () => {
     setLoading(true)
+    setErroCarregamento(null)
     try {
       const [itensData, pacData, dispData, prescsData] = await Promise.all([
         listarItensFarmacia(),
@@ -124,11 +127,13 @@ export const FarmaciaView: React.FC = () => {
       setPacientes(pacData)
       setDispensacoes(dispData)
       setPrescricoesAtivas(prescsData)
-    } catch (e) {
+    } catch (e: any) {
       console.error(e)
+      const msg = e?.message || 'Tente recarregar a página.'
+      setErroCarregamento(`Não foi possível carregar os dados da farmácia: ${msg}`)
       toast({
         title: 'Erro ao carregar dados da farmácia',
-        description: 'Tente recarregar a página.',
+        description: msg,
         variant: 'destructive',
       })
     } finally {
@@ -260,6 +265,7 @@ export const FarmaciaView: React.FC = () => {
 
     if (salvandoDispensacao) return
     setSalvandoDispensacao(true)
+    setErroDispensacao(null)
     try {
       const keyToUse =
         fluxoIdempotencyKey || `disp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
@@ -295,13 +301,19 @@ export const FarmaciaView: React.FC = () => {
           description: `Baixa automática de ${qtd} unidade(s) efetuada no estoque.`,
         })
       }
+      setErroDispensacao(null)
       setModalDispensacaoAberto(false)
       setFluxoIdempotencyKey('')
       await carregarDados()
     } catch (err: any) {
+      const msg = err?.message || 'Não foi possível concluir a saída de estoque.'
+      // Preservação do texto: modal e inputs mantidos em memória
+      setErroDispensacao(
+        `Erro na dispensação: ${msg}. Os dados informados foram preservados na tela.`,
+      )
       toast({
-        title: 'Falha na dispensação',
-        description: err.message || 'Não foi possível concluir a saída de estoque.',
+        title: 'Falha na Dispensação — Dados Preservados',
+        description: msg,
         variant: 'destructive',
       })
     } finally {
@@ -534,10 +546,14 @@ export const FarmaciaView: React.FC = () => {
                   {/* CASO CONTRA PRESCRIÇÃO: SELEÇÃO DA PRESCRIÇÃO ATIVA */}
                   {modoDispensacao === 'prescricao' && (
                     <div className="space-y-1">
-                      <Label className="text-xs text-purple-900 font-bold">
+                      <Label
+                        htmlFor="farm_prescricao_ativa"
+                        className="text-xs text-purple-900 font-bold cursor-pointer"
+                      >
                         Prescrição Médica Ativa (PA ou Internação) *
                       </Label>
                       <select
+                        id="farm_prescricao_ativa"
                         className="w-full mt-1 px-3 py-2 text-xs border border-purple-300 rounded-md bg-purple-50/50 focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium text-purple-950"
                         value={prescricaoSelecionadaId}
                         onChange={(e) => {
@@ -591,10 +607,14 @@ export const FarmaciaView: React.FC = () => {
                   )}
 
                   <div>
-                    <Label className="text-xs text-slate-700 font-medium">
+                    <Label
+                      htmlFor="farm_paciente_recebedor"
+                      className="text-xs text-slate-700 font-medium cursor-pointer"
+                    >
                       Paciente Recebedor *
                     </Label>
                     <select
+                      id="farm_paciente_recebedor"
                       className="w-full mt-1 px-3 py-2 text-xs border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                       value={dispPacienteId}
                       onChange={(e) => setDispPacienteId(e.target.value)}
@@ -623,10 +643,14 @@ export const FarmaciaView: React.FC = () => {
                   </div>
 
                   <div>
-                    <Label className="text-xs text-slate-700 font-medium">
+                    <Label
+                      htmlFor="farm_item_dispensar"
+                      className="text-xs text-slate-700 font-medium cursor-pointer"
+                    >
                       Item Farmacêutico *
                     </Label>
                     <select
+                      id="farm_item_dispensar"
                       className="w-full mt-1 px-3 py-2 text-xs border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                       value={dispItemId}
                       onChange={(e) => setDispItemId(e.target.value)}
@@ -674,8 +698,14 @@ export const FarmaciaView: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <Label className="text-xs text-slate-700 font-medium">Quantidade *</Label>
+                      <Label
+                        htmlFor="farm_quantidade_disp"
+                        className="text-xs text-slate-700 font-medium cursor-pointer"
+                      >
+                        Quantidade *
+                      </Label>
                       <Input
+                        id="farm_quantidade_disp"
                         type="number"
                         min="1"
                         max={itemSelecionadoParaDisp?.estoque_atual || 9999}
@@ -686,8 +716,14 @@ export const FarmaciaView: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <Label className="text-xs text-slate-700 font-medium">Tipo Movimento</Label>
+                      <Label
+                        htmlFor="farm_tipo_movimento"
+                        className="text-xs text-slate-700 font-medium cursor-pointer"
+                      >
+                        Tipo Movimento
+                      </Label>
                       <select
+                        id="farm_tipo_movimento"
                         className="w-full mt-1 h-8 px-2 text-xs border border-slate-300 rounded-md bg-white"
                         value={dispTipoMovimento}
                         onChange={(e) => setDispTipoMovimento(e.target.value as any)}
@@ -700,8 +736,14 @@ export const FarmaciaView: React.FC = () => {
 
                   {dispTipoMovimento === 'remessa_setor' && (
                     <div>
-                      <Label className="text-xs text-slate-700 font-medium">Setor Destino</Label>
+                      <Label
+                        htmlFor="farm_setor_destino"
+                        className="text-xs text-slate-700 font-medium cursor-pointer"
+                      >
+                        Setor Destino
+                      </Label>
                       <Input
+                        id="farm_setor_destino"
                         placeholder="Ex: Pronto Atendimento / Enfermaria B"
                         value={dispSetorDestino}
                         onChange={(e) => setDispSetorDestino(e.target.value)}
@@ -711,10 +753,14 @@ export const FarmaciaView: React.FC = () => {
                   )}
 
                   <div>
-                    <Label className="text-xs text-slate-700 font-medium">
+                    <Label
+                      htmlFor="farm_prescricao_origem"
+                      className="text-xs text-slate-700 font-medium cursor-pointer"
+                    >
                       Prescrição / Origem
                     </Label>
                     <Input
+                      id="farm_prescricao_origem"
                       placeholder="Ex: Dr. Paulo - Receita PA nº 882"
                       value={dispPrescricao}
                       onChange={(e) => setDispPrescricao(e.target.value)}
@@ -723,10 +769,14 @@ export const FarmaciaView: React.FC = () => {
                   </div>
 
                   <div>
-                    <Label className="text-xs text-slate-700 font-medium">
+                    <Label
+                      htmlFor="farm_disp_obs"
+                      className="text-xs text-slate-700 font-medium cursor-pointer"
+                    >
                       Observações / Posologia
                     </Label>
                     <Textarea
+                      id="farm_disp_obs"
                       placeholder="Posologia orientada ou motivo da remessa..."
                       value={dispObservacoes}
                       onChange={(e) => setDispObservacoes(e.target.value)}
@@ -1132,8 +1182,14 @@ export const FarmaciaView: React.FC = () => {
           <form onSubmit={handleSalvarItem} className="space-y-4 pt-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2">
-                <Label className="text-xs font-medium text-slate-700">Nome do Item *</Label>
+                <Label
+                  htmlFor="item_nome"
+                  className="text-xs font-medium text-slate-700 cursor-pointer"
+                >
+                  Nome do Item *
+                </Label>
                 <Input
+                  id="item_nome"
                   placeholder="Ex: Paracetamol 750mg ou Luva Procedimento M"
                   value={formItemNome}
                   onChange={(e) => setFormItemNome(e.target.value)}
@@ -1143,8 +1199,14 @@ export const FarmaciaView: React.FC = () => {
               </div>
 
               <div>
-                <Label className="text-xs font-medium text-slate-700">Tipo *</Label>
+                <Label
+                  htmlFor="item_tipo"
+                  className="text-xs font-medium text-slate-700 cursor-pointer"
+                >
+                  Tipo *
+                </Label>
                 <select
+                  id="item_tipo"
                   className="w-full mt-1 h-8 px-2 text-xs border border-slate-300 rounded-md bg-white"
                   value={formItemTipo}
                   onChange={(e) => setFormItemTipo(e.target.value as any)}
@@ -1155,8 +1217,14 @@ export const FarmaciaView: React.FC = () => {
               </div>
 
               <div>
-                <Label className="text-xs font-medium text-slate-700">Unidade de Medida *</Label>
+                <Label
+                  htmlFor="item_unidade"
+                  className="text-xs font-medium text-slate-700 cursor-pointer"
+                >
+                  Unidade de Medida *
+                </Label>
                 <select
+                  id="item_unidade"
                   className="w-full mt-1 h-8 px-2 text-xs border border-slate-300 rounded-md bg-white"
                   value={formItemUnidade}
                   onChange={(e) => setFormItemUnidade(e.target.value as any)}
@@ -1172,8 +1240,14 @@ export const FarmaciaView: React.FC = () => {
               </div>
 
               <div>
-                <Label className="text-xs font-medium text-slate-700">Princípio Ativo</Label>
+                <Label
+                  htmlFor="item_principio_ativo"
+                  className="text-xs font-medium text-slate-700 cursor-pointer"
+                >
+                  Princípio Ativo
+                </Label>
                 <Input
+                  id="item_principio_ativo"
                   placeholder="Ex: Paracetamol"
                   value={formItemPrincipioAtivo}
                   onChange={(e) => setFormItemPrincipioAtivo(e.target.value)}
@@ -1182,8 +1256,14 @@ export const FarmaciaView: React.FC = () => {
               </div>
 
               <div>
-                <Label className="text-xs font-medium text-slate-700">Apresentação</Label>
+                <Label
+                  htmlFor="item_apresentacao"
+                  className="text-xs font-medium text-slate-700 cursor-pointer"
+                >
+                  Apresentação
+                </Label>
                 <Input
+                  id="item_apresentacao"
                   placeholder="Ex: Caixa com 20 comp / Frasco 100ml"
                   value={formItemApresentacao}
                   onChange={(e) => setFormItemApresentacao(e.target.value)}
@@ -1192,8 +1272,14 @@ export const FarmaciaView: React.FC = () => {
               </div>
 
               <div>
-                <Label className="text-xs font-medium text-slate-700">Lote Inicial</Label>
+                <Label
+                  htmlFor="item_lote"
+                  className="text-xs font-medium text-slate-700 cursor-pointer"
+                >
+                  Lote Inicial
+                </Label>
                 <Input
+                  id="item_lote"
                   placeholder="Ex: LOTE-2024-X"
                   value={formItemLote}
                   onChange={(e) => setFormItemLote(e.target.value)}
@@ -1202,8 +1288,14 @@ export const FarmaciaView: React.FC = () => {
               </div>
 
               <div>
-                <Label className="text-xs font-medium text-slate-700">Data de Validade</Label>
+                <Label
+                  htmlFor="item_validade"
+                  className="text-xs font-medium text-slate-700 cursor-pointer"
+                >
+                  Data de Validade
+                </Label>
                 <Input
+                  id="item_validade"
                   type="date"
                   value={formItemValidade}
                   onChange={(e) => setFormItemValidade(e.target.value)}
@@ -1212,8 +1304,14 @@ export const FarmaciaView: React.FC = () => {
               </div>
 
               <div>
-                <Label className="text-xs font-medium text-slate-700">Estoque Atual *</Label>
+                <Label
+                  htmlFor="item_estoque_atual"
+                  className="text-xs font-medium text-slate-700 cursor-pointer"
+                >
+                  Estoque Atual *
+                </Label>
                 <Input
+                  id="item_estoque_atual"
                   type="number"
                   min="0"
                   value={formItemEstoqueAtual}
@@ -1224,10 +1322,14 @@ export const FarmaciaView: React.FC = () => {
               </div>
 
               <div>
-                <Label className="text-xs font-medium text-slate-700">
+                <Label
+                  htmlFor="item_estoque_minimo"
+                  className="text-xs font-medium text-slate-700 cursor-pointer"
+                >
                   Estoque Mínimo de Alerta
                 </Label>
                 <Input
+                  id="item_estoque_minimo"
                   type="number"
                   min="0"
                   value={formItemEstoqueMinimo}
@@ -1237,8 +1339,12 @@ export const FarmaciaView: React.FC = () => {
               </div>
 
               <div className="sm:col-span-2">
-                <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer mt-1">
+                <label
+                  htmlFor="item_ativo"
+                  className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer mt-1"
+                >
                   <input
+                    id="item_ativo"
                     type="checkbox"
                     checked={formItemAtivo}
                     onChange={(e) => setFormItemAtivo(e.target.checked)}
@@ -1249,8 +1355,14 @@ export const FarmaciaView: React.FC = () => {
               </div>
 
               <div className="sm:col-span-2">
-                <Label className="text-xs font-medium text-slate-700">Observações Gerais</Label>
+                <Label
+                  htmlFor="item_obs"
+                  className="text-xs font-medium text-slate-700 cursor-pointer"
+                >
+                  Observações Gerais
+                </Label>
                 <Textarea
+                  id="item_obs"
                   placeholder="Indicações, cuidados de armazenamento (ex: refrigerado 2°C a 8°C)..."
                   value={formItemObservacoes}
                   onChange={(e) => setFormItemObservacoes(e.target.value)}
@@ -1283,19 +1395,35 @@ export const FarmaciaView: React.FC = () => {
 
       {/* MODAL 2: DISPENSAÇÃO RÁPIDA (quando chamada por botão de atalho) */}
       <Dialog open={modalDispensacaoAberto} onOpenChange={setModalDispensacaoAberto}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[92vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <ArrowDownRight className="w-5 h-5 text-emerald-600" />
-              Dispensação & Baixa de Estoque
+              <ArrowDownRight className="w-5 h-5 text-emerald-600 shrink-0" />
+              <span>Dispensação & Baixa de Estoque</span>
             </DialogTitle>
           </DialogHeader>
 
+          {erroDispensacao && (
+            <div
+              role="alert"
+              className="p-3 rounded-lg border border-amber-300 bg-amber-50 text-amber-950 text-xs flex items-start gap-2 shadow-sm"
+            >
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <span>{erroDispensacao}</span>
+            </div>
+          )}
+
           <form onSubmit={handleSalvarDispensacao} className="space-y-3.5 pt-1">
             <div>
-              <Label className="text-xs text-slate-700 font-medium">Paciente Recebedor *</Label>
+              <Label
+                htmlFor="m_disp_paciente"
+                className="text-xs text-slate-700 font-medium cursor-pointer"
+              >
+                Paciente Recebedor *
+              </Label>
               <select
-                className="w-full mt-1 px-3 py-2 text-xs border border-slate-300 rounded-md bg-white"
+                id="m_disp_paciente"
+                className="w-full mt-1 px-3 py-2 text-xs border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                 value={dispPacienteId}
                 onChange={(e) => setDispPacienteId(e.target.value)}
                 required
@@ -1310,9 +1438,15 @@ export const FarmaciaView: React.FC = () => {
             </div>
 
             <div>
-              <Label className="text-xs text-slate-700 font-medium">Item a Dispensar *</Label>
+              <Label
+                htmlFor="m_disp_item"
+                className="text-xs text-slate-700 font-medium cursor-pointer"
+              >
+                Item a Dispensar *
+              </Label>
               <select
-                className="w-full mt-1 px-3 py-2 text-xs border border-slate-300 rounded-md bg-white"
+                id="m_disp_item"
+                className="w-full mt-1 px-3 py-2 text-xs border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                 value={dispItemId}
                 onChange={(e) => setDispItemId(e.target.value)}
                 required
@@ -1344,8 +1478,14 @@ export const FarmaciaView: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="text-xs text-slate-700 font-medium">Quantidade *</Label>
+                <Label
+                  htmlFor="m_disp_qtd"
+                  className="text-xs text-slate-700 font-medium cursor-pointer"
+                >
+                  Quantidade *
+                </Label>
                 <Input
+                  id="m_disp_qtd"
                   type="number"
                   min="1"
                   max={itemSelecionadoParaDisp?.estoque_atual || 999}
@@ -1356,8 +1496,14 @@ export const FarmaciaView: React.FC = () => {
                 />
               </div>
               <div>
-                <Label className="text-xs text-slate-700 font-medium">Movimento</Label>
+                <Label
+                  htmlFor="m_disp_mov"
+                  className="text-xs text-slate-700 font-medium cursor-pointer"
+                >
+                  Movimento
+                </Label>
                 <select
+                  id="m_disp_mov"
                   className="w-full mt-1 h-8 px-2 text-xs border border-slate-300 rounded-md bg-white"
                   value={dispTipoMovimento}
                   onChange={(e) => setDispTipoMovimento(e.target.value as any)}
@@ -1369,8 +1515,14 @@ export const FarmaciaView: React.FC = () => {
             </div>
 
             <div>
-              <Label className="text-xs text-slate-700 font-medium">Prescrição / Origem</Label>
+              <Label
+                htmlFor="m_disp_prescricao"
+                className="text-xs text-slate-700 font-medium cursor-pointer"
+              >
+                Prescrição / Origem
+              </Label>
               <Input
+                id="m_disp_prescricao"
                 placeholder="Ex: Receita PA nº 109 / Dr. Marcos"
                 value={dispPrescricao}
                 onChange={(e) => setDispPrescricao(e.target.value)}
@@ -1379,8 +1531,14 @@ export const FarmaciaView: React.FC = () => {
             </div>
 
             <div>
-              <Label className="text-xs text-slate-700 font-medium">Observações</Label>
+              <Label
+                htmlFor="m_disp_observacoes"
+                className="text-xs text-slate-700 font-medium cursor-pointer"
+              >
+                Observações
+              </Label>
               <Textarea
+                id="m_disp_observacoes"
                 placeholder="Posologia orientada ou anotação..."
                 value={dispObservacoes}
                 onChange={(e) => setDispObservacoes(e.target.value)}
