@@ -47,6 +47,11 @@ export async function carregarProntuarioUnificado(
     recuperacoesSrpa,
     impressosAssistenciais,
     notificacoesVigilancia,
+    obstetricaAdmissoes,
+    obstetricaTrabalhoParto,
+    obstetricaPartos,
+    obstetricaRecemNascidos,
+    obstetricaDesfechosAltas,
   ] = await Promise.all([
     pb
       .collection('pronto_atendimento')
@@ -145,6 +150,52 @@ export async function carregarProntuarioUnificado(
         expand: 'profissional_notificante',
       })
       .catch(() => [] as NotificacaoVigilancia[]),
+
+    // Centro Obstétrico: Admissões, Trabalho de Parto, Partos, RNs e Desfechos/Altas
+    pb
+      .collection('obstetrica_admissoes')
+      .getFullList<any>({
+        filter: `paciente = "${pacienteId}"`,
+        sort: '-data_hora_admissao,-created',
+        expand: 'profissional_responsavel,leito,internacao',
+      })
+      .catch(() => [] as any[]),
+
+    pb
+      .collection('obstetrica_trabalho_parto')
+      .getFullList<any>({
+        filter: `paciente = "${pacienteId}"`,
+        sort: '-data_hora_registro,-created',
+        expand: 'profissional_registro,admissao_obstetrica',
+      })
+      .catch(() => [] as any[]),
+
+    pb
+      .collection('obstetrica_partos')
+      .getFullList<any>({
+        filter: `paciente_mae = "${pacienteId}"`,
+        sort: '-data_hora_parto,-created',
+        expand: 'medico_obstetra,admissao_obstetrica',
+      })
+      .catch(() => [] as any[]),
+
+    pb
+      .collection('obstetrica_recem_nascidos')
+      .getFullList<any>({
+        filter: `mae_paciente = "${pacienteId}" || paciente_rn_cadastro = "${pacienteId}"`,
+        sort: '-data_hora_nascimento,-created',
+        expand: 'parto,admissao_obstetrica,mae_paciente',
+      })
+      .catch(() => [] as any[]),
+
+    pb
+      .collection('obstetrica_desfechos_altas')
+      .getFullList<any>({
+        filter: `paciente_mae = "${pacienteId}"`,
+        sort: '-data_hora_desfecho,-created',
+        expand: 'profissional_alta,admissao_obstetrica',
+      })
+      .catch(() => [] as any[]),
   ])
 
   const eventos: EventoProntuarioUnificado[] = []
@@ -826,6 +877,250 @@ export async function carregarProntuarioUnificado(
       badgeCor: corSituacao[notif.situacao] || 'bg-amber-600 text-white',
       icone: 'ShieldAlert',
       registroOriginal: notif,
+    })
+  })
+
+  // L. CENTRO OBSTÉTRICO (Admissões, Evolução do Trabalho de Parto, Partos, Vínculo Mãe-RN, Desfecho e Alta)
+  // 1. Admissão Obstétrica
+  obstetricaAdmissoes.forEach((adm) => {
+    const statusMap: Record<string, string> = {
+      em_trabalho_parto: 'Em Trabalho de Parto',
+      em_observacao: 'Em Observação',
+      parto_realizado: 'Parto Realizado',
+      alta: 'Alta Obstétrica',
+      transferida: 'Transferida',
+    }
+
+    const riscoMap: Record<string, string> = {
+      habitual: 'Risco Habitual',
+      alto_risco: 'Alto Risco (informado pelo profissional)',
+      nao_informado: 'Não informado',
+    }
+
+    eventos.push({
+      id: `obs-adm-${adm.id}`,
+      tipo: 'obstetrica_admissao',
+      dataHora: adm.data_hora_admissao || adm.created,
+      titulo: `Admissão Obstétrica — Nº ${adm.numero_admissao} (${statusMap[adm.status_admissao] || adm.status_admissao})`,
+      subtitulo: `Profissional: ${adm.profissional_nome}${adm.leito_codigo ? ` • Leito: ${adm.leito_codigo}` : ''}`,
+      descricao: `Motivo: ${adm.motivo_admissao}${
+        adm.idade_gestacional_semanas
+          ? `\nIdade Gestacional informada: ${adm.idade_gestacional_semanas} sem${adm.idade_gestacional_dias ? ` e ${adm.idade_gestacional_dias} dias` : ''}`
+          : ''
+      }${
+        adm.risco_obstetrico_informado
+          ? ` • Classificação profissional: ${riscoMap[adm.risco_obstetrico_informado] || adm.risco_obstetrico_informado}`
+          : ''
+      }${adm.batimentos_cardiofetais_bcf ? ` • BCF: ${adm.batimentos_cardiofetais_bcf}` : ''}${
+        adm.dinamica_uterina ? ` • Dinâmica: ${adm.dinamica_uterina}` : ''
+      }${adm.dilatacao_cervical_cm ? ` • Dilatação: ${adm.dilatacao_cervical_cm} cm` : ''}${
+        adm.bolsa_amniotica ? ` • Bolsa: ${adm.bolsa_amniotica}` : ''
+      }${adm.observacoes_admissao ? `\nObservações: ${adm.observacoes_admissao}` : ''}`,
+      detalhes: {
+        numero_admissao: adm.numero_admissao,
+        idade_gestacional_semanas: adm.idade_gestacional_semanas,
+        gesta_previa: adm.gesta_previa,
+        para_previa: adm.para_previa,
+        abortos_previos: adm.abortos_previos,
+        cesareas_previas: adm.cesareas_previas,
+        dum: adm.dum_informada,
+        dpp: adm.dpp_informada,
+        risco_informado: adm.risco_obstetrico_informado,
+        status: adm.status_admissao,
+      },
+      profissionalNome: adm.profissional_nome,
+      setorOuLeito: adm.leito_codigo || 'Centro Obstétrico',
+      badgeTexto: `Obstetrícia • Admissão`,
+      badgeCor: 'bg-pink-700 text-white',
+      icone: 'HeartHandshake',
+      registroOriginal: adm,
+    })
+  })
+
+  // 2. Registros da Cronologia do Trabalho de Parto
+  obstetricaTrabalhoParto.forEach((tp) => {
+    eventos.push({
+      id: `obs-tp-${tp.id}`,
+      tipo: 'obstetrica_trabalho_parto',
+      dataHora: tp.data_hora_registro || tp.created,
+      titulo: `Evolução do Trabalho de Parto`,
+      subtitulo: `Registrado por: ${tp.profissional_nome}`,
+      descricao: `Evolução clínica: ${tp.evolucao_anotacao_profissional}${
+        tp.dilatacao_cervical_cm ? `\nDilatação: ${tp.dilatacao_cervical_cm} cm` : ''
+      }${
+        tp.apagamento_cervical_percentual
+          ? ` • Apagamento: ${tp.apagamento_cervical_percentual}`
+          : ''
+      }${
+        tp.altura_apresentacao_de_lee ? ` • Plano de De Lee: ${tp.altura_apresentacao_de_lee}` : ''
+      }${
+        tp.dinamica_uterina_freq_duracao ? ` • Dinâmica: ${tp.dinamica_uterina_freq_duracao}` : ''
+      }${tp.batimentos_cardiofetais_bcf ? ` • BCF: ${tp.batimentos_cardiofetais_bcf}` : ''}${
+        tp.bolsa_aspecto_liquido ? ` • Líquido amniótico: ${tp.bolsa_aspecto_liquido}` : ''
+      }${tp.pressao_arterial ? ` • PA: ${tp.pressao_arterial}` : ''}${
+        tp.metodos_alivio_dor_informados
+          ? ` • Alívio da dor: ${tp.metodos_alivio_dor_informados}`
+          : ''
+      }`,
+      detalhes: {
+        dilatacao: tp.dilatacao_cervical_cm,
+        dinamica: tp.dinamica_uterina_freq_duracao,
+        bcf: tp.batimentos_cardiofetais_bcf,
+        bolsa: tp.bolsa_aspecto_liquido,
+        anotacao: tp.evolucao_anotacao_profissional,
+      },
+      profissionalNome: tp.profissional_nome,
+      badgeTexto: 'Trabalho de Parto',
+      badgeCor: 'bg-rose-600 text-white',
+      icone: 'Activity',
+      registroOriginal: tp,
+    })
+  })
+
+  // 3. Registros de Parto / Nascimento
+  obstetricaPartos.forEach((parto) => {
+    const rotuloTipoParto: Record<string, string> = {
+      vaginal_espontaneo: 'Parto Vaginal Espontâneo',
+      vaginal_instrumentado: 'Parto Vaginal Instrumentado',
+      cesarea_eletiva: 'Cesariana Eletiva',
+      cesarea_urgencia: 'Cesariana de Urgência',
+    }
+
+    eventos.push({
+      id: `obs-parto-${parto.id}`,
+      tipo: 'obstetrica_parto',
+      dataHora: parto.data_hora_parto || parto.created,
+      titulo: `Parto Realizado: ${rotuloTipoParto[parto.tipo_parto] || parto.tipo_parto}`,
+      subtitulo: `Médico Obstetra: ${parto.medico_obstetra_nome}${parto.enfermeiro_obstetra_nome ? ` • Enf. Obstetra: ${parto.enfermeiro_obstetra_nome}` : ''}`,
+      descricao: `Tipo de parto: ${rotuloTipoParto[parto.tipo_parto] || parto.tipo_parto}${
+        parto.indicacao_tipo_parto ? ` • Indicação: ${parto.indicacao_tipo_parto}` : ''
+      }${
+        parto.anestesia_analgesia_utilizada
+          ? ` • Anestesia: ${parto.anestesia_analgesia_utilizada}`
+          : ''
+      }${
+        parto.sangramento_estimado_ml
+          ? ` • Sangramento est.: ${parto.sangramento_estimado_ml} ml`
+          : ''
+      }${parto.contato_pele_a_pele_imediato ? ' • Contato pele a pele imediato garantido' : ''}${
+        parto.amamentacao_primeira_hora ? ' • Amamentação na 1ª hora realizada' : ''
+      }${
+        parto.intercorrencias_maternas ? `\nIntercorrências: ${parto.intercorrencias_maternas}` : ''
+      }${parto.observacoes_parto ? `\nObservações: ${parto.observacoes_parto}` : ''}`,
+      detalhes: {
+        tipo_parto: parto.tipo_parto,
+        indicacao: parto.indicacao_tipo_parto,
+        anestesia: parto.anestesia_analgesia_utilizada,
+        episiotomia_laceracao: parto.episiotomia_laceracao,
+        sangramento_ml: parto.sangramento_estimado_ml,
+        pele_a_pele: parto.contato_pele_a_pele_imediato,
+        amamentacao_1h: parto.amamentacao_primeira_hora,
+      },
+      profissionalNome: parto.medico_obstetra_nome,
+      badgeTexto: `Parto • ${rotuloTipoParto[parto.tipo_parto] || 'Parto'}`,
+      badgeCor: 'bg-purple-800 text-white',
+      icone: 'HeartPulse',
+      registroOriginal: parto,
+    })
+  })
+
+  // 4. Recém-Nascidos Vínculo Mãe-RN
+  obstetricaRecemNascidos.forEach((rn) => {
+    const rotuloAcomodacao: Record<string, string> = {
+      alojamento_conjunto: 'Alojamento Conjunto (junto à mãe)',
+      unidade_cuidados_intermediarios: 'Unidade de Cuidados Intermediários (UCI)',
+      uti_neonatal: 'UTI Neonatal',
+      isolamento: 'Isolamento Neonatal',
+    }
+
+    eventos.push({
+      id: `obs-rn-${rn.id}`,
+      tipo: 'obstetrica_recem_nascido',
+      dataHora: rn.data_hora_nascimento || rn.created,
+      titulo: `Nascimento do Recém-Nascido: ${rn.identificacao_rn}`,
+      subtitulo: `Mãe: ${rn.mae_nome} • Sexo: ${rn.sexo.toUpperCase()} • Peso: ${rn.peso_gramas}g`,
+      descricao: `Dados antropométricos informados: Peso ${rn.peso_gramas}g${
+        rn.comprimento_cm ? ` • Comp.: ${rn.comprimento_cm} cm` : ''
+      }${rn.perimetro_cefalico_cm ? ` • PC: ${rn.perimetro_cefalico_cm} cm` : ''}${
+        rn.apgar_1_minuto !== undefined && rn.apgar_1_minuto !== null
+          ? ` • Apgar 1º min: ${rn.apgar_1_minuto}`
+          : ''
+      }${
+        rn.apgar_5_minutos !== undefined && rn.apgar_5_minutos !== null
+          ? ` • Apgar 5º min: ${rn.apgar_5_minutos}`
+          : ''
+      }\nAcomodação inicial: ${rotuloAcomodacao[rn.acomodacao_rn] || rn.acomodacao_rn}${
+        rn.pulseira_identificacao_conferida ? ' • Pulseira dupla mãe-RN conferida' : ''
+      }${
+        rn.declaracao_nascido_vivo_dnv_numero
+          ? ` • DNV nº: ${rn.declaracao_nascido_vivo_dnv_numero}`
+          : ''
+      }${
+        rn.reanimacao_neonatal_necessaria
+          ? `\nReanimação neonatal: ${rn.detalhes_reanimacao || 'Realizada'}`
+          : ''
+      }${rn.observacoes_rn ? `\nObs: ${rn.observacoes_rn}` : ''}`,
+      detalhes: {
+        identificacao_rn: rn.identificacao_rn,
+        sexo: rn.sexo,
+        peso_gramas: rn.peso_gramas,
+        comprimento_cm: rn.comprimento_cm,
+        perimetro_cefalico_cm: rn.perimetro_cefalico_cm,
+        apgar_1: rn.apgar_1_minuto,
+        apgar_5: rn.apgar_5_minutos,
+        apgar_10: rn.apgar_10_minutos,
+        acomodacao: rn.acomodacao_rn,
+        dnv: rn.declaracao_nascido_vivo_dnv_numero,
+      },
+      badgeTexto: `RN • ${rn.sexo === 'feminino' ? 'Menina' : rn.sexo === 'masculino' ? 'Menino' : 'RN'} (${rn.peso_gramas}g)`,
+      badgeCor: rn.sexo === 'feminino' ? 'bg-pink-600 text-white' : 'bg-cyan-700 text-white',
+      icone: 'Baby',
+      registroOriginal: rn,
+    })
+  })
+
+  // 5. Desfecho e Alta Obstétrica
+  obstetricaDesfechosAltas.forEach((desf) => {
+    const rotuloDesfecho: Record<string, string> = {
+      alta_hospitalar_mae_e_rn: 'Alta Hospitalar Conjunta (Mãe e Recém-Nascido)',
+      alta_hospitalar_apenas_mae: 'Alta Hospitalar da Mãe (RN permanece internado)',
+      transferencia_inter_hospitalar: 'Transferência Inter-Hospitalar',
+      obito_materno: 'Óbito Materno',
+      alta_a_pedido: 'Alta a Pedido da Paciente/Responsável',
+      permanencia_internada: 'Permanência em Internação Puerperal',
+    }
+
+    eventos.push({
+      id: `obs-desf-${desf.id}`,
+      tipo: 'obstetrica_desfecho_alta',
+      dataHora: desf.data_hora_desfecho || desf.created,
+      titulo: `Desfecho Obstétrico: ${rotuloDesfecho[desf.tipo_desfecho] || desf.tipo_desfecho}`,
+      subtitulo: `Profissional Responsável: ${desf.profissional_nome}`,
+      descricao: `Resumo do desfecho: ${desf.resumo_desfecho_clinico}${
+        desf.orientacoes_pos_parto_puerperio
+          ? `\nOrientações pós-parto e puerpério: ${desf.orientacoes_pos_parto_puerperio}`
+          : ''
+      }${
+        desf.encaminhamento_retorno_ubs
+          ? `\nRetorno / UBS de referência: ${desf.encaminhamento_retorno_ubs}`
+          : ''
+      }${
+        desf.desocupar_leito_internacao
+          ? '\n[Leito hospitalar desocupado e encaminhado para higienização]'
+          : ''
+      }`,
+      detalhes: {
+        tipo_desfecho: desf.tipo_desfecho,
+        resumo: desf.resumo_desfecho_clinico,
+        orientacoes: desf.orientacoes_pos_parto_puerperio,
+        retorno_ubs: desf.encaminhamento_retorno_ubs,
+        leito_desocupado: desf.desocupar_leito_internacao,
+      },
+      profissionalNome: desf.profissional_nome,
+      badgeTexto: `Desfecho Obstétrico`,
+      badgeCor: 'bg-emerald-800 text-white',
+      icone: 'CheckCircle2',
+      registroOriginal: desf,
     })
   })
 

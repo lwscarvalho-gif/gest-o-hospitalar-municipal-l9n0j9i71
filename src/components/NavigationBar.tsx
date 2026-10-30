@@ -24,6 +24,7 @@ import {
   Scissors,
   Receipt,
   ShieldAlert,
+  HeartPulse,
 } from 'lucide-react'
 
 export type ActiveTab =
@@ -31,6 +32,7 @@ export type ActiveTab =
   | 'dashboard'
   | 'pronto_atendimento'
   | 'centro_cirurgico'
+  | 'centro_obstetrico'
   | 'vigilancia_saude'
   | 'prontuario_same'
   | 'faturamento_sus'
@@ -76,12 +78,12 @@ const NAV_ITEMS: NavItem[] = [
     id: 'centro_cirurgico',
     label: 'Centro Cirúrgico',
     icon: Scissors,
-    allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
+    allowedRoles: ['admin', 'gestor', 'profissional'],
   },
   {
-    id: 'vigilancia_saude',
-    label: 'Vigilância em Saúde',
-    icon: ShieldAlert,
+    id: 'centro_obstetrico',
+    label: 'Centro Obstétrico',
+    icon: HeartPulse,
     allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
   },
   {
@@ -204,7 +206,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({ activeTab, onSelec
               <div className="flex items-center gap-2">
                 <span className="font-bold text-base tracking-tight text-white">SGH Municipal</span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  v0.0.16
+                  v0.0.17
                 </span>
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">

@@ -88,6 +88,214 @@ export interface NotificacaoVigilancia {
   updated: string
 }
 
+/**
+ * Resumo administrativo da notificação de vigilância (sem dados clínicos sensíveis de terceiros).
+ * Utilizado para o perfil de recepção e contagens operacionais.
+ */
+export interface NotificacaoVigilanciaResumoAdmin {
+  id: string
+  numero_notificacao: string
+  tipo_vigilancia: TipoVigilancia
+  periodicidade: PeriodicidadeNotificacao
+  situacao: SituacaoCasoVigilancia
+  data_notificacao: string
+  unidade_notificadora: string
+  created: string
+  updated: string
+}
+
+// -------------------------------------------------------------
+// FASE 7: CENTRO OBSTÉTRICO (ASSISTÊNCIA AO PARTO & NASCIMENTO)
+// -------------------------------------------------------------
+export type StatusAdmissaoObstetrica =
+  | 'em_trabalho_parto'
+  | 'em_observacao'
+  | 'parto_realizado'
+  | 'alta'
+  | 'transferida'
+
+export type RiscoObstetricoInformado = 'habitual' | 'alto_risco' | 'nao_informado'
+
+export interface AdmissaoObstetrica {
+  id: string
+  numero_admissao: string
+  paciente: string
+  paciente_nome: string
+  internacao?: string
+  leito?: string
+  leito_codigo?: string
+  data_hora_admissao: string
+  gravidez_planejada?: boolean
+  gesta_previa?: number
+  para_previa?: number
+  abortos_previos?: number
+  cesareas_previas?: number
+  idade_gestacional_semanas?: number
+  idade_gestacional_dias?: number
+  dum_informada?: string
+  dpp_informada?: string
+  risco_obstetrico_informado?: RiscoObstetricoInformado
+  justificativa_risco_profissional?: string
+  motivo_admissao: string
+  sinais_sintomas_admissao?: string
+  sinais_vitais_admissao?: string
+  batimentos_cardiofetais_bcf?: string
+  dinamica_uterina?: string
+  dilatacao_cervical_cm?: string
+  bolsa_amniotica?: string
+  status_admissao: StatusAdmissaoObstetrica
+  profissional_responsavel?: string
+  profissional_nome: string
+  observacoes_admissao?: string
+  expand?: {
+    paciente?: Paciente
+    internacao?: Internacao
+    leito?: Leito
+    profissional_responsavel?: Profissional
+  }
+  created: string
+  updated: string
+}
+
+export interface RegistroTrabalhoParto {
+  id: string
+  admissao_obstetrica: string
+  paciente: string
+  data_hora_registro: string
+  dilatacao_cervical_cm?: string
+  apagamento_cervical_percentual?: string
+  altura_apresentacao_de_lee?: string
+  variedade_posicao?: string
+  dinamica_uterina_freq_duracao?: string
+  batimentos_cardiofetais_bcf?: string
+  bolsa_aspecto_liquido?: string
+  pressao_arterial?: string
+  frequencia_cardiaca_materna?: string
+  temperatura_axilar?: string
+  metodos_alivio_dor_informados?: string
+  medicamentos_administrados?: string
+  evolucao_anotacao_profissional: string
+  profissional_registro?: string
+  profissional_nome: string
+  expand?: {
+    admissao_obstetrica?: AdmissaoObstetrica
+    paciente?: Paciente
+    profissional_registro?: Profissional
+  }
+  created: string
+  updated: string
+}
+
+export type TipoParto =
+  | 'vaginal_espontaneo'
+  | 'vaginal_instrumentado'
+  | 'cesarea_eletiva'
+  | 'cesarea_urgencia'
+
+export interface RegistroParto {
+  id: string
+  admissao_obstetrica: string
+  paciente_mae: string
+  paciente_mae_nome: string
+  data_hora_parto: string
+  tipo_parto: TipoParto
+  indicacao_tipo_parto?: string
+  posicao_parto?: string
+  anestesia_analgesia_utilizada?: string
+  episiotomia_laceracao?: string
+  perineorrafia_sutura?: string
+  dequitacao_placenta_tempo_modo?: string
+  sangramento_estimado_ml?: number
+  intercorrencias_maternas?: string
+  contato_pele_a_pele_imediato?: boolean
+  amamentacao_primeira_hora?: boolean
+  clampeamento_cordao_oportuno?: boolean
+  medico_obstetra?: string
+  medico_obstetra_nome: string
+  enfermeiro_obstetra_nome?: string
+  pediatra_neonatologista_nome?: string
+  observacoes_parto?: string
+  expand?: {
+    admissao_obstetrica?: AdmissaoObstetrica
+    paciente_mae?: Paciente
+    medico_obstetra?: Profissional
+  }
+  created: string
+  updated: string
+}
+
+export type SexoRN = 'masculino' | 'feminino' | 'indeterminado'
+export type AcomodacaoRN =
+  | 'alojamento_conjunto'
+  | 'unidade_cuidados_intermediarios'
+  | 'uti_neonatal'
+  | 'isolamento'
+
+export interface RecemNascido {
+  id: string
+  parto: string
+  admissao_obstetrica: string
+  mae_paciente: string
+  mae_nome: string
+  identificacao_rn: string
+  data_hora_nascimento: string
+  sexo: SexoRN
+  peso_gramas: number
+  comprimento_cm?: number
+  perimetro_cefalico_cm?: number
+  perimetro_toracico_cm?: number
+  apgar_1_minuto?: number
+  apgar_5_minutos?: number
+  apgar_10_minutos?: number
+  acomodacao_rn: AcomodacaoRN
+  reanimacao_neonatal_necessaria?: boolean
+  detalhes_reanimacao?: string
+  pulseira_identificacao_conferida: boolean
+  declaracao_nascido_vivo_dnv_numero?: string
+  observacoes_rn?: string
+  paciente_rn_cadastro?: string
+  expand?: {
+    parto?: RegistroParto
+    admissao_obstetrica?: AdmissaoObstetrica
+    mae_paciente?: Paciente
+    paciente_rn_cadastro?: Paciente
+  }
+  created: string
+  updated: string
+}
+
+export type TipoDesfechoObstetrico =
+  | 'alta_hospitalar_mae_e_rn'
+  | 'alta_hospitalar_apenas_mae'
+  | 'transferencia_inter_hospitalar'
+  | 'obito_materno'
+  | 'alta_a_pedido'
+  | 'permanencia_internada'
+
+export interface DesfechoAltaObstetrica {
+  id: string
+  admissao_obstetrica: string
+  paciente_mae: string
+  paciente_mae_nome: string
+  data_hora_desfecho: string
+  tipo_desfecho: TipoDesfechoObstetrico
+  resumo_desfecho_clinico: string
+  orientacoes_pos_parto_puerperio?: string
+  encaminhamento_retorno_ubs?: string
+  desocupar_leito_internacao?: boolean
+  internacao_desocupada?: string
+  profissional_alta?: string
+  profissional_nome: string
+  expand?: {
+    admissao_obstetrica?: AdmissaoObstetrica
+    paciente_mae?: Paciente
+    internacao_desocupada?: Internacao
+    profissional_alta?: Profissional
+  }
+  created: string
+  updated: string
+}
+
 // -------------------------------------------------------------
 // IMPRESSOS ASSISTENCIAIS (Receita, Atestado, Resumo de Alta)
 // -------------------------------------------------------------
@@ -354,6 +562,11 @@ export type TipoEventoProntuario =
   | 'impresso_atestado'
   | 'impresso_resumo_alta'
   | 'notificacao_vigilancia'
+  | 'obstetrica_admissao'
+  | 'obstetrica_trabalho_parto'
+  | 'obstetrica_parto'
+  | 'obstetrica_recem_nascido'
+  | 'obstetrica_desfecho_alta'
 
 export interface EventoProntuarioUnificado {
   id: string

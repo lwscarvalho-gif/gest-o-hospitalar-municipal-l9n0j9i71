@@ -1,6 +1,7 @@
 import pb from '@/lib/pocketbase/client'
 import {
   NotificacaoVigilancia,
+  NotificacaoVigilanciaResumoAdmin,
   TipoVigilancia,
   SituacaoCasoVigilancia,
   PeriodicidadeNotificacao,
@@ -364,6 +365,14 @@ export async function listarNotificacoesVigilancia(
   filtros?: ListarNotificacoesFiltros,
 ): Promise<NotificacaoVigilancia[]> {
   try {
+    const authRole = (pb.authStore.model as any)?.role
+
+    // Se o usuário logado for recepção, a coleção clínica notificacoes_vigilancia é bloqueada pelo RLS.
+    // Em vez de falhar ou vazar dados, a recepção consulta a view administrativa ou tem retorno enxuto sem campos sensíveis de terceiros.
+    if (authRole === 'recepcao') {
+      return []
+    }
+
     const filterClauses: string[] = []
 
     if (filtros?.pacienteId) {
@@ -404,6 +413,27 @@ export async function listarNotificacoesVigilancia(
     return records
   } catch (err) {
     console.error('Erro ao listar notificações de vigilância:', err)
+    return []
+  }
+}
+
+/**
+ * Lista estritamente a fila administrativa de vigilância (segura para o perfil recepção).
+ * Retorna apenas número da notificação, tipo, periodicidade, situação e data.
+ * Zero dados clínicos ou diagnósticos sensíveis de terceiros expostos.
+ */
+export async function listarVigilanciaFilaAdministrativa(): Promise<
+  NotificacaoVigilanciaResumoAdmin[]
+> {
+  try {
+    const records = await pb
+      .collection('vigilancia_fila_administrativa')
+      .getFullList<NotificacaoVigilanciaResumoAdmin>({
+        sort: '-data_notificacao,-created',
+      })
+    return records
+  } catch (err) {
+    console.error('Erro ao consultar fila administrativa de vigilância:', err)
     return []
   }
 }

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T05:14:57.252Z",
+  "generatedAt": "2026-10-30T05:30:42.957Z",
   "collections": [
     {
       "name": "users",
@@ -3420,8 +3420,8 @@
       "name": "notificacoes_vigilancia",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
         "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
         "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
         "delete": "@request.auth.id != '' && @request.auth.role = 'admin'"
@@ -3635,6 +3635,887 @@
         "CREATE INDEX idx_notif_agravo ON notificacoes_vigilancia (agravo_codigo)",
         "CREATE INDEX idx_notif_data ON notificacoes_vigilancia (data_notificacao)",
         "CREATE UNIQUE INDEX idx_notif_numero ON notificacoes_vigilancia (numero_notificacao)"
+      ]
+    },
+    {
+      "name": "vigilancia_fila_administrativa",
+      "type": "view",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "numero_notificacao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo_vigilancia",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["epidemiologica", "sanitaria", "saude_trabalhador"]
+        },
+        {
+          "name": "periodicidade",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["imediata_24h", "semanal"]
+        },
+        {
+          "name": "situacao",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["notificado", "em_investigacao", "confirmado", "descartado", "encerrado"]
+        },
+        {
+          "name": "data_notificacao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "unidade_notificadora",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "name": "obstetrica_admissoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "delete": "@request.auth.id != '' && @request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "numero_admissao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "paciente_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "internacao",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "internacoes"
+        },
+        {
+          "name": "leito",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "leitos"
+        },
+        {
+          "name": "leito_codigo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_admissao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "gravidez_planejada",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "gesta_previa",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "para_previa",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "abortos_previos",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cesareas_previas",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "idade_gestacional_semanas",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "idade_gestacional_dias",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "dum_informada",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "dpp_informada",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "risco_obstetrico_informado",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["habitual", "alto_risco", "nao_informado"]
+        },
+        {
+          "name": "justificativa_risco_profissional",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "motivo_admissao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "sinais_sintomas_admissao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sinais_vitais_admissao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "batimentos_cardiofetais_bcf",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "dinamica_uterina",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "dilatacao_cervical_cm",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "bolsa_amniotica",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status_admissao",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "em_trabalho_parto",
+            "em_observacao",
+            "parto_realizado",
+            "alta",
+            "transferida"
+          ]
+        },
+        {
+          "name": "profissional_responsavel",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "profissional_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "observacoes_admissao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_obs_adm_num ON obstetrica_admissoes (numero_admissao)",
+        "CREATE INDEX idx_obs_adm_paciente ON obstetrica_admissoes (paciente)",
+        "CREATE INDEX idx_obs_adm_status ON obstetrica_admissoes (status_admissao)",
+        "CREATE INDEX idx_obs_adm_data ON obstetrica_admissoes (data_hora_admissao)"
+      ]
+    },
+    {
+      "name": "obstetrica_trabalho_parto",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "delete": "@request.auth.id != '' && @request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "admissao_obstetrica",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "obstetrica_admissoes"
+        },
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "data_hora_registro",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "dilatacao_cervical_cm",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "apagamento_cervical_percentual",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "altura_apresentacao_de_lee",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "variedade_posicao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "dinamica_uterina_freq_duracao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "batimentos_cardiofetais_bcf",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "bolsa_aspecto_liquido",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pressao_arterial",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "frequencia_cardiaca_materna",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "temperatura_axilar",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "metodos_alivio_dor_informados",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "medicamentos_administrados",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "evolucao_anotacao_profissional",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "profissional_registro",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "profissional_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_obs_tp_adm ON obstetrica_trabalho_parto (admissao_obstetrica)",
+        "CREATE INDEX idx_obs_tp_paciente ON obstetrica_trabalho_parto (paciente)",
+        "CREATE INDEX idx_obs_tp_data ON obstetrica_trabalho_parto (data_hora_registro)"
+      ]
+    },
+    {
+      "name": "obstetrica_partos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "delete": "@request.auth.id != '' && @request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "admissao_obstetrica",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "obstetrica_admissoes"
+        },
+        {
+          "name": "paciente_mae",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "paciente_mae_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_hora_parto",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo_parto",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "vaginal_espontaneo",
+            "vaginal_instrumentado",
+            "cesarea_eletiva",
+            "cesarea_urgencia"
+          ]
+        },
+        {
+          "name": "indicacao_tipo_parto",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "posicao_parto",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "anestesia_analgesia_utilizada",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "episiotomia_laceracao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "perineorrafia_sutura",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "dequitacao_placenta_tempo_modo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sangramento_estimado_ml",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "intercorrencias_maternas",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "contato_pele_a_pele_imediato",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "amamentacao_primeira_hora",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "clampeamento_cordao_oportuno",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "medico_obstetra",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "medico_obstetra_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "enfermeiro_obstetra_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pediatra_neonatologista_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes_parto",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_obs_parto_adm ON obstetrica_partos (admissao_obstetrica)",
+        "CREATE INDEX idx_obs_parto_mae ON obstetrica_partos (paciente_mae)",
+        "CREATE INDEX idx_obs_parto_data ON obstetrica_partos (data_hora_parto)"
+      ]
+    },
+    {
+      "name": "obstetrica_recem_nascidos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "delete": "@request.auth.id != '' && @request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "parto",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "obstetrica_partos"
+        },
+        {
+          "name": "admissao_obstetrica",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "obstetrica_admissoes"
+        },
+        {
+          "name": "mae_paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "mae_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "identificacao_rn",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_hora_nascimento",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "sexo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["masculino", "feminino", "indeterminado"]
+        },
+        {
+          "name": "peso_gramas",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "comprimento_cm",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "perimetro_cefalico_cm",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "perimetro_toracico_cm",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "apgar_1_minuto",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "apgar_5_minutos",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "apgar_10_minutos",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "acomodacao_rn",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "alojamento_conjunto",
+            "unidade_cuidados_intermediarios",
+            "uti_neonatal",
+            "isolamento"
+          ]
+        },
+        {
+          "name": "reanimacao_neonatal_necessaria",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "detalhes_reanimacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pulseira_identificacao_conferida",
+          "type": "bool",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "declaracao_nascido_vivo_dnv_numero",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes_rn",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "paciente_rn_cadastro",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_obs_rn_parto ON obstetrica_recem_nascidos (parto)",
+        "CREATE INDEX idx_obs_rn_mae ON obstetrica_recem_nascidos (mae_paciente)",
+        "CREATE INDEX idx_obs_rn_data ON obstetrica_recem_nascidos (data_hora_nascimento)"
+      ]
+    },
+    {
+      "name": "obstetrica_desfechos_altas",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "delete": "@request.auth.id != '' && @request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "admissao_obstetrica",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "obstetrica_admissoes"
+        },
+        {
+          "name": "paciente_mae",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "paciente_mae_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_hora_desfecho",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo_desfecho",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "alta_hospitalar_mae_e_rn",
+            "alta_hospitalar_apenas_mae",
+            "transferencia_inter_hospitalar",
+            "obito_materno",
+            "alta_a_pedido",
+            "permanencia_internada"
+          ]
+        },
+        {
+          "name": "resumo_desfecho_clinico",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "orientacoes_pos_parto_puerperio",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "encaminhamento_retorno_ubs",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "desocupar_leito_internacao",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "internacao_desocupada",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "internacoes"
+        },
+        {
+          "name": "profissional_alta",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "profissional_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_obs_desfecho_adm ON obstetrica_desfechos_altas (admissao_obstetrica)",
+        "CREATE INDEX idx_obs_desfecho_mae ON obstetrica_desfechos_altas (paciente_mae)",
+        "CREATE INDEX idx_obs_desfecho_data ON obstetrica_desfechos_altas (data_hora_desfecho)"
       ]
     }
   ]

@@ -18,6 +18,7 @@ import { FarmaciaView } from '@/components/FarmaciaView'
 import { ProntuarioSAMEView } from '@/components/ProntuarioSAMEView'
 import { ExamesLaudosView } from '@/components/ExamesLaudosView'
 import { CentroCirurgicoView } from '@/components/CentroCirurgicoView'
+import { CentroObstetricoView } from '@/components/CentroObstetricoView'
 import { FaturamentoView } from '@/components/FaturamentoView'
 import { VigilanciaSaudeView } from '@/components/VigilanciaSaudeView'
 import { Loader2 } from 'lucide-react'
@@ -98,6 +99,15 @@ const Index: React.FC = () => {
         )}
         {activeTab === 'centro_cirurgico' &&
           temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && <CentroCirurgicoView />}
+        {activeTab === 'centro_obstetrico' &&
+          temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && (
+            <CentroObstetricoView
+              onNavegarSAME={(pacienteId) => {
+                if (pacienteId) setFocoPacienteId(pacienteId)
+                setActiveTab('prontuario_same')
+              }}
+            />
+          )}
         {activeTab === 'vigilancia_saude' &&
           temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && (
             <VigilanciaSaudeView
@@ -147,9 +157,10 @@ const Index: React.FC = () => {
       <footer className="border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
           <span>
-            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar v0.0.16
-            (Vigilância em Saúde, Impressos Assistenciais SUS, Painel de Gestão, Faturamento
-            AIH/BPA, Centro Cirúrgico, Exames, SAME, Prescrição & Farmácia)
+            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar v0.0.17
+            (Centro Obstétrico, Vigilância em Saúde com Privacidade Revisada, Impressos
+            Assistenciais SUS, Painel de Gestão, Faturamento AIH/BPA, Centro Cirúrgico, Exames,
+            SAME, Prescrição & Farmácia)
           </span>
           <span className="text-slate-400">
             Acesso em nuvem seguro • Usuário: {user?.name} ({user?.role})

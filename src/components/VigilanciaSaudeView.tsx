@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   NotificacaoVigilancia,
+  NotificacaoVigilanciaResumoAdmin,
   SituacaoCasoVigilancia,
   TipoVigilancia,
   CriterioConfirmacaoVigilancia,
@@ -13,6 +14,7 @@ import {
   CATALOGO_AGRAVOS_VIGILANCIA,
   AgravoCatalogo,
   listarNotificacoesVigilancia,
+  listarVigilanciaFilaAdministrativa,
   registrarNotificacaoVigilancia,
   atualizarSituacaoInvestigacao,
   calcularIndicadoresVigilancia,
@@ -66,10 +68,12 @@ export const VigilanciaSaudeView: React.FC<VigilanciaSaudeViewProps> = ({ onNave
 
   // Permissão de escrita (backend RLS bloqueia recepção; front também restringe botões)
   const podeRegistrar = temPermissao(['admin', 'gestor', 'profissional'])
+  const isRecepcao = user?.role === 'recepcao'
   const isApenasConsulta = !podeRegistrar
 
   // Estados principais
   const [notificacoes, setNotificacoes] = useState<NotificacaoVigilancia[]>([])
+  const [filaAdmin, setFilaAdmin] = useState<NotificacaoVigilanciaResumoAdmin[]>([])
   const [pacientes, setPacientes] = useState<Paciente[]>([])
   const [loading, setLoading] = useState(false)
   const [abaAtiva, setAbaAtiva] = useState<'lista' | 'indicadores'>('lista')
@@ -111,19 +115,26 @@ export const VigilanciaSaudeView: React.FC<VigilanciaSaudeViewProps> = ({ onNave
   const carregarDados = async () => {
     setLoading(true)
     try {
-      const [listaNotifs, listaPacs] = await Promise.all([
-        listarNotificacoesVigilancia({
-          agravoCodigo: filtroAgravo,
-          situacao: filtroSituacao as any,
-          tipoVigilancia: filtroTipoVig as any,
-          dataInicio: filtroDataInicio,
-          dataFim: filtroDataFim,
-          buscaTexto,
-        }),
-        listarPacientes(),
-      ])
-      setNotificacoes(listaNotifs)
-      setPacientes(listaPacs)
+      if (isRecepcao) {
+        // Para a recepção: ler estritamente da view administrativa (sem dados clínicos ou pessoais de terceiros)
+        const listaAdmin = await listarVigilanciaFilaAdministrativa()
+        setFilaAdmin(listaAdmin)
+        setNotificacoes([])
+      } else {
+        const [listaNotifs, listaPacs] = await Promise.all([
+          listarNotificacoesVigilancia({
+            agravoCodigo: filtroAgravo,
+            situacao: filtroSituacao as any,
+            tipoVigilancia: filtroTipoVig as any,
+            dataInicio: filtroDataInicio,
+            dataFim: filtroDataFim,
+            buscaTexto,
+          }),
+          listarPacientes(),
+        ])
+        setNotificacoes(listaNotifs)
+        setPacientes(listaPacs)
+      }
     } catch (err: any) {
       console.error('Erro ao carregar notificações:', err)
       toast({
@@ -157,8 +168,42 @@ export const VigilanciaSaudeView: React.FC<VigilanciaSaudeViewProps> = ({ onNave
 
   // Indicadores agregados
   const indicadores: IndicadoresAgregadosVigilancia = useMemo(() => {
+    if (isRecepcao) {
+      // Contagens a partir da fila administrativa (apenas contadores de situação e periodicidade, sem dados clínicos)
+      const casosPorSituacao = {
+        notificado: filaAdmin.filter((f) => f.situacao === 'notificado').length,
+        em_investigacao: filaAdmin.filter((f) => f.situacao === 'em_investigacao').length,
+        confirmado: filaAdmin.filter((f) => f.situacao === 'confirmado').length,
+        descartado: filaAdmin.filter((f) => f.situacao === 'descartado').length,
+        encerrado: filaAdmin.filter((f) => f.situacao === 'encerrado').length,
+      }
+      const casosPorPeriodicidade = {
+        imediata_24h: filaAdmin.filter((f) => f.periodicidade === 'imediata_24h').length,
+        semanal: filaAdmin.filter((f) => f.periodicidade === 'semanal').length,
+      }
+      const casosPorTipoVigilancia = {
+        epidemiologica: filaAdmin.filter((f) => f.tipo_vigilancia === 'epidemiologica').length,
+        sanitaria: filaAdmin.filter((f) => f.tipo_vigilancia === 'sanitaria').length,
+        saude_trabalhador: filaAdmin.filter((f) => f.tipo_vigilancia === 'saude_trabalhador')
+          .length,
+      }
+      const concluidos = casosPorSituacao.encerrado + casosPorSituacao.descartado
+      const taxaEncerramentoPercentual =
+        filaAdmin.length > 0 ? Math.round((concluidos / filaAdmin.length) * 100) : 0
+
+      return {
+        totalCasos: filaAdmin.length,
+        casosPorSituacao,
+        casosPorPeriodicidade,
+        casosPorTipoVigilancia,
+        topAgravos: [],
+        casosUltimos30Dias: filaAdmin.length,
+        casosUltimos7Dias: filaAdmin.length,
+        taxaEncerramentoPercentual,
+      }
+    }
     return calcularIndicadoresVigilancia(notificacoes)
-  }, [notificacoes])
+  }, [notificacoes, filaAdmin, isRecepcao])
 
   // Auto-preenchimento ao escolher agravo no catálogo
   const handleSelecionarAgravoCatalogo = (codigo: string) => {
@@ -573,7 +618,9 @@ export const VigilanciaSaudeView: React.FC<VigilanciaSaudeViewProps> = ({ onNave
           }`}
         >
           <FileText className="w-3.5 h-3.5" />
-          Fila de Notificações & Casos ({notificacoesFiltradas.length})
+          {isRecepcao
+            ? `Fila Administrativa de Notificações (${filaAdmin.length})`
+            : `Fila de Notificações & Casos (${notificacoesFiltradas.length})`}
         </button>
 
         <button
@@ -589,8 +636,84 @@ export const VigilanciaSaudeView: React.FC<VigilanciaSaudeViewProps> = ({ onNave
         </button>
       </div>
 
-      {/* CONTEÚDO DA ABA 1: FILA DE NOTIFICAÇÕES & FILTROS */}
-      {abaAtiva === 'lista' && (
+      {/* MODO RECEPÇÃO: EXIBIÇÃO ADMINISTRATIVA ESTRITA (SEM DADOS CLÍNICOS NEM PESSOAIS DE TERCEIROS) */}
+      {isRecepcao && abaAtiva === 'lista' && (
+        <Card className="border-slate-200 shadow-xs bg-white">
+          <CardHeader className="p-4 border-b border-slate-100 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-600" />
+                Fila de Trabalho Administrativo da Vigilância
+              </CardTitle>
+              <CardDescription className="text-xs text-slate-500">
+                Acesso restrito à recepção: contadores, situação da fila e datas operacionais. Dados
+                clínicos e epidemiológicos sensíveis permanecem protegidos por RLS no servidor.
+              </CardDescription>
+            </div>
+            <Badge
+              variant="outline"
+              className="bg-amber-50 text-amber-800 border-amber-300 text-xs"
+            >
+              Visão Administrativa • {filaAdmin.length} registro(s)
+            </Badge>
+          </CardHeader>
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="p-8 text-center text-slate-500 text-xs">
+                Carregando fila administrativa...
+              </div>
+            ) : filaAdmin.length === 0 ? (
+              <div className="p-8 text-center text-slate-500 text-xs">
+                Nenhum registro na fila administrativa.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
+                    <tr>
+                      <th className="p-3">Nº Notificação</th>
+                      <th className="p-3">Data</th>
+                      <th className="p-3">Tipo Vigilância</th>
+                      <th className="p-3">Periodicidade</th>
+                      <th className="p-3">Situação</th>
+                      <th className="p-3">Unidade Notificadora</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filaAdmin.map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50/50">
+                        <td className="p-3 font-mono font-bold text-slate-800">
+                          {item.numero_notificacao}
+                        </td>
+                        <td className="p-3 text-slate-700">{item.data_notificacao}</td>
+                        <td className="p-3 text-slate-700 capitalize">
+                          {item.tipo_vigilancia.replace('_', ' ')}
+                        </td>
+                        <td className="p-3">
+                          {item.periodicidade === 'imediata_24h' ? (
+                            <Badge className="bg-red-600 text-white text-[10px]">
+                              Imediata 24h
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] text-slate-600">
+                              Semanal
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="p-3">{renderSituacaoBadge(item.situacao)}</td>
+                        <td className="p-3 text-slate-600">{item.unidade_notificadora}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* CONTEÚDO DA ABA 1: FILA DE NOTIFICAÇÕES & FILTROS (ADMIN, GESTOR, PROFISSIONAL) */}
+      {!isRecepcao && abaAtiva === 'lista' && (
         <div className="space-y-4">
           {/* BARRA DE FILTROS: PERÍODO, AGRAVO, SITUAÇÃO E BUSCA POR PACIENTE */}
           <Card className="border-slate-200 shadow-xs bg-white">
