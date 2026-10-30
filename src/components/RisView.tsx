@@ -68,6 +68,7 @@ import {
   XCircle,
   Plus,
   RotateCcw,
+  Eye,
 } from 'lucide-react'
 import { EditorFormatadoRIS } from '@/components/EditorFormatadoRIS'
 
@@ -1249,7 +1250,8 @@ export const RisView: React.FC<RisViewProps> = ({ onNavegarSAME }) => {
                                 )}
 
                                 {/* Laudo Já Emitido: Botão para Consulta de Versões / Retificação / Impressão no Editor Formatado */}
-                                {(item.status_ris === 'laudado' || item.status === 'liberado') && (
+                                {(item.status_ris === 'laudado' ||
+                                  item.status_exame_legado === 'liberado') && (
                                   <>
                                     <Button
                                       size="sm"

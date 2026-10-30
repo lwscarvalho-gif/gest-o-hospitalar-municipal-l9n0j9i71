@@ -889,17 +889,27 @@ Em atendimento à Missão do Codex para a conclusão dos três itens restantes d
 - **Concorrência Real Distribuída:** Os testes no harness são locais e determinísticos em memória. **A simulação não comprova concorrência massiva real** sob múltiplos nós ou processos simultâneos disputando locks no SQLite do PocketBase;
 - **Validação Visual Humana:** A formatação gráfica e visual dos laudos depende de inspeção visual humana direta.
 
-### 19.4. Pendências Exatas da Parte 2 (Interface de Usuário)
+### 19.4. Estado do Editor Formatado RIS (v0.0.63 - Restauração e Verificação Incremental)
 
-A Parte 2 do editor de laudos RIS está expressamente delimitada para a próxima etapa:
+Na versão v0.0.63, a compilação do editor formatado foi plenamente restaurada após correção do import do PocketBase (`import pb from '@/lib/pocketbase/client'`) e alinhamento estrito dos tipos da interface (`ItemFilaRIS`, sem propriedades inexistentes como `status`, `data_laudo`, `codigo_acesso`, `data_realizacao` ou `responsavel_laudo_nome`). Todos os passos de lint, tsc e build passaram limpos com sucesso.
 
-1. **Interface do Usuário (UI do Editor):** Construção da tela/componente do editor formatado na aba do RIS (botões de formatação, tabela, checklists, inserção de imagens locais anexadas, layout A4 em tela);
-2. **Testes de Round-Trip e Edição Concorrente na UI:** Verificação de carregamento de rascunho -> edição -> prévia visual -> publicação formal; simulação de conflito de concorrência com exibição de modal de alerta e retenção do texto digitado;
-3. **Matriz Recurso por Recurso 7.4.3.4.b.i–iii:**
-   - (i) Laudos descritivos e sumários com editor formatado;
-   - (ii) Modelos pré-definidos aplicados como rascunho editável;
-   - (iii) Histórico de retificações e versões comparativas com destaque da vigente;
-4. **Validação Visual Humana:** Conferência estética humana dos cabeçalhos, margens de impressão A4 e legibilidade dos sumários de resultado.
+#### Matriz Recurso por Recurso — DOC-02 Seção 7.4.3.4.b.i–iii:
+
+| Item / Subseção           | Requisito da Especificação                                                                                     | Situação                               | Evidência / O que foi Comprovado                                                                                                                                                                                       | O que Permanece Parcial ou Não Provado                                                        |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| **7.4.3.4.b.i**           | **Editor de Texto:** Negrito, itálico, sublinhado, grifo, alinhamento, recuo, fontes, cores e quebra de página | **VERIFICADO (UI + Sanitizador Real)** | Comandos `execCommand` operacionais na UI; sanitizador real do servidor (`sanitizarHtmlServidorRIS`) testado e aprovado em testes unitários locais (RIS-8 a RIS-10, RIS-15, RIS-16), preservando formatação sem perda. | Validação estética e visual humana de layout sob impressão física em papel.                   |
+| **7.4.3.4.b.i**           | **Estruturas Clínicas:** Tabelas, checklists, campos Box, Lista e Flutuante                                    | **VERIFICADO (UI + Sanitizador Real)** | Inserção funcional via barra de ferramentas e sanitização preservando classes semânticas (`ris-campo-box`, `ris-campo-lista`, `ris-checklist-item`) e tabelas no round-trip (RIS-10, RIS-15).                          | Definição de layout visual customizado pelo usuário por arrastar-e-soltar (drag-and-drop).    |
+| **7.4.3.4.b.i**           | **Manipulação / Anotação Gráfica Vetorial sobre Imagens:** Desenho sobre imagens radiológicas                  | **NÃO IMPLEMENTADO / FORA DE ESCOPO**  | Excluído explicitamente conforme diretriz de escopo do sistema hospitalar; não alegada conformidade.                                                                                                                   | Ferramenta de desenho vetorial radiológico não implementada.                                  |
+| **7.4.3.4.b.ii**          | **Modelos de Laudo e Pré-definições:** Inserção de modelos padronizados versionados                            | **VERIFICADO (UI + Backend)**          | Aplicação de modelo como rascunho para revisão humana obrigatória sem sobrescrever laudo já liberado (RIS-6); catálogo versionado em `ris_modelos_laudo`.                                                              | Criação de novos modelos durante a digitação rápida sem sair da tela.                         |
+| **7.4.3.4.b.iii**         | **Prévia e Impressão A4:** Visualização de folha A4 com cabeçalho municipal e aviso legal                      | **VERIFICADO (UI + Serviço)**          | Modal de prévia com snapshot estruturado em folha A4 (`obterPreviaLaudoRIS`), dados da Prefeitura de Mirante da Serra e aviso explícito de ausência de ICP-Brasil (RIS-21).                                            | Teste em impressora física de rede.                                                           |
+| **7.4.3.4.b.iii**         | **Retificação Imutável e Histórico de Versões:** Preservação da versão 1 e nova versão vinculada               | **VERIFICADO (Lógica + UI)**           | Retificação cria versão incremental (V2) referenciando a anterior (`versao_anterior_id`) exigindo justificativa clínica (>= 5 caracteres), com snapshot da V1 100% inalterado (RIS-13, RIS-19).                        | Comparação lado a lado (diff visual gráfico de texto) de duas versões na tela.                |
+| **Contrato Concorrência** | **Tratamento de 409 (Versão Esperada) e SeqRef:** Sem perda de texto digitado                                  | **VERIFICADO (Lógica + UI)**           | Erro `ConflitoConcorrenciaEdicaoError` (409) mantém o buffer em memória intacto; `seqRef` descarta respostas de requisições obsoletas na troca rápida de paciente (RIS-12, RIS-17, RIS-18).                            | Teste com banco PocketBase com dezenas de conexões concorrentes simultâneas de alta latência. |
+
+#### Declaração de Distinção Técnica entre Funções Reais e Mocks:
+
+- **Funções e Classes Reais Exercitadas:** `sanitizarHtmlServidorRIS`, `ConflitoConcorrenciaEdicaoError`, `RespostaSessaoObsoletaError` e contratos de dados em `src/services/ris.ts` são código real executado diretamente nos testes RIS-8 a RIS-22.
+- **Mocks Utilizados:** As chamadas de rede para o PocketBase (`pb.collection`, rotas HTTP do backend) foram mockadas deterministamente no harness para permitir execução offline segura sem poluir a base compartilhada de testes com fixtures ou registros fictícios.
+- **Sem LocalStorage Clínico:** O laudo em edição fica estritamente na memória React da sessão; nenhuma informação clínica confidencial é armazenada em `localStorage`.
 
 ---
 

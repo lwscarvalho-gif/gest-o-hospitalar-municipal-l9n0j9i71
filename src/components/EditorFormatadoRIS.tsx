@@ -60,7 +60,7 @@ import {
   listarModelosLaudoRIS,
   aplicarModeloLaudoComoRascunho,
 } from '@/services/ris'
-import { pb } from '@/lib/pocketbase/client'
+import pb from '@/lib/pocketbase/client'
 import {
   ItemFilaRIS,
   RisModeloLaudo,
@@ -170,8 +170,8 @@ export const EditorFormatadoRIS: React.FC<EditorFormatadoRISProps> = ({
   // Verifica se o exame já está formalmente laudado / liberado
   const laudoJaLiberado =
     exame.status_ris === 'laudado' ||
-    exame.status === 'liberado' ||
-    Boolean(exame.data_laudo && exame.laudo_texto)
+    exame.status_exame_legado === 'liberado' ||
+    Boolean(exame.laudo_texto)
 
   // Limpeza estrita e inicialização na troca de paciente/exame
   useEffect(() => {
@@ -212,7 +212,6 @@ export const EditorFormatadoRIS: React.FC<EditorFormatadoRISProps> = ({
         // Inicializa conteúdo com rascunho ou laudo publicado
         const conteudoBruto =
           previa.previa.conteudo_formatado_sanitizado ||
-          exame.conteudo_formatado_rascunho ||
           exame.rascunho_laudo ||
           exame.laudo_texto ||
           ''
@@ -222,13 +221,25 @@ export const EditorFormatadoRIS: React.FC<EditorFormatadoRISProps> = ({
         setConteudoHtml(conteudoSeguro)
         setSumarioResultado(exame.resultado_sumario || '')
         setVersaoEsperada(exame.versao_atual || 1)
-        setVersaoRascunhoAtual(exame.versao_conteudo_rascunho || 1)
+        setVersaoRascunhoAtual(1)
 
         // Configuração do editor
         const cfg = previa.previa.config_editor as RisConfigEditorLaudo
         if (cfg) {
-          if (cfg.estilo_fonte) setEstiloFonte(cfg.estilo_fonte)
-          if (cfg.tamanho_fonte) setTamanhoFonte(cfg.tamanho_fonte)
+          if (
+            cfg.estilo_fonte === 'sans' ||
+            cfg.estilo_fonte === 'serif' ||
+            cfg.estilo_fonte === 'mono'
+          ) {
+            setEstiloFonte(cfg.estilo_fonte)
+          }
+          if (
+            cfg.tamanho_fonte === 'pequena' ||
+            cfg.tamanho_fonte === 'normal' ||
+            cfg.tamanho_fonte === 'grande'
+          ) {
+            setTamanhoFonte(cfg.tamanho_fonte)
+          }
           if (cfg.cor_destaque) setCorTextoAtiva(cfg.cor_destaque)
         }
 
@@ -741,9 +752,7 @@ export const EditorFormatadoRIS: React.FC<EditorFormatadoRISProps> = ({
                 </span>
                 <span>
                   Protocolo:{' '}
-                  <span className="font-mono text-slate-400">
-                    {exame.codigo_acesso || exame.id.slice(0, 8)}
-                  </span>
+                  <span className="font-mono text-slate-400">{exame.id.slice(0, 8)}</span>
                 </span>
               </div>
             </div>
@@ -1139,9 +1148,7 @@ export const EditorFormatadoRIS: React.FC<EditorFormatadoRISProps> = ({
               </div>
               <div>
                 <span className="text-slate-500">Data Realização:</span>{' '}
-                <span className="font-mono">
-                  {exame.data_realizacao || exame.data_solicitacao || '—'}
-                </span>
+                <span className="font-mono">{exame.updated || exame.data_solicitacao || '—'}</span>
               </div>
             </div>
 
@@ -1165,16 +1172,14 @@ export const EditorFormatadoRIS: React.FC<EditorFormatadoRISProps> = ({
                     : 'text-[13px]'
               }`}
               style={{ color: corTextoAtiva }}
-              placeholder="Digite o laudo descritivo completo ou aplique um modelo pré-definido acima..."
+              aria-label="Editor de laudo descritivo completo"
             />
 
             {/* Rodapé da Folha com Identificação Profissional */}
             <div className="mt-8 pt-4 border-t border-slate-300 text-xs flex flex-wrap items-center justify-between text-slate-600">
               <div>
                 <span>Médico Responsável: </span>
-                <strong className="text-slate-900">
-                  {exame.responsavel_laudo_nome || user?.name || 'Médico Radiologista'}
-                </strong>
+                <strong className="text-slate-900">{user?.name || 'Médico Radiologista'}</strong>
               </div>
               <div className="text-[11px] font-mono text-slate-500">
                 Homologação e Liberação Assistencial • Não constitui certificado ICP-Brasil
