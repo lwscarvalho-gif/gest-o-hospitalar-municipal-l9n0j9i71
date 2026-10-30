@@ -165,6 +165,11 @@ export type TipoEventoProntuario =
   | 'exame_em_analise'
   | 'exame_laudado'
   | 'exame_cancelado'
+  | 'cirurgia_agendada'
+  | 'cirurgia_checklist'
+  | 'cirurgia_ato_operatorio'
+  | 'cirurgia_recuperacao_srpa'
+  | 'cirurgia_cancelada'
 
 export interface EventoProntuarioUnificado {
   id: string
@@ -378,6 +383,170 @@ export interface EvolucaoClinica {
   cid10?: string
   sinais_vitais?: string
   conduta?: string
+  created: string
+  updated: string
+}
+
+// -------------------------------------------------------------
+// FASE 5: MÓDULO CENTRO CIRÚRGICO
+// -------------------------------------------------------------
+export type StatusSalaCirurgica = 'livre' | 'ocupada' | 'limpeza' | 'manutencao'
+
+export interface SalaCirurgica {
+  id: string
+  nome: string
+  bloco?: string
+  status: StatusSalaCirurgica
+  motivo_bloqueio?: string
+  equipamentos?: string
+  ativo?: boolean
+  observacoes?: string
+  created: string
+  updated: string
+}
+
+export type TipoPacienteCirurgia = 'internado' | 'ambulatorial' | 'urgencia_pa'
+
+export type StatusCirurgia =
+  | 'agendada'
+  | 'checklist_concluido'
+  | 'em_sala'
+  | 'em_recuperacao'
+  | 'concluida'
+  | 'cancelada'
+
+export interface Cirurgia {
+  id: string
+  paciente: string
+  tipo_paciente: TipoPacienteCirurgia
+  internacao?: string
+  atendimento_pa?: string
+  sala: string
+  procedimento_codigo?: string
+  procedimento_nome: string
+  data_horario_previsto: string
+  duracao_estimada_minutos?: number
+  status: StatusCirurgia
+  cirurgiao_principal: string
+  cirurgiao_principal_nome: string
+  anestesista?: string
+  anestesista_nome?: string
+  instrumentador?: string
+  instrumentador_nome?: string
+  equipe_adicional?: string
+  observacoes_agendamento?: string
+  motivo_cancelamento?: string
+  data_hora_inicio?: string
+  data_hora_fim?: string
+  expand?: {
+    paciente?: Paciente
+    internacao?: Internacao
+    atendimento_pa?: FichaProntoAtendimento
+    sala?: SalaCirurgica
+    cirurgiao_principal?: Profissional
+    anestesista?: Profissional
+    instrumentador?: Profissional
+  }
+  created: string
+  updated: string
+}
+
+export type RiscoASA = 'ASA_I' | 'ASA_II' | 'ASA_III' | 'ASA_IV' | 'ASA_V' | 'ASA_VI'
+
+export interface ChecklistPreOperatorio {
+  id: string
+  cirurgia: string
+  paciente: string
+  data_conferencia: string
+  responsavel?: string
+  responsavel_nome: string
+  jejum_confirmado?: boolean
+  jejum_horas?: number
+  exames_pre_operatorios_ok?: boolean
+  detalhes_exames?: string
+  consentimento_informado_assinado?: boolean
+  avaliacao_risco_anestesico_concluida?: boolean
+  risco_asa?: RiscoASA
+  demarcacao_lateralidade?: boolean
+  alergias_checadas?: boolean
+  reserva_sangue_hemoderivados?: boolean
+  retirada_proteses_adornos?: boolean
+  acesso_venoso_permeavel?: boolean
+  liberado_centro_cirurgico?: boolean
+  observacoes?: string
+  expand?: {
+    cirurgia?: Cirurgia
+    paciente?: Paciente
+    responsavel?: Profissional
+  }
+  created: string
+  updated: string
+}
+
+export type TipoAnestesia =
+  | 'geral'
+  | 'raquianestesia'
+  | 'peridural'
+  | 'sedacao_local'
+  | 'bloqueio_regional'
+  | 'local'
+
+export interface AtoOperatorio {
+  id: string
+  cirurgia: string
+  paciente: string
+  cirurgiao?: string
+  cirurgiao_nome: string
+  procedimento_realizado: string
+  codigo_procedimento?: string
+  tecnica_cirurgica: string
+  tipo_anestesia: TipoAnestesia
+  data_hora_inicio: string
+  data_hora_fim: string
+  duracao_minutos?: number
+  diagnostico_pre_operatorio?: string
+  diagnostico_pos_operatorio?: string
+  cid10?: string
+  descricao_ato: string
+  complicacoes_intercorrencias?: string
+  perda_sanguinea_estimada_ml?: number
+  materiais_implantes_utilizados?: string
+  envio_anatomo_patologico?: boolean
+  equipe_participante?: string
+  expand?: {
+    cirurgia?: Cirurgia
+    paciente?: Paciente
+    cirurgiao?: Profissional
+  }
+  created: string
+  updated: string
+}
+
+export type DestinoSRPA = 'retorno_leito' | 'alta_hospitalar' | 'uti' | 'observacao_srpa'
+
+export interface RecuperacaoPosAnestesica {
+  id: string
+  cirurgia: string
+  paciente: string
+  data_hora_admissao_srpa: string
+  data_hora_alta_srpa?: string
+  responsavel?: string
+  responsavel_nome: string
+  escala_aldrete_kroulik?: number
+  sinais_vitais_admissao?: string
+  sinais_vitais_alta?: string
+  nivel_consciencia?: string
+  dor_escala_analogica?: string
+  nauseas_vomitos?: boolean
+  evolucao_pos_operatoria: string
+  destino_pos_alta: DestinoSRPA
+  leito_destino?: string
+  orientacoes_alta?: string
+  expand?: {
+    cirurgia?: Cirurgia
+    paciente?: Paciente
+    responsavel?: Profissional
+  }
   created: string
   updated: string
 }

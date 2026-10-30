@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T03:35:47.481Z",
+  "generatedAt": "2026-10-30T03:49:08.572Z",
   "collections": [
     {
       "name": "users",
@@ -1892,6 +1892,695 @@
         "CREATE INDEX idx_exames_status ON exames (status)",
         "CREATE INDEX idx_exames_data ON exames (data_solicitacao)",
         "CREATE INDEX idx_exames_prioridade ON exames (prioridade)"
+      ]
+    },
+    {
+      "name": "salas_cirurgicas",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "bloco",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["livre", "ocupada", "limpeza", "manutencao"]
+        },
+        {
+          "name": "motivo_bloqueio",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "equipamentos",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_salas_cirurgicas_status ON salas_cirurgicas (status)"]
+    },
+    {
+      "name": "cirurgias",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "tipo_paciente",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["internado", "ambulatorial", "urgencia_pa"]
+        },
+        {
+          "name": "internacao",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "internacoes"
+        },
+        {
+          "name": "atendimento_pa",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "pronto_atendimento"
+        },
+        {
+          "name": "sala",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "salas_cirurgicas"
+        },
+        {
+          "name": "procedimento_codigo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "procedimento_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_horario_previsto",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "duracao_estimada_minutos",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "agendada",
+            "checklist_concluido",
+            "em_sala",
+            "em_recuperacao",
+            "concluida",
+            "cancelada"
+          ]
+        },
+        {
+          "name": "cirurgiao_principal",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "cirurgiao_principal_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "anestesista",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "anestesista_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "instrumentador",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "instrumentador_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "equipe_adicional",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes_agendamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "motivo_cancelamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_inicio",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_fim",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_cirurgias_paciente ON cirurgias (paciente)",
+        "CREATE INDEX idx_cirurgias_sala ON cirurgias (sala)",
+        "CREATE INDEX idx_cirurgias_status ON cirurgias (status)",
+        "CREATE INDEX idx_cirurgias_data ON cirurgias (data_horario_previsto)"
+      ]
+    },
+    {
+      "name": "checklists_pre_operatorios",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "cirurgia",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "cirurgias"
+        },
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "data_conferencia",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "responsavel",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "responsavel_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "jejum_confirmado",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "jejum_horas",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "exames_pre_operatorios_ok",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "detalhes_exames",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "consentimento_informado_assinado",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "avaliacao_risco_anestesico_concluida",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "risco_asa",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["ASA_I", "ASA_II", "ASA_III", "ASA_IV", "ASA_V", "ASA_VI"]
+        },
+        {
+          "name": "demarcacao_lateralidade",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "alergias_checadas",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "reserva_sangue_hemoderivados",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "retirada_proteses_adornos",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "acesso_venoso_permeavel",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "liberado_centro_cirurgico",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_checklists_cirurgia ON checklists_pre_operatorios (cirurgia)",
+        "CREATE INDEX idx_checklists_paciente ON checklists_pre_operatorios (paciente)"
+      ]
+    },
+    {
+      "name": "atos_operatorios",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "cirurgia",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "cirurgias"
+        },
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "cirurgiao",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "cirurgiao_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "procedimento_realizado",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "codigo_procedimento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tecnica_cirurgica",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo_anestesia",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "geral",
+            "raquianestesia",
+            "peridural",
+            "sedacao_local",
+            "bloqueio_regional",
+            "local"
+          ]
+        },
+        {
+          "name": "data_hora_inicio",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_hora_fim",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "duracao_minutos",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "diagnostico_pre_operatorio",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "diagnostico_pos_operatorio",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cid10",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "descricao_ato",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "complicacoes_intercorrencias",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "perda_sanguinea_estimada_ml",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "materiais_implantes_utilizados",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "envio_anatomo_patologico",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "equipe_participante",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_atos_cirurgia ON atos_operatorios (cirurgia)",
+        "CREATE INDEX idx_atos_paciente ON atos_operatorios (paciente)"
+      ]
+    },
+    {
+      "name": "recuperacao_pos_anestesica",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "cirurgia",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "cirurgias"
+        },
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "data_hora_admissao_srpa",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_hora_alta_srpa",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "responsavel",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "responsavel_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "escala_aldrete_kroulik",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sinais_vitais_admissao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sinais_vitais_alta",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "nivel_consciencia",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "dor_escala_analogica",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "nauseas_vomitos",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "evolucao_pos_operatoria",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "destino_pos_alta",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["retorno_leito", "alta_hospitalar", "uti", "observacao_srpa"]
+        },
+        {
+          "name": "leito_destino",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "orientacoes_alta",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_srpa_cirurgia ON recuperacao_pos_anestesica (cirurgia)",
+        "CREATE INDEX idx_srpa_paciente ON recuperacao_pos_anestesica (paciente)",
+        "CREATE INDEX idx_srpa_destino ON recuperacao_pos_anestesica (destino_pos_alta)"
       ]
     }
   ]

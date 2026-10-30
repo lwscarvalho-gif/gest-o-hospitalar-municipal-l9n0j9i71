@@ -31,6 +31,8 @@ import {
   ShieldAlert,
   FlaskConical,
   Microscope,
+  Scissors,
+  CheckSquare,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -126,6 +128,7 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
         if (filtroTipo === 'farmacia' && ev.tipo !== 'dispensacao_farmacia') return false
         if (filtroTipo === 'agendamento' && ev.tipo !== 'agendamento') return false
         if (filtroTipo === 'exames' && !ev.tipo.startsWith('exame_')) return false
+        if (filtroTipo === 'cirurgia' && !ev.tipo.startsWith('cirurgia_')) return false
       }
 
       // Filtro período
@@ -174,6 +177,15 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
       case 'exame_em_analise':
       case 'exame_cancelado':
         return <Microscope className="w-4 h-4 text-purple-600" />
+      case 'cirurgia_agendada':
+      case 'cirurgia_cancelada':
+        return <Scissors className="w-4 h-4 text-rose-600" />
+      case 'cirurgia_checklist':
+        return <CheckSquare className="w-4 h-4 text-amber-600" />
+      case 'cirurgia_ato_operatorio':
+        return <Scissors className="w-4 h-4 text-red-700" />
+      case 'cirurgia_recuperacao_srpa':
+        return <HeartPulse className="w-4 h-4 text-indigo-600" />
       default:
         return <HeartPulse className="w-4 h-4 text-blue-600" />
     }
@@ -399,12 +411,13 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
             onChange={(e) => setFiltroTipo(e.target.value)}
           >
             <option value="todos">Todos os Eventos ({eventos.length})</option>
+            <option value="cirurgia">Centro Cirúrgico (Ato, SRPA, Checklist)</option>
             <option value="pa">Pronto Atendimento (PA)</option>
             <option value="internacao">Internações & Transferências</option>
             <option value="prescricao">Prescrições Médicas</option>
             <option value="enfermagem">Checagens de Enfermagem</option>
             <option value="assistencial">Evoluções Clínicas</option>
-            <option value="exames">Exames & Laudos Complementares</option>
+            <option value="exames">Exames & Laudos</option>
             <option value="farmacia">Dispensações de Medicamentos</option>
             <option value="agendamento">Agendamentos</option>
           </select>

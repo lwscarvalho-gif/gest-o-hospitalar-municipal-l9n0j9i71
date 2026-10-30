@@ -10,9 +10,14 @@ import {
   PrescricaoMedica,
   AdministracaoMedicamento,
   ExameItem,
+  Cirurgia,
+  ChecklistPreOperatorio,
+  AtoOperatorio,
+  RecuperacaoPosAnestesica,
 } from '@/types/hospital'
 import { listarPrescricoes, listarAdministracoesMedicamentos } from './prescricoes'
 import { listarExames } from './exames'
+import { listarCirurgias } from './centroCirurgico'
 
 /**
  * SERVIÇO SAME — PRONTUÁRIO ELETRÔNICO ÚNICO / CONSOLIDADO
@@ -35,6 +40,10 @@ export async function carregarProntuarioUnificado(
     prescricoes,
     administracoes,
     exames,
+    cirurgias,
+    checklistsPreOp,
+    atosOperatorios,
+    recuperacoesSrpa,
   ] = await Promise.all([
     pb
       .collection('pronto_atendimento')
@@ -86,6 +95,35 @@ export async function carregarProntuarioUnificado(
     listarAdministracoesMedicamentos({ pacienteId }),
 
     listarExames({ pacienteId }),
+
+    listarCirurgias({ pacienteId }),
+
+    pb
+      .collection('checklists_pre_operatorios')
+      .getFullList<ChecklistPreOperatorio>({
+        filter: `paciente = "${pacienteId}"`,
+        sort: '-created',
+        expand: 'responsavel,cirurgia',
+      })
+      .catch(() => [] as ChecklistPreOperatorio[]),
+
+    pb
+      .collection('atos_operatorios')
+      .getFullList<AtoOperatorio>({
+        filter: `paciente = "${pacienteId}"`,
+        sort: '-created',
+        expand: 'cirurgiao,cirurgia',
+      })
+      .catch(() => [] as AtoOperatorio[]),
+
+    pb
+      .collection('recuperacao_pos_anestesica')
+      .getFullList<RecuperacaoPosAnestesica>({
+        filter: `paciente = "${pacienteId}"`,
+        sort: '-created',
+        expand: 'responsavel,cirurgia',
+      })
+      .catch(() => [] as RecuperacaoPosAnestesica[]),
   ])
 
   const eventos: EventoProntuarioUnificado[] = []
@@ -458,6 +496,173 @@ export async function carregarProntuarioUnificado(
       badgeCor: corStatus,
       icone: 'Microscope',
       registroOriginal: ex,
+    })
+  })
+
+  // I. CENTRO CIRÚRGICO — Agenda, Checklists, Atos Operatórios e SRPA
+  // 1. Agendamento / Ciclo da Cirurgia
+  cirurgias.forEach((cir) => {
+    const statusLabels: Record<string, string> = {
+      agendada: 'Agendada',
+      checklist_concluido: 'Checklist Concluído',
+      em_sala: 'Em Sala Cirúrgica',
+      em_recuperacao: 'Em Recuperação (SRPA)',
+      concluida: 'Concluída',
+      cancelada: 'Cancelada',
+    }
+
+    const statusBadgeCores: Record<string, string> = {
+      agendada: 'bg-blue-600 text-white',
+      checklist_concluido: 'bg-amber-600 text-white',
+      em_sala: 'bg-red-600 text-white',
+      em_recuperacao: 'bg-purple-600 text-white',
+      concluida: 'bg-emerald-700 text-white',
+      cancelada: 'bg-slate-600 text-white',
+    }
+
+    const isCancelada = cir.status === 'cancelada'
+    const salaNome = cir.expand?.sala?.nome || 'Sala Cirúrgica'
+
+    eventos.push({
+      id: `cir-${cir.id}`,
+      tipo: isCancelada ? 'cirurgia_cancelada' : 'cirurgia_agendada',
+      dataHora: cir.data_horario_previsto || cir.created,
+      titulo: `Centro Cirúrgico — ${cir.procedimento_nome} (${statusLabels[cir.status] || cir.status})`,
+      subtitulo: `Cirurgião: ${cir.cirurgiao_principal_nome} • Sala: ${salaNome}${cir.anestesista_nome ? ` • Anestesista: ${cir.anestesista_nome}` : ''}`,
+      descricao: `${cir.procedimento_codigo ? `Código SIGTAP: ${cir.procedimento_codigo} | ` : ''}Tipo: Paciente ${cir.tipo_paciente.toUpperCase()}${
+        cir.duracao_estimada_minutos ? ` | Estimativa: ${cir.duracao_estimada_minutos} min` : ''
+      }${cir.observacoes_agendamento ? `\nObservações: ${cir.observacoes_agendamento}` : ''}${
+        cir.motivo_cancelamento ? `\nMotivo do Cancelamento: ${cir.motivo_cancelamento}` : ''
+      }`,
+      detalhes: {
+        procedimento: cir.procedimento_nome,
+        codigo: cir.procedimento_codigo,
+        sala: salaNome,
+        status: cir.status,
+        cirurgiao: cir.cirurgiao_principal_nome,
+        anestesista: cir.anestesista_nome,
+        instrumentador: cir.instrumentador_nome,
+        equipe_adicional: cir.equipe_adicional,
+        data_hora_inicio: cir.data_hora_inicio,
+        data_hora_fim: cir.data_hora_fim,
+      },
+      profissionalNome: cir.cirurgiao_principal_nome,
+      setorOuLeito: salaNome,
+      badgeTexto: `Cirurgia • ${statusLabels[cir.status] || cir.status}`,
+      badgeCor: statusBadgeCores[cir.status] || 'bg-slate-700 text-white',
+      icone: 'Scissors',
+      registroOriginal: cir,
+    })
+  })
+
+  // 2. Checklists Pré-Operatórios
+  checklistsPreOp.forEach((chk) => {
+    eventos.push({
+      id: `chk-preop-${chk.id}`,
+      tipo: 'cirurgia_checklist',
+      dataHora: chk.data_conferencia || chk.created,
+      titulo: `Checklist Pré-Operatório — ${chk.liberado_centro_cirurgico ? 'PACIENTE LIBERADO' : 'PENDENTE DE LIBERAÇÃO'}`,
+      subtitulo: `Conferido por: ${chk.responsavel_nome}${chk.risco_asa ? ` • Risco Cirúrgico: ${chk.risco_asa}` : ''}`,
+      descricao: `Jejum: ${chk.jejum_confirmado ? `Confirmado (${chk.jejum_horas || 8}h)` : 'Não confirmado'} | Exames Pré-Op: ${chk.exames_pre_operatorios_ok ? 'Conformes' : 'Pendentes'} | Consentimento Informado: ${chk.consentimento_informado_assinado ? 'Assinado' : 'Pendente'} | Alergias: ${chk.alergias_checadas ? 'Checadas' : 'Não checadas'}${
+        chk.detalhes_exames ? `\nExames: ${chk.detalhes_exames}` : ''
+      }${chk.observacoes ? `\nObs: ${chk.observacoes}` : ''}`,
+      detalhes: {
+        jejum: chk.jejum_confirmado,
+        jejum_horas: chk.jejum_horas,
+        exames_ok: chk.exames_pre_operatorios_ok,
+        consentimento: chk.consentimento_informado_assinado,
+        avaliacao_anestesica: chk.avaliacao_risco_anestesico_concluida,
+        risco_asa: chk.risco_asa,
+        demarcacao_lateralidade: chk.demarcacao_lateralidade,
+        alergias_checadas: chk.alergias_checadas,
+        liberado: chk.liberado_centro_cirurgico,
+      },
+      profissionalNome: chk.responsavel_nome,
+      badgeTexto: chk.liberado_centro_cirurgico ? 'Pré-Op • Liberado' : 'Pré-Op • Pendente',
+      badgeCor: chk.liberado_centro_cirurgico
+        ? 'bg-emerald-700 text-white'
+        : 'bg-amber-600 text-white',
+      icone: 'CheckSquare',
+      registroOriginal: chk,
+    })
+  })
+
+  // 3. Atos Operatórios (Descrição Cirúrgica)
+  atosOperatorios.forEach((ato) => {
+    eventos.push({
+      id: `ato-op-${ato.id}`,
+      tipo: 'cirurgia_ato_operatorio',
+      dataHora: ato.data_hora_fim || ato.data_hora_inicio || ato.created,
+      titulo: `Ato Operatório Registrado: ${ato.procedimento_realizado}`,
+      subtitulo: `Cirurgião: ${ato.cirurgiao_nome} • Técnica: ${ato.tecnica_cirurgica} • Anestesia: ${ato.tipo_anestesia.toUpperCase()}`,
+      descricao: `Início: ${ato.data_hora_inicio} • Término: ${ato.data_hora_fim}${ato.duracao_minutos ? ` (${ato.duracao_minutos} min)` : ''}${
+        ato.diagnostico_pre_operatorio ? `\nDx Pré: ${ato.diagnostico_pre_operatorio}` : ''
+      }${ato.diagnostico_pos_operatorio ? ` | Dx Pós: ${ato.diagnostico_pos_operatorio}` : ''}${
+        ato.cid10 ? ` (CID-10: ${ato.cid10})` : ''
+      }\n\nDescrição do Ato:\n${ato.descricao_ato}${
+        ato.complicacoes_intercorrencias
+          ? `\n\nIntercorrências: ${ato.complicacoes_intercorrencias}`
+          : ''
+      }${ato.materiais_implantes_utilizados ? `\nMateriais/Implantes: ${ato.materiais_implantes_utilizados}` : ''}${
+        ato.envio_anatomo_patologico ? '\nMaterial enviado para exame anátomo-patológico.' : ''
+      }`,
+      detalhes: {
+        procedimento: ato.procedimento_realizado,
+        tecnica: ato.tecnica_cirurgica,
+        anestesia: ato.tipo_anestesia,
+        duracao: ato.duracao_minutos,
+        diagnostico_pos: ato.diagnostico_pos_operatorio,
+        perda_sanguinea: ato.perda_sanguinea_estimada_ml,
+        equipe: ato.equipe_participante,
+      },
+      profissionalNome: ato.cirurgiao_nome,
+      badgeTexto: 'Ato Cirúrgico Registrado',
+      badgeCor: 'bg-rose-700 text-white',
+      icone: 'Activity',
+      registroOriginal: ato,
+    })
+  })
+
+  // 4. Recuperação Pós-Anestésica (SRPA)
+  recuperacoesSrpa.forEach((rec) => {
+    const destinoLabels: Record<string, string> = {
+      retorno_leito: 'Retorno ao Leito / Enfermaria',
+      alta_hospitalar: 'Alta Hospitalar Direta',
+      uti: 'Transferência para UTI',
+      observacao_srpa: 'Em Observação na SRPA',
+    }
+
+    eventos.push({
+      id: `rec-srpa-${rec.id}`,
+      tipo: 'cirurgia_recuperacao_srpa',
+      dataHora: rec.data_hora_alta_srpa || rec.data_hora_admissao_srpa || rec.created,
+      titulo: `SRPA / Recuperação Pós-Anestésica — Destino: ${destinoLabels[rec.destino_pos_alta] || rec.destino_pos_alta}`,
+      subtitulo: `Responsável SRPA: ${rec.responsavel_nome}${rec.escala_aldrete_kroulik !== undefined ? ` • Escala Aldrete: ${rec.escala_aldrete_kroulik}/10` : ''}`,
+      descricao: `Admissão: ${rec.data_hora_admissao_srpa}${rec.data_hora_alta_srpa ? ` • Alta SRPA: ${rec.data_hora_alta_srpa}` : ''}${
+        rec.sinais_vitais_admissao ? `\nSinais Vitais Admissão: ${rec.sinais_vitais_admissao}` : ''
+      }${rec.sinais_vitais_alta ? ` | Sinais Vitais Alta: ${rec.sinais_vitais_alta}` : ''}${
+        rec.nivel_consciencia ? ` | Consciência: ${rec.nivel_consciencia}` : ''
+      }${rec.dor_escala_analogica ? ` | Dor EVA: ${rec.dor_escala_analogica}` : ''}\n\nEvolução:\n${rec.evolucao_pos_operatoria}${
+        rec.leito_destino ? `\nLeito de Destino: ${rec.leito_destino}` : ''
+      }${rec.orientacoes_alta ? `\nOrientações: ${rec.orientacoes_alta}` : ''}`,
+      detalhes: {
+        admissao: rec.data_hora_admissao_srpa,
+        alta: rec.data_hora_alta_srpa,
+        aldrete: rec.escala_aldrete_kroulik,
+        destino: rec.destino_pos_alta,
+        leito_destino: rec.leito_destino,
+        evolucao: rec.evolucao_pos_operatoria,
+      },
+      profissionalNome: rec.responsavel_nome,
+      badgeTexto: `SRPA • ${destinoLabels[rec.destino_pos_alta] || 'Recuperação'}`,
+      badgeCor:
+        rec.destino_pos_alta === 'uti'
+          ? 'bg-red-700 text-white'
+          : rec.destino_pos_alta === 'alta_hospitalar'
+            ? 'bg-emerald-700 text-white'
+            : 'bg-indigo-700 text-white',
+      icone: 'HeartPulse',
+      registroOriginal: rec,
     })
   })
 
