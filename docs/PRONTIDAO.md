@@ -11,33 +11,34 @@
 
 ## 1. Evidências por Versão Entregue (v0.0.1 a v0.0.24)
 
-| Versão     | Escopo / Módulo Entregue                                         | Evidência Comprovada                                                                                                                                                              |
-| :--------- | :--------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0.0.1**  | Scaffold base e autenticação PocketBase                          | Login municipal com perfis (admin, gestor, profissional, recepcao), contexto AuthContext e token JWT.                                                                             |
-| **0.0.2**  | Cadastros Fundamentais                                           | CRUD de Setores hospitalares, Leitos com status (vago/ocupado/manutenção/higienização), Pacientes e Profissionais de Saúde.                                                       |
-| **0.0.3**  | Agendamentos Ambulatoriais e Painel Inicial                      | Fila de consultas, status de agendamento (agendado, confirmado, atendido, cancelado) e métricas básicas de ocupação.                                                              |
-| **0.0.4**  | Internação e Mapa de Leitos                                      | Fluxo de admissão hospitalar, transferência de leitos entre setores, histórico de leitos e altas médicas.                                                                         |
-| **0.0.5**  | Evolução Clínica e Prontuário Básico                             | Registro assistencial multiprofissional (médica, enfermagem), CID-10 e sinais vitais vinculados à internação.                                                                     |
-| **0.0.6**  | Trilha de Auditoria Geral                                        | Coleção `auditoria` gravando eventos de login, logout e transações assistenciais com usuário, IP e timestamp.                                                                     |
-| **0.0.7**  | Pronto Atendimento (PA)                                          | Acolhimento, classificação de risco Protocolo de Manchester (Vermelho, Laranja, Amarelo, Verde, Azul) e encaminhamentos.                                                          |
-| **0.0.8**  | Prescrição Médica e Aprazamento de Enfermagem                    | Prescrição de itens farmacêuticos, horários e checagem de administração de medicamentos à beira-leito.                                                                            |
-| **0.0.9**  | Farmácia Hospitalar e Dispensação                                | Catálogo de medicamentos/materiais, saldo atual/mínimo e baixa de dispensação por paciente ou remessa de setor.                                                                   |
-| **0.0.10** | Exames Laboratoriais e Laudos                                    | Ciclo completo: solicitação médica, coleta de amostra, início de análise técnica e emissão de laudo estruturado.                                                                  |
-| **0.0.11** | Centro Cirúrgico                                                 | Gestão de salas cirúrgicas, agendamento de cirurgias, checklist pré-operatório OMS/Safe Surgery, ato operatório e SRPA (escala de Aldrete-Kroulik).                               |
-| **0.0.12** | Faturamento SUS / SIGTAP                                         | Importação e consulta da tabela SIGTAP, contas hospitalares AIH (SH/SA/SP) e apuração de produção ambulatorial BPA.                                                               |
-| **0.0.13** | Impressos Assistenciais em Folha A4                              | Emissão formatada de Receituário simples/controlado, Atestado Médico e Resumo de Alta com opção de consentimento para CID-10 (LGPD/CFM).                                          |
-| **0.0.14** | Vigilância em Saúde (Sem Georreferenciamento)                    | Notificação compulsória (imediata 24h e semanal), histórico de investigação epidemiológica e fila administrativa restrita sem mapas/geolocalização.                               |
-| **0.0.15** | Centro Obstétrico e Sala de Parto                                | Admissão obstétrica com risco, partograma simplificado, registro do parto, cadastro do RN com escala de Apgar e desfecho puerperal.                                               |
-| **0.0.16** | Central de Regulação Interna                                     | Solicitações de transferência leito a leito, triagem por médico regulador com fila administrativa sem dados de contato expostos à recepção.                                       |
-| **0.0.17** | Segurança e Regras de RLS no Backend                             | Migração 0014 travando coleções clínicas para o perfil `recepcao`, restrição de dispensação e auditoria imutável (update/delete nulos).                                           |
-| **0.0.18** | Painel de Gestão e Indicadores em Tempo Real                     | Painel executivo com tempos médios de espera PA, taxa de ocupação de leitos, cirurgias por sala e monitoramento operacional com PocketBase Realtime.                              |
-| **0.0.19** | SAME e Prontuário Unificado do Paciente                          | Linha do tempo integrada consolidando PA, internações, cirurgias, obstetrícia, exames, dispensações e impressos por CPF/CNS.                                                      |
-| **0.0.20** | Inventário Farmacêutico, Integridade e Idempotência              | Snapshot de abertura de inventário, detecção de concorrência na contagem física, perdas por validade/avaria e proteção de idempotency_key contra retry duplicado.                 |
-| **0.0.21** | Fechamento de Testes Sintéticos & Imutabilidade                  | Expurgo total de endpoints mutantes sintéticos; travamento estrito de delete/update em movimentações e auditoria.                                                                 |
-| **0.0.22** | Regulação Administrativa e Relógio Fuso Inicial                  | Catálogo de recursos/destinos, filtros administrativos e cálculo individual de tempo de espera com pausas documentadas.                                                           |
-| **0.0.23** | Consolidação de Relatórios e Auditoria de Acessos                | Refinamento de permissões e relatórios por competência sem alterações destrutivas.                                                                                                |
-| **0.0.24** | Consistência de Datas/Horários, Fuso IANA e Qualidade de Dados   | Parametrização por unidade (`America/Porto_Velho` para Mirante da Serra/RO [UTC-4]), dados sem data exibidos como 'indisponível' e fora das médias (sem zeros).                   |
-| **0.0.27** | Conferência de Consistência Faturamento SUS (AIH / BPA / SIGTAP) | Validação administrativa prévia de contas AIH (campos, datas invertidas, alta >6 meses, causa externa), BPA (duplicidade), regras SIGTAP por competência e painel de conferência. |
+| Versão     | Escopo / Módulo Entregue                                         | Evidência Comprovada                                                                                                                                                                  |
+| :--------- | :--------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **0.0.1**  | Scaffold base e autenticação PocketBase                          | Login municipal com perfis (admin, gestor, profissional, recepcao), contexto AuthContext e token JWT.                                                                                 |
+| **0.0.2**  | Cadastros Fundamentais                                           | CRUD de Setores hospitalares, Leitos com status (vago/ocupado/manutenção/higienização), Pacientes e Profissionais de Saúde.                                                           |
+| **0.0.3**  | Agendamentos Ambulatoriais e Painel Inicial                      | Fila de consultas, status de agendamento (agendado, confirmado, atendido, cancelado) e métricas básicas de ocupação.                                                                  |
+| **0.0.4**  | Internação e Mapa de Leitos                                      | Fluxo de admissão hospitalar, transferência de leitos entre setores, histórico de leitos e altas médicas.                                                                             |
+| **0.0.5**  | Evolução Clínica e Prontuário Básico                             | Registro assistencial multiprofissional (médica, enfermagem), CID-10 e sinais vitais vinculados à internação.                                                                         |
+| **0.0.6**  | Trilha de Auditoria Geral                                        | Coleção `auditoria` gravando eventos de login, logout e transações assistenciais com usuário, IP e timestamp.                                                                         |
+| **0.0.7**  | Pronto Atendimento (PA)                                          | Acolhimento, classificação de risco Protocolo de Manchester (Vermelho, Laranja, Amarelo, Verde, Azul) e encaminhamentos.                                                              |
+| **0.0.8**  | Prescrição Médica e Aprazamento de Enfermagem                    | Prescrição de itens farmacêuticos, horários e checagem de administração de medicamentos à beira-leito.                                                                                |
+| **0.0.9**  | Farmácia Hospitalar e Dispensação                                | Catálogo de medicamentos/materiais, saldo atual/mínimo e baixa de dispensação por paciente ou remessa de setor.                                                                       |
+| **0.0.10** | Exames Laboratoriais e Laudos                                    | Ciclo completo: solicitação médica, coleta de amostra, início de análise técnica e emissão de laudo estruturado.                                                                      |
+| **0.0.11** | Centro Cirúrgico                                                 | Gestão de salas cirúrgicas, agendamento de cirurgias, checklist pré-operatório OMS/Safe Surgery, ato operatório e SRPA (escala de Aldrete-Kroulik).                                   |
+| **0.0.12** | Faturamento SUS / SIGTAP                                         | Importação e consulta da tabela SIGTAP, contas hospitalares AIH (SH/SA/SP) e apuração de produção ambulatorial BPA.                                                                   |
+| **0.0.13** | Impressos Assistenciais em Folha A4                              | Emissão formatada de Receituário simples/controlado, Atestado Médico e Resumo de Alta com opção de consentimento para CID-10 (LGPD/CFM).                                              |
+| **0.0.14** | Vigilância em Saúde (Sem Georreferenciamento)                    | Notificação compulsória (imediata 24h e semanal), histórico de investigação epidemiológica e fila administrativa restrita sem mapas/geolocalização.                                   |
+| **0.0.15** | Centro Obstétrico e Sala de Parto                                | Admissão obstétrica com risco, partograma simplificado, registro do parto, cadastro do RN com escala de Apgar e desfecho puerperal.                                                   |
+| **0.0.16** | Central de Regulação Interna                                     | Solicitações de transferência leito a leito, triagem por médico regulador com fila administrativa sem dados de contato expostos à recepção.                                           |
+| **0.0.17** | Segurança e Regras de RLS no Backend                             | Migração 0014 travando coleções clínicas para o perfil `recepcao`, restrição de dispensação e auditoria imutável (update/delete nulos).                                               |
+| **0.0.18** | Painel de Gestão e Indicadores em Tempo Real                     | Painel executivo com tempos médios de espera PA, taxa de ocupação de leitos, cirurgias por sala e monitoramento operacional com PocketBase Realtime.                                  |
+| **0.0.19** | SAME e Prontuário Unificado do Paciente                          | Linha do tempo integrada consolidando PA, internações, cirurgias, obstetrícia, exames, dispensações e impressos por CPF/CNS.                                                          |
+| **0.0.20** | Inventário Farmacêutico, Integridade e Idempotência              | Snapshot de abertura de inventário, detecção de concorrência na contagem física, perdas por validade/avaria e proteção de idempotency_key contra retry duplicado.                     |
+| **0.0.21** | Fechamento de Testes Sintéticos & Imutabilidade                  | Expurgo total de endpoints mutantes sintéticos; travamento estrito de delete/update em movimentações e auditoria.                                                                     |
+| **0.0.22** | Regulação Administrativa e Relógio Fuso Inicial                  | Catálogo de recursos/destinos, filtros administrativos e cálculo individual de tempo de espera com pausas documentadas.                                                               |
+| **0.0.23** | Consolidação de Relatórios e Auditoria de Acessos                | Refinamento de permissões e relatórios por competência sem alterações destrutivas.                                                                                                    |
+| **0.0.24** | Consistência de Datas/Horários, Fuso IANA e Qualidade de Dados   | Parametrização por unidade (`America/Porto_Velho` para Mirante da Serra/RO [UTC-4]), dados sem data exibidos como 'indisponível' e fora das médias (sem zeros).                       |
+| **0.0.27** | Conferência de Consistência Faturamento SUS (AIH / BPA / SIGTAP) | Validação administrativa prévia de contas AIH (campos, datas invertidas, alta >6 meses, causa externa), BPA (duplicidade), regras SIGTAP por competência e painel de conferência.     |
+| **0.0.28** | Importador do Pacote SIGTAP Oficial Posicional (.zip)            | Extração segura em memória, parser guiado dinamicamente pelos arquivos `*_layout.txt` (sem posições fixas, imune à alteração pós-202506), ISO-8859-1, preservação de zeros e valores. |
 
 ---
 
@@ -99,10 +100,60 @@ imprimirRelatorioConsole()
 | **(v) Catálogo parcial SIGTAP (recorte)**           | `validarContaHospitalarAIH`                        | **PASSOU** | Procedimento ausente em catálogo parcial emite aviso "tabela incompleta, validar manualmente", nunca erro impeditivo de inexistência.                    |
 | **(w) Parser e pré-visualização SIGTAP CSV**        | `previsualizarSigtapCSV`                           | **PASSOU** | Restaura zeros à esquerda (03.01.06.008-8), valida decimais (SH/SA/SP) e rejeita duplicidades dentro do lote com relatório linha a linha.                |
 | **(x) Regras Manual 2017 e competência explícita**  | `validarContaHospitalarAIH`, `previsualizarSigtap` | **PASSOU** | Regras normativas sem vigência confirmada 2026 viram aviso documental de revisão humana; competência explícita exigida e validada.                       |
+| **(1) Linha truncada no posicional SIGTAP**         | `processarPacoteSigtapPosicional`                  | **PASSOU** | Linhas com tamanho inferior ao mínimo posicional do layout geram rejeição por linha com detalhe do tamanho.                                              |
+| **(2) Encoding ISO-8859-1 acentuação correta**      | `processarPacoteSigtapPosicional`, `decodificar`   | **PASSOU** | Caracteres acentuados ("Cirúrgico", "Atenção") decodificados com exatidão pelo padrão oficial do Ministério da Saúde.                                    |
+| **(3) Competência divergente entre pacote e UI**    | `processarPacoteSigtapPosicional`                  | **PASSOU** | Divergência entre a competência informada pelo usuário e a declarada em `DT_COMPETENCIA` bloqueia a gravação com relatório de divergência.               |
+| **(4) Registros duplicados no mesmo pacote**        | `processarPacoteSigtapPosicional`                  | **PASSOU** | Duplicidades internas no mesmo pacote rejeitadas linha a linha apontando a ocorrência original anterior.                                                 |
+| **(5) Zeros à esquerda preservados (códigos SUS)**  | `normalizarCodigoProcedimentoSigtap`, parser       | **PASSOU** | Zeros à esquerda preservados como String (ex: `0101010010` -> `01.01.01.001-0`) sem truncamento numérico.                                                |
+| **(6) Valores conforme escala de layout dinâmico**  | `processarPacoteSigtapPosicional`, parser escala   | **PASSOU** | Valores monetários convertidos conforme a escala declarada no layout (centavos / 100), compatível com expansão de colunas pós-06/2025.                   |
+| **(7) Prevenção Zip-Slip e limites de arquivo**     | `validarCaminhoSeguroZip`, `descompactarZipSeguro` | **PASSOU** | Bloqueio de caminhos maliciosos (`../`, barras absolutas) e rejeição de pacotes superiores ao limite de segurança (50 MB).                               |
 
 ---
 
-## 4. Conferência de Consistência do Faturamento SUS Municipal (v0.0.28)
+## 4. Importador do Pacote Oficial SIGTAP Posicional (v0.0.28)
+
+### 4.1. Fontes Oficiais Documentadas e Acessadas
+
+1. **Download Oficial das Competências Mensais (DATASUS):**
+   - **URL Oficial:** `http://tabela-unificada.datasus.gov.br/tabela-unificada/app/download.jsp`
+   - **Competência Mais Recente:** `09/2026`, gerada em `05/10/2026`.
+   - **Estrutura do Pacote:** Arquivo compactado `.zip` contendo aproximadamente 80 arquivos `.txt` de dados relacionais e respectivos arquivos de definição de layout estrutural por tabela em formato CSV (ex: `tb_procedimento_layout.txt`, `tb_grupo_layout.txt`, `tb_sub_grupo_layout.txt`, `tb_forma_organizacao_layout.txt`).
+   - **Colunas Oficiais de Layout:** `Coluna, Tamanho, Inicio, Fim, Tipo` (índices 1-based, inclusivos).
+
+2. **Wiki DATASUS SIGTAP Desktop:**
+   - **URL Oficial:** `https://wiki.datasus.gov.br/sigtap/index.php/M%C3%B3dulo_SIGTAP_Desktop`
+   - **Estrutura Hierárquica:** Grupo (2 dígitos) -> Subgrupo (2 dígitos) -> Forma de Organização (2 dígitos) -> Procedimento com dígito verificador (4 dígitos + DV = 10 dígitos).
+
+3. **Encoding Oficial dos Arquivos do Ministério da Saúde:**
+   - **Padrão Oficial:** `ISO-8859-1` (Latin1), comprovado pela acentuação e histórico dos repositórios de referência (`github.com/rdsilva/SIGTAP`, `github.com/silasrm/api-sigtap`).
+   - O sistema implementa decodificação segura `ISO-8859-1` via `TextDecoder('iso-8859-1')` com fallback automático controlado para `UTF-8`.
+
+4. **Decisão Crítica de Arquitetura contra Quebra de Layout (Fórum DATASUS Tópico 432177):**
+   - A partir da competência `06/2025`, o DATASUS alterou o layout posicional expandindo as colunas de valores monetários. Parsers com posições fixas (hardcoded) em sistemas legados falharam.
+   - **Decisão no Projeto:** O importador **NUNCA** fixa posições no código. Ele lê dinamicamente o arquivo `tb_procedimento_layout.txt` contido no próprio pacote ZIP enviado pelo usuário e deriva início, fim, tamanho e escala de cada campo em tempo de execução.
+   - Caso o pacote não contenha o layout oficial correspondente, o sistema emite relatório de lacuna estrutural e **recusa** a utilização de qualquer parser fictício ou adivinhado.
+
+5. **Manual Oficial SIGTAP Desktop:**
+   - **URL Oficial:** `ftp://ftp2.datasus.gov.br/pub/sistemas/tup/downloads/manual/sigtap_desktop_manual.pdf`
+   - **Níveis e Regras:** Preservação rigorosa de zeros à esquerda como string e conversão de valores decimais implícitos (centavos divididos por 100).
+
+### 4.2. Segurança e Extração do Pacote ZIP
+
+- Utilização da biblioteca leve e reputada `fflate` (sem serviços pagos nem dependência de nuvem de terceiros).
+- Processamento **100% local no cliente/navegador**, sem envio do pacote compactado a servidores externos.
+- Prevenção estrita contra **Zip-Slip**: validação de caminhos internos rejeitando `../`, diretórios pai e caminhos absolutos com barras (`/` ou `\`).
+- Limites de segurança rígidos: máximo de 50 MB para arquivo ZIP comprimido, 80 MB por arquivo individual e 150 MB total descompactado.
+
+### 4.3. Declaração Explícita de Cobertura do Catálogo
+
+- A interface de pré-visualização e a documentação declaram expressamente a cobertura do lote importado:
+  - **Catálogo de Procedimentos:** Importa a tabela `tb_procedimento` e, caso presentes no pacote, as tabelas auxiliares hierárquicas (`tb_grupo`, `tb_sub_grupo`, `tb_forma_organizacao`).
+  - **Limitação de Compatibilidades:** Compatibilidades clínicas externas, regras de habilitação e CBO não incluídas nos arquivos importados do pacote **NÃO são inventadas nem inferidas** pelo sistema.
+- **Transação e Idempotência:** A gravação reaproveita a rotina transacional idempotente já homologada (migração 0019 restrita a perfis `admin` e `gestor`), com bloqueio contra sobrescrita de competências fechadas e preservação das contas hospitalares históricas.
+
+---
+
+## 5. Conferência de Consistência do Faturamento SUS Municipal (v0.0.28)
 
 ### 4.1. Natureza da Validação e Força das Regras (Aviso Regulatório Obrigatório)
 

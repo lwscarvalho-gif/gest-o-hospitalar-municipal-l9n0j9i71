@@ -43,7 +43,7 @@ export interface PrevisualizacaoSIGTAPResultado {
   totalRejeitados: number
   itensValidos: ItemSIGTAPValido[]
   rejeicoes: RejeicaoImportacaoSIGTAP[]
-  delimitadorDetectado: ';' | ','
+  delimitadorDetectado: ';' | ',' | string
 }
 
 /**

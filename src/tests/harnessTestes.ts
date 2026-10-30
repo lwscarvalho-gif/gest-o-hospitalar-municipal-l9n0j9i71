@@ -32,6 +32,15 @@ import {
   parseValorDecimalSigtap,
 } from '../services/importacaoSigtap'
 import {
+  parseArquivoLayoutSigtap,
+  processarPacoteSigtapPosicional,
+  parseValorMonetarioPosicional,
+  validarCaminhoSeguroZip,
+  descompactarZipSeguro,
+  decodificarTextoBytes,
+  LIMITE_MAX_BYTES_ZIP,
+} from '../services/importadorSigtapPosicional'
+import {
   ContaFaturamento,
   ProducaoBPAItem,
   ProcedimentoSigtap,
@@ -1476,6 +1485,409 @@ export function executarHarnessLocal(): {
       cenario: '(x) Regras do Manual SIH 2017 sem vigência confirmada 2026 geram aviso "revisão humana" sem bloquear conta; competência explícita validada',
       passou: false,
       detalhes: 'Falha no teste de regras 2017 e competência explícita',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIOS IMPORTADOR SIGTAP OFICIAL POSICIONAL (v0.0.28)
+  // Baseados no layout oficial DATASUS (tb_procedimento_layout.txt)
+  // 7 Cenários mandatórios:
+  // (1) Linha truncada -> rejeitada com motivo e detalhe
+  // (2) Encoding ISO-8859-1 com acentuação correta ("Cirúrgico", "Atenção", "Médico")
+  // (3) Competência divergente entre informada e registros -> bloqueio/relatório
+  // (4) Registros duplicados no lote -> rejeitados com relatório
+  // (5) Zeros à esquerda preservados (ex: "0101010010")
+  // (6) Valores conforme escala do layout (inclusive formato expandido pós-202506)
+  // (7) Zip-slip/caminho perigoso e arquivo grande demais rejeitados com segurança
+  // =========================================================================
+
+  // Layout oficial sintetizado conforme o DATASUS
+  // Coluna,Tamanho,Inicio,Fim,Tipo
+  const layoutOficialSintetico = [
+    'Coluna,Tamanho,Inicio,Fim,Tipo',
+    'CO_PROCEDIMENTO,10,1,10,VARCHAR2',
+    'NO_PROCEDIMENTO,250,11,260,VARCHAR2',
+    'TP_COMPLEXIDADE,1,261,261,VARCHAR2',
+    'TP_SEXO,1,262,262,VARCHAR2',
+    'QT_MAXIMA_EXECUCAO,4,263,266,NUMBER',
+    'QT_DIAS_PERMANENCIA,4,267,270,NUMBER',
+    'QT_PONTOS,4,271,274,NUMBER',
+    'VL_IDADE_MINIMA,4,275,278,NUMBER',
+    'VL_IDADE_MAXIMA,4,279,282,NUMBER',
+    'VL_SERVICO_HOSPITALAR,10,283,292,NUMBER',
+    'VL_SERVICO_AMBULATORIAL,10,293,302,NUMBER',
+    'VL_SERVICO_PROFISSIONAL,10,303,312,NUMBER',
+    'DT_COMPETENCIA,6,313,318,VARCHAR2',
+  ].join('\r\n')
+
+  const encoderLatin1 = (str: string): Uint8Array => {
+    // Codifica caracteres Latin1 (0 a 255) diretamente em bytes Uint8Array
+    const arr = new Uint8Array(str.length)
+    for (let i = 0; i < str.length; i++) {
+      const code = str.charCodeAt(i)
+      arr[i] = code < 256 ? code : 63 // '?' se fora de Latin1
+    }
+    return arr
+  }
+
+  // 1. Linha truncada -> rejeitada com motivo
+  try {
+    const layoutBytes = encoderLatin1(layoutOficialSintetico)
+    // Linha incompleta com apenas 40 caracteres (esperado mínimo de 318)
+    const linhaTruncada = '0101010010Consulta Médica Especializada'
+    const dadosBytes = encoderLatin1(linhaTruncada)
+
+    const pacote = processarPacoteSigtapPosicional({
+      arquivos: {
+        'tb_procedimento_layout.txt': layoutBytes,
+        'tb_procedimento.txt': dadosBytes,
+      },
+      competenciaInformada: '2026-09',
+    })
+
+    const rejTrunc = pacote.rejeicoes.find((r) => r.motivo.includes('Linha truncada'))
+    const passou1 =
+      pacote.totalValidos === 0 &&
+      pacote.totalRejeitados === 1 &&
+      rejTrunc !== undefined &&
+      rejTrunc.linha === 1
+
+    resultados.push({
+      id: 'sigtap_posicional_1_linha_truncada',
+      cenario: '(1) Linha truncada no arquivo posicional SIGTAP é rejeitada com motivo e tamanho detalhados',
+      passou: passou1,
+      detalhes: `Validado: linha com 40 caracteres rejeitada na validação de tamanho mínimo posicional do layout (318 caracteres).`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'sigtap_posicional_1_linha_truncada',
+      cenario: '(1) Linha truncada no arquivo posicional SIGTAP é rejeitada com motivo e tamanho detalhados',
+      passou: false,
+      detalhes: 'Falha no teste de linha truncada',
+      erro: err.message,
+    })
+  }
+
+  // 2. Encoding ISO-8859-1 com acentuação correta
+  try {
+    const layoutBytes = encoderLatin1(layoutOficialSintetico)
+    // Procedimento com acentuação estrita ISO-8859-1: "Procedimento Cirúrgico de Atenção Básica"
+    // Montar linha posicional preenchida com espaços
+    const cod = '0301060088'
+    const nomeComAcentos = 'Procedimento Cirúrgico de Atenção Básica de Saúde'
+    const comp = '202609'
+    // 1..10 (cod), 11..260 (nome: 250 chars), 261 (1: compl), 262 (M), 263..266 (0001),
+    // 267..270 (0000), 271..274 (0000), 275..278 (0000), 279..282 (9999),
+    // 283..292 (0000015000 = 150.00), 293..302 (0000000000), 303..312 (0000004500 = 45.00), 313..318 (202609)
+    const linha2 =
+      cod +
+      nomeComAcentos.padEnd(250, ' ') +
+      '2' +
+      'N' +
+      '0001' +
+      '0003' +
+      '0000' +
+      '0000' +
+      '9999' +
+      '0000015000' +
+      '0000000000' +
+      '0000004500' +
+      comp
+
+    const dadosBytes2 = encoderLatin1(linha2)
+    const pacote2 = processarPacoteSigtapPosicional({
+      arquivos: {
+        'tb_procedimento_layout.txt': layoutBytes,
+        'tb_procedimento.txt': dadosBytes2,
+      },
+      competenciaInformada: '2026-09',
+    })
+
+    const item2 = pacote2.itensValidos[0]
+    const passou2 =
+      pacote2.totalValidos === 1 &&
+      pacote2.totalRejeitados === 0 &&
+      item2.nome === nomeComAcentos &&
+      item2.nome.includes('Cirúrgico') &&
+      item2.nome.includes('Atenção')
+
+    resultados.push({
+      id: 'sigtap_posicional_2_encoding_latin1',
+      cenario: '(2) Decodificação ISO-8859-1 (Latin1) preserva acentuação gráfica oficial do Ministério da Saúde',
+      passou: passou2,
+      detalhes: `Validado: caracteres acentuados "Cirúrgico" e "Atenção" decodificados com exatidão sem corrupção UTF-8.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'sigtap_posicional_2_encoding_latin1',
+      cenario: '(2) Decodificação ISO-8859-1 (Latin1) preserva acentuação gráfica oficial do Ministério da Saúde',
+      passou: false,
+      detalhes: 'Falha no teste de encoding Latin1',
+      erro: err.message,
+    })
+  }
+
+  // 3. Competência divergente entre informada e conteúdo -> bloqueio/relatório
+  try {
+    const layoutBytes = encoderLatin1(layoutOficialSintetico)
+    const cod = '0301060088'
+    const nome = 'Atendimento de Urgência'.padEnd(250, ' ')
+    const compRegistradaNoArquivo = '202608' // Agosto/2026
+    const linha3 =
+      cod +
+      nome +
+      '1' +
+      'N' +
+      '0001' +
+      '0000' +
+      '0000' +
+      '0000' +
+      '9999' +
+      '0000000000' +
+      '0000001250' +
+      '0000000000' +
+      compRegistradaNoArquivo
+
+    const pacote3 = processarPacoteSigtapPosicional({
+      arquivos: {
+        'tb_procedimento_layout.txt': layoutBytes,
+        'tb_procedimento.txt': encoderLatin1(linha3),
+      },
+      competenciaInformada: '2026-09', // Setembro/2026 (DIVERGENTE!)
+    })
+
+    const rejComp = pacote3.rejeicoes.find((r) => r.motivo.includes('diverge da competência informada'))
+    const passou3 =
+      pacote3.totalValidos === 0 &&
+      pacote3.totalRejeitados === 1 &&
+      rejComp !== undefined &&
+      rejComp.motivo.includes('2026-08')
+
+    resultados.push({
+      id: 'sigtap_posicional_3_competencia_divergente',
+      cenario: '(3) Competência divergente entre informada pelo usuário e registros do pacote gera bloqueio no relatório',
+      passou: passou3,
+      detalhes: `Validado: registro com competência 2026-08 em pacote informado como 2026-09 gera rejeição linha a linha explicativa.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'sigtap_posicional_3_competencia_divergente',
+      cenario: '(3) Competência divergente entre informada pelo usuário e registros do pacote gera bloqueio no relatório',
+      passou: false,
+      detalhes: 'Falha no teste de competência divergente',
+      erro: err.message,
+    })
+  }
+
+  // 4. Registros duplicados no lote -> rejeitados com relatório
+  try {
+    const layoutBytes = encoderLatin1(layoutOficialSintetico)
+    const linhaUnica = (cod: string, nome: string) =>
+      cod +
+      nome.padEnd(250, ' ') +
+      '1' +
+      'N' +
+      '0001' +
+      '0000' +
+      '0000' +
+      '0000' +
+      '9999' +
+      '0000000000' +
+      '0000001250' +
+      '0000000000' +
+      '202609'
+
+    // Linha 1: 0301060088
+    // Linha 2: 0301060088 (Duplicado!)
+    // Linha 3: 0407010032 (Válido)
+    const dados4 = [
+      linhaUnica('0301060088', 'Atendimento de Urgência 1'),
+      linhaUnica('0301060088', 'Atendimento de Urgência Duplicado'),
+      linhaUnica('0407010032', 'Apendicectomia'),
+    ].join('\r\n')
+
+    const pacote4 = processarPacoteSigtapPosicional({
+      arquivos: {
+        'tb_procedimento_layout.txt': layoutBytes,
+        'tb_procedimento.txt': encoderLatin1(dados4),
+      },
+      competenciaInformada: '2026-09',
+    })
+
+    const rejDup = pacote4.rejeicoes.find((r) => r.campo === 'duplicidade')
+    const passou4 =
+      pacote4.totalValidos === 2 &&
+      pacote4.totalRejeitados === 1 &&
+      rejDup !== undefined &&
+      rejDup.linha === 2 &&
+      rejDup.motivo.includes('já processado na linha 1')
+
+    resultados.push({
+      id: 'sigtap_posicional_4_duplicidade_lote',
+      cenario: '(4) Registros duplicados no mesmo lote de importação posicional são rejeitados linha a linha',
+      passou: passou4,
+      detalhes: `Validado: segunda ocorrência do código 03.01.06.008-8 na linha 2 apontada como duplicada da linha 1; demais itens preservados.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'sigtap_posicional_4_duplicidade_lote',
+      cenario: '(4) Registros duplicados no mesmo lote de importação posicional são rejeitados linha a linha',
+      passou: false,
+      detalhes: 'Falha no teste de duplicidades',
+      erro: err.message,
+    })
+  }
+
+  // 5. Zeros à esquerda de código preservados (ex: "0101010010")
+  try {
+    const layoutBytes = encoderLatin1(layoutOficialSintetico)
+    const codZeroInicial = '0101010010' // Atenção Primária com zero inicial
+    const linha5 =
+      codZeroInicial +
+      'Ações Educativas em Grupo na Atenção Primária'.padEnd(250, ' ') +
+      '1' +
+      'N' +
+      '0001' +
+      '0000' +
+      '0000' +
+      '0000' +
+      '9999' +
+      '0000000000' +
+      '0000000000' +
+      '0000000000' +
+      '202609'
+
+    const pacote5 = processarPacoteSigtapPosicional({
+      arquivos: {
+        'tb_procedimento_layout.txt': layoutBytes,
+        'tb_procedimento.txt': encoderLatin1(linha5),
+      },
+      competenciaInformada: '2026-09',
+    })
+
+    const item5 = pacote5.itensValidos[0]
+    const passou5 =
+      pacote5.totalValidos === 1 &&
+      item5.codigoNormalizado === '0101010010' &&
+      item5.codigo === '01.01.01.001-0' &&
+      item5.codigo.startsWith('01.')
+
+    resultados.push({
+      id: 'sigtap_posicional_5_zeros_a_esquerda',
+      cenario: '(5) Zeros à esquerda nos códigos SUS são preservados como String (ex: 0101010010 -> 01.01.01.001-0)',
+      passou: passou5,
+      detalhes: `Validado: código com zero inicial mantido como string e formatado para padrão SUS 01.01.01.001-0 sem perda numérica.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'sigtap_posicional_5_zeros_a_esquerda',
+      cenario: '(5) Zeros à esquerda nos códigos SUS são preservados como String (ex: 0101010010 -> 01.01.01.001-0)',
+      passou: false,
+      detalhes: 'Falha no teste de preservação de zeros',
+      erro: err.message,
+    })
+  }
+
+  // 6. Valores conforme escala do layout (inclusive formato expandido pós-202506)
+  try {
+    // Layout dinâmico com campos expandidos (mudança pós-202506 documentada no fórum DATASUS 432177)
+    // Exemplo: valores com 12 posições em vez de 10
+    const layoutExpandido = [
+      'Coluna,Tamanho,Inicio,Fim,Tipo',
+      'CO_PROCEDIMENTO,10,1,10,VARCHAR2',
+      'NO_PROCEDIMENTO,200,11,210,VARCHAR2',
+      'TP_COMPLEXIDADE,1,211,211,VARCHAR2',
+      'VL_SERVICO_HOSPITALAR,12,212,223,NUMBER', // Expandido de 10 para 12 posições!
+      'VL_SERVICO_AMBULATORIAL,12,224,235,NUMBER',
+      'VL_SERVICO_PROFISSIONAL,12,236,247,NUMBER',
+      'DT_COMPETENCIA,6,248,253,VARCHAR2',
+    ].join('\r\n')
+
+    // Valores em centavos:
+    // SH = 000000280050 -> R$ 2.800,50
+    // SA = 000000001980 -> R$ 19,80
+    // SP = 000000135025 -> R$ 1.350,25
+    const linha6 =
+      '0407010032' +
+      'Procedimento de Alta Complexidade Expandido'.padEnd(200, ' ') +
+      '3' +
+      '000000280050' +
+      '000000001980' +
+      '000000135025' +
+      '202609'
+
+    const pacote6 = processarPacoteSigtapPosicional({
+      arquivos: {
+        'tb_procedimento_layout.txt': encoderLatin1(layoutExpandido),
+        'tb_procedimento.txt': encoderLatin1(linha6),
+      },
+      competenciaInformada: '2026-09',
+    })
+
+    const item6 = pacote6.itensValidos[0]
+    const passou6 =
+      pacote6.totalValidos === 1 &&
+      item6.valor_sh === 2800.5 &&
+      item6.valor_sa === 19.8 &&
+      item6.valor_sp === 1350.25
+
+    resultados.push({
+      id: 'sigtap_posicional_6_escala_layout_dinamico',
+      cenario: '(6) Valores monetários convertidos dinamicamente pela escala do layout oficial (inclusive pós-06/2025)',
+      passou: passou6,
+      detalhes: `Validado: layout com posições expandidas (12 dígitos) derivado dinamicamente; SH=R$ 2.800,50, SA=R$ 19,80, SP=R$ 1.350,25.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'sigtap_posicional_6_escala_layout_dinamico',
+      cenario: '(6) Valores monetários convertidos dinamicamente pela escala do layout oficial (inclusive pós-06/2025)',
+      passou: false,
+      detalhes: 'Falha no teste de escala dinâmica de valores',
+      erro: err.message,
+    })
+  }
+
+  // 7. Zip-slip/caminho perigoso e arquivo grande demais rejeitados
+  try {
+    // 1. Validação de caminho seguro contra Zip-Slip
+    const caminhoValido = validarCaminhoSeguroZip('tb_procedimento.txt')
+    const caminhoSubpasta = validarCaminhoSeguroZip('tabela_unificada/tb_procedimento.txt')
+    const caminhoZipSlip1 = validarCaminhoSeguroZip('../../etc/passwd')
+    const caminhoZipSlip2 = validarCaminhoSeguroZip('..\\..\\windows\\system32')
+    const caminhoAbsoluto = validarCaminhoSeguroZip('/var/log/teste.txt')
+
+    // 2. Validação de limite de tamanho de ZIP (excesso de bytes)
+    let rejeitouTamanhoExcessivo = false
+    try {
+      const bufferFalsoGigante = new Uint8Array(LIMITE_MAX_BYTES_ZIP + 1024)
+      descompactarZipSeguro(bufferFalsoGigante)
+    } catch (err: any) {
+      if (err.message.includes('excede o limite máximo permitido')) {
+        rejeitouTamanhoExcessivo = true
+      }
+    }
+
+    const passou7 =
+      caminhoValido === true &&
+      caminhoSubpasta === true &&
+      caminhoZipSlip1 === false &&
+      caminhoZipSlip2 === false &&
+      caminhoAbsoluto === false &&
+      rejeitouTamanhoExcessivo === true
+
+    resultados.push({
+      id: 'sigtap_posicional_7_seguranca_zip_slip_e_limites',
+      cenario: '(7) Prevenção estrita contra Zip-Slip e rejeição de arquivos que excedam limites de segurança',
+      passou: passou7,
+      detalhes: `Validado: tentativas de navegação "../" e barras absolutas bloqueadas; pacotes maiores que ${LIMITE_MAX_BYTES_ZIP / (1024 * 1024)}MB rejeitados preventivamente.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'sigtap_posicional_7_seguranca_zip_slip_e_limites',
+      cenario: '(7) Prevenção estrita contra Zip-Slip e rejeição de arquivos que excedam limites de segurança',
+      passou: false,
+      detalhes: 'Falha no teste de segurança de ZIP',
       erro: err.message,
     })
   }

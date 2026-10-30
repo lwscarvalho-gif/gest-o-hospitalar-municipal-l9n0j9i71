@@ -44,6 +44,11 @@ import {
   TotaisCompetencia,
 } from '@/services/faturamento'
 import { previsualizarSigtapCSV, PrevisualizacaoSIGTAPResultado } from '@/services/importacaoSigtap'
+import {
+  descompactarZipSeguro,
+  processarPacoteSigtapPosicional,
+  PacoteSigtapExtraido,
+} from '@/services/importadorSigtapPosicional'
 import { listarPacientes } from '@/services/cadastros'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -139,14 +144,19 @@ export function FaturamentoView() {
   const [totaisConsolidados, setTotaisConsolidados] = useState<TotaisCompetencia | null>(null)
   const [consolidando, setConsolidando] = useState(false)
 
-  // Upload e Pré-Visualização SIGTAP CSV
+  // Upload e Pré-Visualização SIGTAP (CSV ou ZIP Posicional Oficial)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const fileInputZipRef = useRef<HTMLInputElement>(null)
   const [uploadingSigtap, setUploadingSigtap] = useState(false)
   const [modalPreviewSigtap, setModalPreviewSigtap] = useState(false)
   const [previewSigtapDados, setPreviewSigtapDados] =
     useState<PrevisualizacaoSIGTAPResultado | null>(null)
+  const [pacotePosicionalSigtap, setPacotePosicionalSigtap] = useState<PacoteSigtapExtraido | null>(
+    null,
+  )
+  const [tipoImportacaoAtiva, setTipoImportacaoAtiva] = useState<'csv' | 'zip_posicional'>('csv')
   const [competenciaImportacaoSigtap, setCompetenciaImportacaoSigtap] = useState<string>(
-    competenciaFiltro !== 'todas' ? competenciaFiltro : calcularCompetenciaAtual(),
+    competenciaFiltro !== 'todas' ? competenciaFiltro : '2026-09',
   )
   const [gravandoLoteSigtap, setGravandoLoteSigtap] = useState(false)
   const [abaPreviewSigtap, setAbaPreviewSigtap] = useState<'validos' | 'rejeicoes'>('validos')
@@ -509,12 +519,75 @@ export function FaturamentoView() {
     })
   }
 
+  // Importação Oficial SIGTAP em ZIP Posicional (.zip com tb_procedimento_layout.txt e tb_procedimento.txt)
+  const handleUploadSigtapZipPosicional = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploadingSigtap(true)
+    setTipoImportacaoAtiva('zip_posicional')
+    try {
+      const compAlvo =
+        competenciaImportacaoSigtap ||
+        (competenciaFiltro !== 'todas' ? competenciaFiltro : '2026-09')
+
+      const arrayBuffer = await file.arrayBuffer()
+      const arquivosExtraidos = descompactarZipSeguro(arrayBuffer)
+
+      const pacote = processarPacoteSigtapPosicional({
+        arquivos: arquivosExtraidos,
+        competenciaInformada: compAlvo,
+      })
+
+      setPacotePosicionalSigtap(pacote)
+
+      // Converter para formato de preview compatível com a interface
+      const previewAdaptado: PrevisualizacaoSIGTAPResultado = {
+        competencia: compAlvo,
+        delimitadorDetectado: 'Posicional (Layout Oficial Dinâmico)',
+        totalLinhasArquivo: pacote.totalLinhasProcedimentos,
+        totalValidos: pacote.totalValidos,
+        totalRejeitados: pacote.totalRejeitados,
+        itensValidos: pacote.itensValidos,
+        rejeicoes: pacote.rejeicoes,
+      }
+
+      setPreviewSigtapDados(previewAdaptado)
+      setAbaPreviewSigtap(pacote.rejeicoes.length > 0 ? 'rejeicoes' : 'validos')
+      setModalPreviewSigtap(true)
+
+      if (pacote.rejeicoes.length > 0) {
+        toast({
+          title: 'Pacote Posicional Extraído com Rejeições/Alertas',
+          description: `${pacote.totalValidos} válidos, ${pacote.totalRejeitados} rejeitados. Cobertura: ${pacote.coberturaCatalogo}.`,
+          variant: 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Pacote Oficial Posicional Validado',
+          description: `${pacote.totalValidos} procedimentos aprovados pelo layout oficial da competência ${compAlvo}.`,
+        })
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao processar pacote SIGTAP ZIP',
+        description: err.message || 'Falha na leitura segura do pacote posicional.',
+        variant: 'destructive',
+      })
+    } finally {
+      setUploadingSigtap(false)
+      if (fileInputZipRef.current) fileInputZipRef.current.value = ''
+    }
+  }
+
   // Importação CSV SIGTAP: Pré-visualização antes de gravar
   const handleUploadSIGTAP = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
     setUploadingSigtap(true)
+    setTipoImportacaoAtiva('csv')
+    setPacotePosicionalSigtap(null)
     try {
       const text = await file.text()
       const compAlvo =
@@ -582,6 +655,7 @@ export function FaturamentoView() {
 
       setModalPreviewSigtap(false)
       setPreviewSigtapDados(null)
+      setPacotePosicionalSigtap(null)
       const novos = await listarProcedimentosSigtap()
       setSigtapList(novos)
       carregarDadosGerais()
@@ -1862,6 +1936,14 @@ export function FaturamentoView() {
                   className="hidden"
                 />
 
+                <input
+                  type="file"
+                  accept=".zip"
+                  ref={fileInputZipRef}
+                  onChange={handleUploadSigtapZipPosicional}
+                  className="hidden"
+                />
+
                 <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
                   <Label
                     htmlFor="comp-import-sigtap"
@@ -1894,12 +1976,27 @@ export function FaturamentoView() {
                   <>
                     <Button
                       size="sm"
+                      onClick={() => fileInputZipRef.current?.click()}
+                      disabled={uploadingSigtap}
+                      className="bg-blue-700 hover:bg-blue-800 text-white text-xs h-8 shadow-sm font-semibold"
+                      title="Importa o pacote .ZIP oficial do DATASUS sem conversão manual (layout posicional derivado dinamicamente)"
+                    >
+                      <FolderSync className="w-3.5 h-3.5 mr-1.5" />
+                      {uploadingSigtap && tipoImportacaoAtiva === 'zip_posicional'
+                        ? 'Extraindo e Validando...'
+                        : 'Importar Pacote ZIP Oficial'}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingSigtap}
-                      className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs h-8 shadow-sm"
+                      className="text-xs h-8 text-emerald-800 border-emerald-300 hover:bg-emerald-50"
+                      title="Importação alternativa por CSV"
                     >
                       <Upload className="w-3.5 h-3.5 mr-1.5" />
-                      {uploadingSigtap ? 'Processando...' : 'Importar SIGTAP (CSV)'}
+                      Importar CSV
                     </Button>
 
                     <Button
@@ -2824,19 +2921,47 @@ export function FaturamentoView() {
                 </p>
               </DialogHeader>
 
-              {/* Banner informativo de normas e limites */}
-              <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-lg text-xs space-y-1 text-amber-900">
-                <div className="font-bold flex items-center gap-1.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-700" />
-                  Conformidade Normativa e Idempotência:
+              {/* Banner informativo de normas, limites e declaração de cobertura */}
+              <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-lg text-xs space-y-1.5 text-blue-950">
+                <div className="font-bold flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-blue-900">
+                    <FolderSync className="w-4 h-4 text-blue-700" />
+                    Origem e Especificação:{' '}
+                    {tipoImportacaoAtiva === 'zip_posicional'
+                      ? 'Pacote Oficial Posicional DATASUS (.zip)'
+                      : 'Arquivo Tabular (.csv)'}
+                  </span>
+                  {pacotePosicionalSigtap && (
+                    <Badge
+                      variant="outline"
+                      className="bg-white text-[10px] font-bold text-blue-800 border-blue-300"
+                    >
+                      Layout: {pacotePosicionalSigtap.layoutsIdentificados.join(', ')}
+                    </Badge>
+                  )}
                 </div>
-                <p className="text-[11px] text-amber-800">
-                  • Fonte Oficial DATASUS: <code>http://tabela-unificada.datasus.gov.br</code>{' '}
-                  (versão oficial distribuída em layout posicional .txt pelo SIGTAP Desktop).
-                  <br />• Gravação idempotente: procedimentos já existentes com mesmos atributos são
-                  preservados sem duplicação; competências históricas e contas não são recalculadas
-                  retroativamente.
+
+                <p className="text-[11px] text-blue-900 leading-relaxed">
+                  • <strong>Fonte Oficial:</strong>{' '}
+                  <code>http://tabela-unificada.datasus.gov.br</code> (SIGTAP Desktop oficial).
+                  <br />• <strong>Encoding & Layout:</strong> ISO-8859-1 (Latin1). Layout derivado
+                  dinamicamente do próprio arquivo <code>tb_procedimento_layout.txt</code> (sem
+                  posições fixas/hardcoded).
+                  <br />• <strong>Declaração de Cobertura:</strong>{' '}
+                  {pacotePosicionalSigtap
+                    ? pacotePosicionalSigtap.declaracaoCobertura
+                    : 'Importação de catálogo de procedimentos municipais.'}
+                  <br />• <strong>Idempotência e Segurança:</strong> Gravação transacional por lote;
+                  procedimentos existentes são preservados sem duplicação; competências fechadas são
+                  bloqueadas; contas históricas não sofrem recálculo retroativo.
                 </p>
+
+                {pacotePosicionalSigtap?.lacunas && pacotePosicionalSigtap.lacunas.length > 0 && (
+                  <div className="p-2 bg-rose-50 border border-rose-200 rounded text-rose-800 font-medium text-[11px]">
+                    <strong>Lacunas Estruturais Identificadas:</strong>{' '}
+                    {pacotePosicionalSigtap.lacunas.join('; ')}
+                  </div>
+                )}
               </div>
 
               {/* Cards de Resumo */}
