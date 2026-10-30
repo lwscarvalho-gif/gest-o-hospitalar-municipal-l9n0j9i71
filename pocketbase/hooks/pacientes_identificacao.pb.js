@@ -7,6 +7,8 @@
  * - Preservação estrita de zeros à esquerda em CPF e Cartão SUS.
  * - Ausência de documento permitida para Recém-Nascidos e casos de Urgência/Emergência.
  * - Validação oficial de formato e dígitos verificadores.
+ * - Cobrindo criação (onRecordCreate) E atualização (onRecordUpdate).
+ * - Proteção dupla: verificação atômica no hook aliada a índices únicos parciais no banco.
  * - Nota PocketBase JSVM: todas as funções auxiliares residem dentro do callback.
  */
 
@@ -100,7 +102,7 @@ onRecordCreate((e) => {
     throw new BadRequestError('Nome do paciente é obrigatório.')
   }
 
-  // 1. CPF
+  // 1. CPF (preservando zeros à esquerda, permitindo ausência para RN/urgência)
   var cpfRaw = e.record.get('cpf')
   var cpfLimpo = limparDigitos(cpfRaw)
   if (cpfLimpo) {
@@ -131,7 +133,7 @@ onRecordCreate((e) => {
     }
   }
 
-  // 2. CNS
+  // 2. CNS (preservando zeros à esquerda, permitindo ausência para RN/urgência)
   var cnsRaw = e.record.get('cartao_sus')
   var cnsLimpo = limparDigitos(cnsRaw)
   if (cnsLimpo) {
@@ -252,7 +254,7 @@ onRecordUpdate((e) => {
 
   var recordId = e.record.id
 
-  // 1. CPF
+  // 1. CPF (preservando zeros à esquerda, permitindo ausência para RN/urgência)
   var cpfRaw = e.record.get('cpf')
   var cpfLimpo = limparDigitos(cpfRaw)
   if (cpfLimpo) {
@@ -281,7 +283,7 @@ onRecordUpdate((e) => {
     }
   }
 
-  // 2. CNS
+  // 2. CNS (preservando zeros à esquerda, permitindo ausência para RN/urgência)
   var cnsRaw = e.record.get('cartao_sus')
   var cnsLimpo = limparDigitos(cnsRaw)
   if (cnsLimpo) {

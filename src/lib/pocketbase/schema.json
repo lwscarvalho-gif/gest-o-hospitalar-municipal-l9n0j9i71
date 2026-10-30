@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T09:42:34.671Z",
+  "generatedAt": "2026-10-30T10:20:37.916Z",
   "collections": [
     {
       "name": "users",
@@ -222,7 +222,7 @@
         {
           "name": "cartao_sus",
           "type": "text",
-          "required": true,
+          "required": false,
           "system": false
         },
         {
@@ -307,7 +307,10 @@
           "system": false
         }
       ],
-      "indexes": []
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_pacientes_cpf_unique ON pacientes (cpf) WHERE cpf IS NOT NULL AND cpf != ''",
+        "CREATE UNIQUE INDEX idx_pacientes_cns_unique ON pacientes (cartao_sus) WHERE cartao_sus IS NOT NULL AND cartao_sus != ''"
+      ]
     },
     {
       "name": "profissionais",

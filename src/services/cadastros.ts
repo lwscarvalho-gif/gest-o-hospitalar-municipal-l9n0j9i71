@@ -94,18 +94,41 @@ export async function listarPacientes(
   filtroTexto?: string,
   limite: number = 50,
 ): Promise<Paciente[]> {
+  const q = filtroTexto ? filtroTexto.trim() : ''
+  const limit = Math.min(limite > 0 ? limite : 50, 100)
+
+  // 1. Tenta obter payload minimizado diretamente do backend seguro
+  try {
+    const queryParams = new URLSearchParams({
+      pagina: '1',
+      porPagina: String(limit),
+      ...(q ? { termo: q } : {}),
+    })
+    const resposta = await pb.send<{ itens: Paciente[] }>(
+      `/backend/v1/pacientes/busca-minimizada?${queryParams.toString()}`,
+      { method: 'GET', requestKey: null },
+    )
+    if (resposta && Array.isArray(resposta.itens)) {
+      return resposta.itens
+    }
+  } catch (_e) {
+    // Continua para o fallback de consulta direta escapada
+  }
+
+  // 2. Fallback de busca com escape estrito de aspas e caracteres especiais
   let filterStr = ''
-  if (filtroTexto && filtroTexto.trim()) {
-    const q = filtroTexto.trim()
+  if (q) {
+    const termoEscapado = q.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/'/g, "\\'")
     const apenasDigitosComZeros = q.replace(/\D/g, '')
     if (apenasDigitosComZeros) {
-      filterStr = `nome ~ "${q}" || cartao_sus ~ "${apenasDigitosComZeros}" || cpf ~ "${apenasDigitosComZeros}"`
+      filterStr = `nome ~ "${termoEscapado}" || cartao_sus ~ "${apenasDigitosComZeros}" || cpf ~ "${apenasDigitosComZeros}"`
     } else {
-      filterStr = `nome ~ "${q}" || cartao_sus ~ "${q}" || cpf ~ "${q}"`
+      filterStr = `nome ~ "${termoEscapado}" || cartao_sus ~ "${termoEscapado}" || cpf ~ "${termoEscapado}"`
     }
   }
+
   // Proteção do cliente: limita listagens de seleção para evitar carregar toda a base em memória
-  const pageResult = await pb.collection('pacientes').getList<Paciente>(1, Math.min(limite, 100), {
+  const pageResult = await pb.collection('pacientes').getList<Paciente>(1, limit, {
     filter: filterStr || undefined,
     sort: 'nome',
     requestKey: null,

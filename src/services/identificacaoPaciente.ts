@@ -333,6 +333,27 @@ export interface ResultadoBuscaPacientesPaginada {
  * NUNCA carrega toda a base de pacientes no cliente.
  * Preserva zeros à esquerda ao buscar por CPF ou Cartão SUS (ex: "0014" não vira "14").
  */
+/**
+ * Escapa com segurança strings para uso em filtros PocketBase,
+ * neutralizando caracteres de injeção e aspas.
+ */
+export function escaparFiltroPocketBase(valor: string): string {
+  if (!valor) return ''
+  return valor
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/'/g, "\\'")
+    .replace(/\n|\r/g, ' ')
+}
+
+/**
+ * Busca paginada no PocketBase com minimização de dados no servidor.
+ * 1. Tenta prioritariamente o endpoint `/backend/v1/pacientes/busca-minimizada`
+ *    que já entrega CPF e CNS mascarados direto do servidor.
+ * 2. Caso o endpoint customizado não responda (fallback de ambiente local/mock),
+ *    utiliza a listagem padrão de pacientes aplicando sanitização e limite estrito.
+ * Preserva zeros à esquerda ao buscar por CPF ou Cartão SUS (ex: "0014" não vira "14").
+ */
 export async function buscarPacientesPaginadoNoServidor(
   params: ParametrosBuscaPacientes = {},
 ): Promise<ResultadoBuscaPacientesPaginada> {
@@ -340,22 +361,44 @@ export async function buscarPacientesPaginadoNoServidor(
   const porPagina = params.porPagina && params.porPagina > 0 ? Math.min(params.porPagina, 50) : 15
   const termo = params.termo ? params.termo.trim() : ''
 
+  // 1. Tentativa via endpoint de payload minimizado no servidor
+  try {
+    const queryParams = new URLSearchParams({
+      pagina: String(pagina),
+      porPagina: String(porPagina),
+      ...(termo ? { termo } : {}),
+    })
+
+    const respostaServidor = await pb.send<ResultadoBuscaPacientesPaginada>(
+      `/backend/v1/pacientes/busca-minimizada?${queryParams.toString()}`,
+      {
+        method: 'GET',
+        requestKey: null,
+      },
+    )
+
+    if (respostaServidor && Array.isArray(respostaServidor.itens)) {
+      return respostaServidor
+    }
+  } catch (_e) {
+    // Continua para o fallback seguro caso rota não esteja disponível
+  }
+
+  // 2. Fallback com filtros escapados e limite estrito
   let filterStr = ''
 
   if (termo) {
-    // Se o termo contém dígitos (inclusive zeros à esquerda), busca também pelos dígitos limpos preservados
     const digitosComZeros = limparApenasDigitosPreservandoZeros(termo)
     const partesFiltro: string[] = []
 
-    // 1. Busca por nome (contendo substring)
-    const termoEscapado = termo.replace(/"/g, '\\"')
+    const termoEscapado = escaparFiltroPocketBase(termo)
     partesFiltro.push(`nome ~ "${termoEscapado}"`)
     partesFiltro.push(`nome_mae ~ "${termoEscapado}"`)
 
-    // 2. Busca por identificador preservando zeros
     if (digitosComZeros.length > 0) {
-      partesFiltro.push(`cartao_sus ~ "${digitosComZeros}"`)
-      partesFiltro.push(`cpf ~ "${digitosComZeros}"`)
+      const digitosEscapados = escaparFiltroPocketBase(digitosComZeros)
+      partesFiltro.push(`cartao_sus ~ "${digitosEscapados}"`)
+      partesFiltro.push(`cpf ~ "${digitosEscapados}"`)
     }
 
     filterStr = partesFiltro.join(' || ')
@@ -368,8 +411,15 @@ export async function buscarPacientesPaginadoNoServidor(
       requestKey: null,
     })
 
+    // Minimização de payload no fallback de cliente
+    const itensMinimizados = (res.items as unknown as Paciente[]).map((p) => ({
+      ...p,
+      cpf: mascararCPF(p.cpf),
+      cartao_sus: mascararCNS(p.cartao_sus),
+    }))
+
     return {
-      itens: res.items as unknown as Paciente[],
+      itens: itensMinimizados,
       totalItens: res.totalItems,
       totalPaginas: res.totalPages,
       paginaAtual: res.page,
