@@ -29,6 +29,7 @@ import {
   Mail,
   Bus,
   Camera,
+  Utensils,
 } from 'lucide-react'
 
 export type ActiveTab =
@@ -48,6 +49,7 @@ export type ActiveTab =
   | 'faturamento_sus'
   | 'exames_laudos'
   | 'farmacia'
+  | 'snd_nutricao'
   | 'pacientes'
   | 'profissionais'
   | 'setores_leitos'
@@ -155,6 +157,12 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Farmácia & Dispensação',
     icon: Pill,
     allowedRoles: ['admin', 'gestor', 'recepcao'],
+  },
+  {
+    id: 'snd_nutricao',
+    label: 'Nutrição & Dietética (SND)',
+    icon: Utensils,
+    allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
   },
   {
     id: 'agendamentos',

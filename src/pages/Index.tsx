@@ -27,6 +27,7 @@ import { ApacView } from '@/components/ApacView'
 import { TransporteView } from '@/components/TransporteView'
 import { TfdView } from '@/components/TfdView'
 import { RisView } from '@/components/RisView'
+import { SndView } from '@/components/SndView'
 import { verificarInvariantesFuncionais } from '@/tests'
 import { Loader2 } from 'lucide-react'
 
@@ -175,6 +176,16 @@ const Index: React.FC = () => {
         {activeTab === 'farmacia' && temPermissao(['admin', 'gestor', 'recepcao']) && (
           <FarmaciaView />
         )}
+        {activeTab === 'snd_nutricao' &&
+          temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && (
+            <SndView
+              onNavegarSAME={(pacienteId) => {
+                if (pacienteId) setFocoPacienteId(pacienteId)
+                setActiveTab('prontuario_same')
+              }}
+              pacienteIdInicial={focoPacienteId}
+            />
+          )}
         {activeTab === 'dashboard' && temPermissao(['admin', 'gestor']) && (
           <DashboardView onNavigate={setActiveTab} />
         )}

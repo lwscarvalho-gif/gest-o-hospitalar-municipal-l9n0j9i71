@@ -70,6 +70,33 @@ export interface RegistrarDistribuicaoRefeicaoParams {
   idempotency_key?: string
 }
 
+export interface ListarDistribuicoesFiltros {
+  page?: number
+  perPage?: number
+  data_operacional?: string
+  data_inicio?: string
+  data_fim?: string
+  setor_ref?: string
+  leito_ref?: string
+  paciente_ref?: string
+  refeicao_codigo?: string
+  status_operacional?: string
+}
+
+export interface ResultadoPaginadoDistribuicoes {
+  items: DistribuicaoRefeicaoSND[]
+  page: number
+  perPage: number
+  totalItems: number
+  totalPages: number
+}
+
+export interface SuspenderPrescricaoParams {
+  prescricao_id: string
+  motivo: string
+  idempotency_key?: string
+}
+
 /**
  * 1. Catálogo de Refeições (Cardápio / Horários)
  */
@@ -310,4 +337,83 @@ export async function obterMapaCozinhaSanitizado(
   })
 
   return response.itens || []
+}
+
+/**
+ * 6. Suspensão de Prescrição Dietética
+ * Imutabilidade: Atualiza o status da prescrição para 'suspensa' ou cria evento de encerramento
+ * com motivo auditável, data/hora da suspensão e autoria.
+ */
+export async function suspenderPrescricaoDietetica(
+  params: SuspenderPrescricaoParams,
+): Promise<PrescricaoDieteticaSND> {
+  if (!params.motivo || params.motivo.trim().length < 3) {
+    throw new Error('Motivo da suspensão é obrigatório (mínimo de 3 caracteres).')
+  }
+
+  const agoraUtc = new Date().toISOString()
+  const autorNome =
+    pb.authStore.model?.name || pb.authStore.model?.email || 'Profissional Autorizado'
+
+  // Prescrição anterior é mantida integralmente, atualizando apenas o encerramento do seu ciclo de vida
+  const prescricao = await pb
+    .collection('snd_prescricoes_dieteticas')
+    .update(params.prescricao_id, {
+      status: 'suspensa',
+      vigencia_fim: agoraUtc,
+      motivo_alteracao_suspensao: `Suspensa pelo profissional ${autorNome}. Motivo: ${params.motivo.trim()}`,
+    })
+
+  await registrarAuditoria({
+    acao: 'suspender_prescricao_dietetica',
+    modulo: 'snd',
+    detalhes: `Prescrição dietética ${params.prescricao_id} suspensa. Motivo: ${params.motivo.trim()}`,
+    registro_id: params.prescricao_id,
+  })
+
+  return prescricao as unknown as PrescricaoDieteticaSND
+}
+
+/**
+ * 7. Listagem Paginada de Distribuições de Refeição (Operação de Cozinha e Auditoria)
+ */
+export async function listarDistribuicoesRefeicoes(
+  filtros: ListarDistribuicoesFiltros = {},
+): Promise<ResultadoPaginadoDistribuicoes> {
+  const page = filtros.page || 1
+  const perPage = filtros.perPage || 20
+  const filterParts: string[] = []
+
+  if (filtros.data_operacional) {
+    filterParts.push(`data_operacional = "${filtros.data_operacional}"`)
+  } else {
+    if (filtros.data_inicio) {
+      filterParts.push(`data_operacional >= "${filtros.data_inicio}"`)
+    }
+    if (filtros.data_fim) {
+      filterParts.push(`data_operacional <= "${filtros.data_fim}"`)
+    }
+  }
+
+  if (filtros.setor_ref) filterParts.push(`setor_ref = "${filtros.setor_ref}"`)
+  if (filtros.leito_ref) filterParts.push(`leito_ref = "${filtros.leito_ref}"`)
+  if (filtros.paciente_ref) filterParts.push(`paciente_ref = "${filtros.paciente_ref}"`)
+  if (filtros.refeicao_codigo) filterParts.push(`refeicao_codigo = "${filtros.refeicao_codigo}"`)
+  if (filtros.status_operacional && filtros.status_operacional !== 'todos') {
+    filterParts.push(`status_operacional = "${filtros.status_operacional}"`)
+  }
+
+  const result = await pb.collection('snd_distribuicoes_refeicoes').getList(page, perPage, {
+    filter: filterParts.join(' && '),
+    sort: '-data_operacional,-created',
+    expand: 'prescricao_dietetica_ref,paciente_ref,leito_ref,setor_ref',
+  })
+
+  return {
+    items: result.items as unknown as DistribuicaoRefeicaoSND[],
+    page: result.page,
+    perPage: result.perPage,
+    totalItems: result.totalItems,
+    totalPages: result.totalPages,
+  }
 }
