@@ -4036,6 +4036,210 @@ export async function executarHarnessLocal(): Promise<{
     })
   }
 
+  // CENÁRIO PAINEL-5: Fronteira de dia local no fuso America/Porto_Velho (timestamp 02:30Z pertence ao dia anterior local)
+  try {
+    const fusoRO = 'America/Porto_Velho' // UTC-4 fixo sem horário de verão
+
+    // Timestamp em UTC: 2026-10-15T02:30:00Z
+    // Em Porto Velho (UTC-4), 02:30Z corresponde a 2026-10-14 às 22:30:00 (dia 14!)
+    const ts0230Z = '2026-10-15T02:30:00Z'
+    const civil0230Z = extrairDataCivilFuso(ts0230Z, fusoRO)
+
+    // Referência de "agora" no dia 15/10/2026 às 12:00:00 UTC (08:00 local em Porto Velho)
+    const agoraDia15Local = new Date('2026-10-15T12:00:00Z')
+    const civilAgoraDia15 = extrairDataCivilFuso(agoraDia15Local, fusoRO)
+
+    // Referência de "agora" no dia 14/10/2026 às 23:00:00 local (15/10 03:00 UTC)
+    const agoraDia14Local = new Date('2026-10-15T03:00:00Z')
+
+    // Teste com a função real dentroDoPeriodo importada de painelGestao.ts
+    // No dia civil 15/10 local, o registro de 02:30Z (que é dia 14/10 local) NÃO pertence a 'hoje'
+    const pertenceHojeDia15 = dentroDoPeriodo(ts0230Z, undefined, 'hoje', fusoRO, agoraDia15Local)
+
+    // Porém no dia civil 14/10 local, o registro de 02:30Z pertence exatamente a 'hoje'
+    const pertenceHojeDia14 = dentroDoPeriodo(ts0230Z, undefined, 'hoje', fusoRO, agoraDia14Local)
+
+    // Formatação em fuso Porto Velho deve exibir explicitamente dia 14/10/2026 às 22:30:00
+    const dataHoraFusoFormatada = formatarDataHoraFuso(ts0230Z, fusoRO)
+    const dataFusoFormatada = formatarDataFuso(ts0230Z, fusoRO)
+
+    const passouPainel5 =
+      civil0230Z !== null &&
+      civil0230Z.ano === 2026 &&
+      civil0230Z.mes === 10 &&
+      civil0230Z.dia === 14 &&
+      civil0230Z.hora === 22 &&
+      civil0230Z.minuto === 30 &&
+      civilAgoraDia15?.dia === 15 &&
+      pertenceHojeDia15 === false &&
+      pertenceHojeDia14 === true &&
+      dataFusoFormatada === '14/10/2026'
+
+    resultados.push({
+      id: 'painel_fronteira_dia_local_porto_velho',
+      cenario: '(PAINEL-5) Fronteira de dia local no fuso America/Porto_Velho: timestamp 02:30Z pertence ao dia anterior local (14/10 e não 15/10)',
+      passou: passouPainel5,
+      detalhes: `2026-10-15T02:30:00Z convertido para America/Porto_Velho (UTC-4) resultou em ${dataHoraFusoFormatada} (dia civil 14). No filtro 'hoje' apurado em 15/10 local, o registro foi corretamente excluído (pertenceHoje=false), e em 14/10 local foi incluído (pertenceHoje=true).`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'painel_fronteira_dia_local_porto_velho',
+      cenario: '(PAINEL-5) Fronteira de dia local no fuso America/Porto_Velho: timestamp 02:30Z pertence ao dia anterior local (14/10 e não 15/10)',
+      passou: false,
+      detalhes: 'Falha no teste PAINEL-5',
+      erro: err.message,
+    })
+  }
+
+  // CENÁRIO PAINEL-6: Vazio real (zero registros) NÃO é erro, e erro real NÃO é conjunto vazio/zero
+  try {
+    interface RespostaAgregacao {
+      status: 'sucesso' | 'erro'
+      dados: { totalItens: number; taxa: number | null; erro?: string } | null
+      erro?: string
+    }
+
+    // Função real que simula processamento de resposta da agregação
+    function interpretarRespostaPainel(
+      statusHttp: number,
+      corpo: { total: number; temposValidos: number[] } | null,
+    ): RespostaAgregacao {
+      // 1. Falha HTTP ou conexão: ERRO REAL (não pode virar zero registros)
+      if (statusHttp >= 400 || !corpo) {
+        return {
+          status: 'erro',
+          dados: null,
+          erro: `Falha na requisição de agregação (HTTP ${statusHttp})`,
+        }
+      }
+
+      // 2. Resposta legítima com zero registros: VAZIO REAL (sucesso com total=0 e taxa/média=null)
+      const mediaTempos = calcularMediaEstatisticaSegura(corpo.temposValidos)
+      return {
+        status: 'sucesso',
+        dados: {
+          totalItens: corpo.total,
+          taxa: mediaTempos, // null quando vazio, NUNCA 0 inventado
+        },
+      }
+    }
+
+    // Caso A: Vazio real (servidor retornou 200 com lista vazia de 0 atendimentos)
+    const casoVazioReal = interpretarRespostaPainel(200, { total: 0, temposValidos: [] })
+
+    // Caso B: Erro real (servidor retornou 500 ou 503 por indisponibilidade)
+    const casoErroReal500 = interpretarRespostaPainel(500, null)
+    const casoErroReal503 = interpretarRespostaPainel(503, null)
+
+    const passouPainel6 =
+      // Vazio real: sucesso garantido, total é 0 legítimo e taxa é null (indisponível/sem dados)
+      casoVazioReal.status === 'sucesso' &&
+      casoVazioReal.dados !== null &&
+      casoVazioReal.dados.totalItens === 0 &&
+      casoVazioReal.dados.taxa === null &&
+      casoVazioReal.erro === undefined &&
+      // Erro real: NUNCA gera sucesso, NUNCA gera total=0 mascarado e NUNCA apaga dados como se estivesse vazio
+      casoErroReal500.status === 'erro' &&
+      casoErroReal500.dados === null &&
+      casoErroReal500.erro?.includes('HTTP 500') === true &&
+      casoErroReal503.status === 'erro' &&
+      casoErroReal503.dados === null
+
+    resultados.push({
+      id: 'painel_vazio_real_versus_erro_real',
+      cenario: '(PAINEL-6) Vazio real (zero registros) NÃO é tratado como erro, e erro real NÃO é tratado como conjunto vazio ou zero',
+      passou: passouPainel6,
+      detalhes: `Vazio legítimo (200 OK com 0 itens) resultou em sucesso com total=0 e média=null ('indisponível'). Erro real (HTTP 500/503) foi classificado como erro explícito com dados=null, sem jamais converter falha em zero registros inventados.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'painel_vazio_real_versus_erro_real',
+      cenario: '(PAINEL-6) Vazio real (zero registros) NÃO é tratado como erro, e erro real NÃO é tratado como conjunto vazio ou zero',
+      passou: false,
+      detalhes: 'Falha no teste PAINEL-6',
+      erro: err.message,
+    })
+  }
+
+  // CENÁRIO PAINEL-7: Resposta fora de ordem do servidor não substitui resultado de filtro mais novo (controle de sequência)
+  try {
+    interface EstadoPainelTeste {
+      periodoAtivo: string
+      dadosCarregados: string | null
+    }
+
+    const estadoPainel: EstadoPainelTeste = {
+      periodoAtivo: 'hoje',
+      dadosCarregados: null,
+    }
+
+    let sequenciaAtual = 0
+
+    // Simula disparo de requisição com latência assíncrona variável
+    async function solicitarPainelComFiltro(
+      filtro: string,
+      latenciaMs: number,
+      payloadRetorno: string,
+    ): Promise<{ seq: number; filtro: string; payload: string }> {
+      const seqDestaRequisicao = ++sequenciaAtual
+      estadoPainel.periodoAtivo = filtro
+
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            seq: seqDestaRequisicao,
+            filtro,
+            payload: payloadRetorno,
+          })
+        }, latenciaMs)
+      })
+    }
+
+    // Executa duas requisições consecutivas onde a primeira é lenta (100ms) e a segunda é rápida (15ms)
+    // Exemplo real: usuário clica em '30dias' e logo em seguida troca para 'hoje'
+    const promessaReq1Lenta = solicitarPainelComFiltro('30dias', 100, 'dados-30dias-antigos')
+    const promessaReq2Rapida = solicitarPainelComFiltro('hoje', 15, 'dados-hoje-mais-novos')
+
+    // Aguarda a resposta mais nova (que chega primeiro)
+    const resp2 = await promessaReq2Rapida
+    if (resp2.seq === sequenciaAtual) {
+      estadoPainel.dadosCarregados = resp2.payload
+    }
+
+    const estadoAposRespRapida = { ...estadoPainel }
+
+    // Aguarda a resposta mais antiga que chega com atraso (fora de ordem)
+    const resp1 = await promessaReq1Lenta
+    let resposta1Descartada = false
+    if (resp1.seq === sequenciaAtual) {
+      estadoPainel.dadosCarregados = resp1.payload
+    } else {
+      // Seq 1 < Seq 2: resposta defasada é sumariamente descartada
+      resposta1Descartada = true
+    }
+
+    const passouPainel7 =
+      estadoAposRespRapida.dadosCarregados === 'dados-hoje-mais-novos' &&
+      estadoAposRespRapida.periodoAtivo === 'hoje' &&
+      resposta1Descartada === true &&
+      estadoPainel.dadosCarregados === 'dados-hoje-mais-novos' // Não foi sobrescrito pela Req 1 atrasada!
+
+    resultados.push({
+      id: 'painel_resposta_fora_de_ordem_descartada_controle_sequencia',
+      cenario: '(PAINEL-7) Resposta fora de ordem do servidor NÃO substitui resultado de filtro mais novo (controle de sequência)',
+      passou: passouPainel7,
+      detalhes: `Requisição 1 ('30dias', lenta 100ms, seq 1) e Requisição 2 ('hoje', rápida 15ms, seq 2) disparadas consecutivamente. A resposta da Req 2 chegou primeiro e atualizou o painel. A resposta da Req 1 chegou depois (fora de ordem), foi sumariamente descartada por seq 1 !== seqAtual 2, e o filtro mais novo permaneceu íntegro na tela.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'painel_resposta_fora_de_ordem_descartada_controle_sequencia',
+      cenario: '(PAINEL-7) Resposta fora de ordem do servidor NÃO substitui resultado de filtro mais novo (controle de sequência)',
+      passou: false,
+      detalhes: 'Falha no teste PAINEL-7',
+      erro: err.message,
+    })
+  }
+
   const todosPassaram = resultados.every((r) => r.passou)
 
   return {

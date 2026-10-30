@@ -46,6 +46,9 @@ export const PainelGestaoView: React.FC<PainelGestaoViewProps> = ({ onNavegar })
   const [tempoRestante, setTempoRestante] = useState<number>(30)
   const [autoRefreshAtivo, setAutoRefreshAtivo] = useState(true)
 
+  // Controle de sequência de requisições para evitar que resposta fora de ordem substitua filtro mais novo
+  const sequenciaCarregamentoRef = useRef<number>(0)
+
   const isGestorOuAdmin = temPermissao(['admin', 'gestor'])
 
   // Auditoria de acesso ao painel (apenas na montagem)
@@ -64,11 +67,19 @@ export const PainelGestaoView: React.FC<PainelGestaoViewProps> = ({ onNavegar })
         setLoading(true)
       }
 
+      const seqMomento = ++sequenciaCarregamentoRef.current
       try {
         const resultado = await carregarDadosPainelGestao(periodo)
+        // Controle de sequência: se outra requisição mais nova foi iniciada (ex: troca de filtro de período), descarta resposta fora de ordem
+        if (seqMomento !== sequenciaCarregamentoRef.current) {
+          return
+        }
         setDados(resultado)
         setErroAtualizacao(null)
       } catch (err: any) {
+        if (seqMomento !== sequenciaCarregamentoRef.current) {
+          return
+        }
         console.error('Falha ao atualizar painel de gestão:', err)
         const msg =
           err?.message ||
