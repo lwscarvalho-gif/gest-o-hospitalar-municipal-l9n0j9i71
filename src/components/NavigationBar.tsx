@@ -214,7 +214,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({ activeTab, onSelec
               <div className="flex items-center gap-2">
                 <span className="font-bold text-base tracking-tight text-white">SGH Municipal</span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  v0.0.18
+                  v0.0.19
                 </span>
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">

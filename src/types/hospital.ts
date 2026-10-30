@@ -609,6 +609,7 @@ export interface ItemFarmacia {
   unidade_medida: UnidadeMedidaFarmacia
   lote?: string
   validade?: string
+  localizacao_farmacia?: string
   estoque_atual: number
   estoque_minimo?: number
   ativo?: boolean
@@ -625,6 +626,7 @@ export interface DispensacaoFarmacia {
   item: string
   quantidade: number
   lote?: string
+  idempotency_key?: string
   prescricao_origem?: string
   profissional_dispensador?: string
   data_dispensacao: string
@@ -640,6 +642,93 @@ export interface DispensacaoFarmacia {
     prescricao_relacionada?: PrescricaoMedica
     internacao?: Internacao
     atendimento_pa?: FichaProntoAtendimento
+  }
+  created: string
+  updated: string
+}
+
+export type StatusInventarioFarmacia =
+  | 'em_andamento'
+  | 'cancelado'
+  | 'concluido'
+  | 'rejeitado_concorrencia'
+
+export interface InventarioFarmacia {
+  id: string
+  codigo_inventario: string
+  titulo: string
+  status: StatusInventarioFarmacia
+  data_abertura: string
+  responsavel_abertura: string
+  data_fechamento?: string
+  responsavel_fechamento?: string
+  justificativa_fechamento?: string
+  total_itens_inventariados?: number
+  total_divergencias?: number
+  observacoes?: string
+  created: string
+  updated: string
+}
+
+export type StatusConferenciaInventario =
+  | 'pendente'
+  | 'contado'
+  | 'divergente'
+  | 'reconciliado'
+  | 'ajustado'
+
+export interface ItemInventarioFarmacia {
+  id: string
+  inventario: string
+  item: string
+  item_nome: string
+  lote?: string
+  validade?: string
+  local_armazenamento?: string
+  quantidade_sistema_base: number
+  quantidade_contada?: number
+  divergencia?: number
+  status_conferencia: StatusConferenciaInventario
+  responsavel_contagem?: string
+  data_hora_contagem?: string
+  justificativa_ajuste?: string
+  observacoes?: string
+  expand?: {
+    inventario?: InventarioFarmacia
+    item?: ItemFarmacia
+  }
+  created: string
+  updated: string
+}
+
+export type TipoMovimentoEstoque =
+  | 'entrada_nota'
+  | 'ajuste_inventario_sobra'
+  | 'ajuste_inventario_falta'
+  | 'perda_validade'
+  | 'perda_avaria'
+  | 'devolucao_paciente'
+
+export interface MovimentoEstoqueFarmacia {
+  id: string
+  item: string
+  item_nome: string
+  tipo_movimento: TipoMovimentoEstoque
+  quantidade: number
+  estoque_anterior: number
+  estoque_posterior: number
+  lote?: string
+  validade?: string
+  local_armazenamento?: string
+  justificativa: string
+  responsavel_nome: string
+  responsavel_id?: string
+  data_hora: string
+  inventario_origem?: string
+  documento_ref?: string
+  expand?: {
+    item?: ItemFarmacia
+    inventario_origem?: InventarioFarmacia
   }
   created: string
   updated: string

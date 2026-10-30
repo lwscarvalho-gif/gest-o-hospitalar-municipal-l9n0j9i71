@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T06:17:42.448Z",
+  "generatedAt": "2026-10-30T06:39:57.194Z",
   "collections": [
     {
       "name": "users",
@@ -1081,6 +1081,12 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "localizacao_farmacia",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -1196,13 +1202,20 @@
           "required": false,
           "system": false,
           "collectionRef": "pronto_atendimento"
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
         "CREATE INDEX idx_disp_paciente ON farmacia_dispensacoes (paciente)",
         "CREATE INDEX idx_disp_item ON farmacia_dispensacoes (item)",
         "CREATE INDEX idx_disp_data ON farmacia_dispensacoes (data_dispensacao)",
-        "CREATE INDEX `idx_disp_pa` ON `farmacia_dispensacoes` (atendimento_pa)"
+        "CREATE INDEX `idx_disp_pa` ON `farmacia_dispensacoes` (atendimento_pa)",
+        "CREATE INDEX `idx_disp_idempotency` ON `farmacia_dispensacoes` (idempotency_key)"
       ]
     },
     {
@@ -4975,6 +4988,357 @@
         }
       ],
       "indexes": []
+    },
+    {
+      "name": "farmacia_inventarios",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "view": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "delete": "@request.auth.id != '' && @request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "codigo_inventario",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "titulo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["em_andamento", "cancelado", "concluido", "rejeitado_concorrencia"]
+        },
+        {
+          "name": "data_abertura",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "responsavel_abertura",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_fechamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "responsavel_fechamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "justificativa_fechamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "total_itens_inventariados",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "total_divergencias",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_inv_codigo ON farmacia_inventarios (codigo_inventario)",
+        "CREATE INDEX idx_inv_status ON farmacia_inventarios (status)",
+        "CREATE INDEX idx_inv_data ON farmacia_inventarios (data_abertura)"
+      ]
+    },
+    {
+      "name": "farmacia_inventario_itens",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "view": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "delete": "@request.auth.id != '' && @request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "inventario",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "farmacia_inventarios"
+        },
+        {
+          "name": "item",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "farmacia_itens"
+        },
+        {
+          "name": "item_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "lote",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "validade",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "local_armazenamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "quantidade_sistema_base",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "quantidade_contada",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "divergencia",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status_conferencia",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pendente", "contado", "divergente", "reconciliado", "ajustado"]
+        },
+        {
+          "name": "responsavel_contagem",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_contagem",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "justificativa_ajuste",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_inv_item_parent ON farmacia_inventario_itens (inventario)",
+        "CREATE INDEX idx_inv_item_ref ON farmacia_inventario_itens (item)",
+        "CREATE INDEX idx_inv_item_status ON farmacia_inventario_itens (status_conferencia)"
+      ]
+    },
+    {
+      "name": "farmacia_movimentos_estoque",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "view": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": "@request.auth.id != '' && @request.auth.role = 'admin'",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "item",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "farmacia_itens"
+        },
+        {
+          "name": "item_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo_movimento",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "entrada_nota",
+            "ajuste_inventario_sobra",
+            "ajuste_inventario_falta",
+            "perda_validade",
+            "perda_avaria",
+            "devolucao_paciente"
+          ]
+        },
+        {
+          "name": "quantidade",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "estoque_anterior",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "estoque_posterior",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "lote",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "validade",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "local_armazenamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "justificativa",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "responsavel_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "responsavel_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "inventario_origem",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "farmacia_inventarios"
+        },
+        {
+          "name": "documento_ref",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_mov_item ON farmacia_movimentos_estoque (item)",
+        "CREATE INDEX idx_mov_tipo ON farmacia_movimentos_estoque (tipo_movimento)",
+        "CREATE INDEX idx_mov_data ON farmacia_movimentos_estoque (data_hora)",
+        "CREATE INDEX idx_mov_inv ON farmacia_movimentos_estoque (inventario_origem)"
+      ]
     }
   ]
 }

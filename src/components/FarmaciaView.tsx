@@ -47,18 +47,22 @@ import {
   Filter,
   User,
   RefreshCw,
+  ClipboardCheck,
 } from 'lucide-react'
+import { InventarioFarmaciaTab } from './InventarioFarmaciaTab'
 
 export const FarmaciaView: React.FC = () => {
   const { user, temPermissao } = useAuth()
   const { toast } = useToast()
 
   const podeCadastrarCatalogo = temPermissao(['admin', 'gestor'])
+  const podeCriarFecharInventario = temPermissao(['admin', 'gestor'])
+  const podeAcessarInventario = temPermissao(['admin', 'gestor', 'profissional'])
 
   // Estados principais
-  const [activeSubTab, setActiveSubTab] = useState<'catalogo' | 'dispensacao' | 'historico'>(
-    'dispensacao',
-  )
+  const [activeSubTab, setActiveSubTab] = useState<
+    'catalogo' | 'dispensacao' | 'historico' | 'inventario'
+  >('dispensacao')
   const [itens, setItens] = useState<ItemFarmacia[]>([])
   const [dispensacoes, setDispensacoes] = useState<DispensacaoFarmacia[]>([])
   const [pacientes, setPacientes] = useState<Paciente[]>([])
@@ -105,6 +109,7 @@ export const FarmaciaView: React.FC = () => {
   const [dispSetorDestino, setDispSetorDestino] = useState('')
   const [dispObservacoes, setDispObservacoes] = useState('')
   const [salvandoDispensacao, setSalvandoDispensacao] = useState(false)
+  const [fluxoIdempotencyKey, setFluxoIdempotencyKey] = useState('')
 
   const carregarDados = async () => {
     setLoading(true)
@@ -221,6 +226,8 @@ export const FarmaciaView: React.FC = () => {
     setDispTipoMovimento('dispensacao_paciente')
     setDispSetorDestino('')
     setDispObservacoes('')
+    // Gera ID único persistente de idempotência na abertura do fluxo
+    setFluxoIdempotencyKey(`disp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`)
     setModalDispensacaoAberto(true)
   }
 
@@ -254,12 +261,15 @@ export const FarmaciaView: React.FC = () => {
     if (salvandoDispensacao) return
     setSalvandoDispensacao(true)
     try {
+      const keyToUse =
+        fluxoIdempotencyKey || `disp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
       const prescObj = prescricoesAtivas.find((p) => p.id === prescricaoSelecionadaId)
-      await registrarDispensacao({
+      const res = await registrarDispensacao({
         pacienteId: dispPacienteId,
         itemId: dispItemId,
         quantidade: qtd,
         lote: itemSelecionadoParaDisp?.lote,
+        idempotencyKey: keyToUse,
         prescricaoOrigem:
           modoDispensacao === 'prescricao' && prescObj
             ? `Prescrição #${prescObj.id.slice(0, 7)} (${prescObj.medico_nome || 'Médico'})`
@@ -274,11 +284,19 @@ export const FarmaciaView: React.FC = () => {
         atendimentoPaId: modoDispensacao === 'prescricao' ? prescObj?.atendimento_pa : undefined,
       })
 
-      toast({
-        title: 'Dispensação realizada com sucesso!',
-        description: `Baixa automática de ${qtd} unidade(s) efetuada no estoque.`,
-      })
+      if (res.idempotenteReutilizado) {
+        toast({
+          title: 'Operação Idempotente (Reenvio Detectado)',
+          description: `Retornado o registro original (#${res.dispensacao.id.slice(0, 7)}) sem aplicar segunda baixa de estoque.`,
+        })
+      } else {
+        toast({
+          title: 'Dispensação realizada com sucesso!',
+          description: `Baixa automática de ${qtd} unidade(s) efetuada no estoque.`,
+        })
+      }
       setModalDispensacaoAberto(false)
+      setFluxoIdempotencyKey('')
       await carregarDados()
     } catch (err: any) {
       toast({
@@ -457,6 +475,15 @@ export const FarmaciaView: React.FC = () => {
               <History className="w-3.5 h-3.5 mr-1.5" />
               Histórico de Dispensações ({dispensacoes.length})
             </TabsTrigger>
+            {podeAcessarInventario && (
+              <TabsTrigger
+                value="inventario"
+                className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-purple-900"
+              >
+                <ClipboardCheck className="w-3.5 h-3.5 mr-1.5 text-purple-600" />
+                Inventário Físico & Perdas
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
 
@@ -1078,6 +1105,17 @@ export const FarmaciaView: React.FC = () => {
             </div>
           </Card>
         </TabsContent>
+
+        {/* 4. ABA INVENTÁRIO FÍSICO, DIVERGÊNCIAS, PERDAS & AUDITORIA */}
+        {podeAcessarInventario && (
+          <TabsContent value="inventario" className="mt-4 space-y-4">
+            <InventarioFarmaciaTab
+              userNome={user?.name || 'Operador de Farmácia'}
+              podeCriarFechar={podeCriarFecharInventario}
+              podeContarAjustar={podeAcessarInventario}
+            />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* MODAL 1: CADASTRAR / EDITAR ITEM NO CATÁLOGO */}
