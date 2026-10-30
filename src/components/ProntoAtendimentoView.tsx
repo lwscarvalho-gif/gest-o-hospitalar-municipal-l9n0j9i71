@@ -66,6 +66,8 @@ import {
   Minimize2,
   Pill,
   Printer,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react'
 import { ModalSolicitarExame } from '@/components/ModalSolicitarExame'
 import { SecaoPrescricaoPAMedica } from '@/components/SecaoPrescricaoPAMedica'
