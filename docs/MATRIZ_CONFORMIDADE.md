@@ -1,24 +1,22 @@
 # Matriz de Conformidade Documental e Rastreabilidade do Sistema Hospitalar
 
 **Projeto:** Sistema Integrado de Gestão Hospitalar Municipal (SGH Municipal - Mirante da Serra / RO)  
-**Versão:** 0.0.46  
-**Data da Reconciliação:** 30/10/2026 (Horário de Cuiabá/Porto Velho: America/Porto_Velho / America/Cuiaba)  
+**Versão Documental:** 0.0.47 (Revisão Material com Fontes Reais Recebidas)  
+**Data da Reconciliação:** 30/10/2026 (Horário Local: America/Porto_Velho / UTC-4)  
 **Stack Técnica:** React 19 + TypeScript + Tailwind CSS / Skip Cloud PocketBase v0.36  
-**Finalidade:** Reconciliação documental única entre os requisitos de referência, o escopo deliberado pelo município/Codex e os artefatos de código, backend, migrações e testes efetivamente existentes no repositório.
+**Finalidade:** Reconciliação documental única entre os requisitos de referência extraídos diretamente dos três documentos oficiais recebidos em anexo, o escopo deliberado pelo município/Codex e os artefatos de código, backend, migrações e testes efetivamente existentes no repositório.
 
 ---
 
-## 1. Registro Exato de Faltas Documentais e Limitações Impostas
+## 1. Fontes de Origem Recebidas e Persistidas
 
-Em auditoria física no repositório (`glob **/*.{pdf,docx,txt}`), **nenhum arquivo de documentação externa em PDF/DOCX/TXT está presente no repositório local**.
+Ao contrário de versões preliminares em que os documentos físicos constavam como ausentes, **os três arquivos foram recebidos em anexo nesta conversa, lidos integralmente em modo texto e tiveram suas citações e páginas persistidas em `docs/FONTES_ESCOPO.md`**:
 
-### 1.1. Status dos Documentos de Origem Citados
-
-| Documento Citado                     | Extensão / Páginas / Escopo Original            | Presença no Repositório | Limite Metodológico e Operacional Imposto                                                                                                                                                                                                                                                                                                                           |
-| :----------------------------------- | :---------------------------------------------- | :---------------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **"Módulos - Modelo base.pdf"**      | 27 páginas (Itens 1 até 474 do ANEXO I)         |       **AUSENTE**       | O conteúdo detalhado é indexado e rastreado com base na memória consolidada do projeto (ANEXO I – Teste de Conformidade do Sistema Integrado de Gestão Saúde, 474 itens), agrupados pelas seções temáticas municipais conhecidas e pela lista geométrica estrita dos 69 itens excluídos confirmados pelo usuário. Nenhum texto literal não arquivado foi inventado. |
-| **"módulos (1).pdf"**                | 45 páginas (Seções 7.4.1 a 7.4.9)               |       **AUSENTE**       | As seções 7.4.1 a 7.4.9 são auditadas e classificadas **exclusivamente pelos nomes de módulos e temas arquiteturais conhecidos e homologados pelo Codex**. Nenhum subitem interno ilegível ou ausente foi inferido.                                                                                                                                                 |
-| **"COTAÇÃO SISTEMA HOSPITALAR.pdf"** | 2 páginas (Especificação comercial/licitatória) |       **AUSENTE**       | Registra-se a ausência física. O escopo comercial serve apenas de balizador de não contratação de serviços externos pagos e não introduz requisitos clínicos inventados.                                                                                                                                                                                            |
+| ID Documento | Arquivo / Asset Local                             | Extensão / Páginas | Órgão / Título Oficial                                                                                                  | Status no Repositório |
+| :----------- | :------------------------------------------------ | :----------------: | :---------------------------------------------------------------------------------------------------------------------- | :-------------------: |
+| **DOC-01**   | `src/assets/modulos-modelo-base-f0a3f.pdf`        |     27 páginas     | **ANEXO I – SETORES / TESTE DE CONFORMIDADE E CRITÉRIOS OBRIGATÓRIOS PARA AVALIAÇÃO / PROVA DE CONCEITO** _(474 itens)_ |  **RECEBIDO E LIDO**  |
+| **DOC-02**   | `src/assets/modulos-1-ea88d.pdf`                  |     45 páginas     | **ANEXO I - MÓDULOS DE ESPECIFICAÇÃO TÉCNICA FUNCIONAL** _(Seções 7.4.1 a 7.4.9)_                                       |  **RECEBIDO E LIDO**  |
+| **DOC-03**   | `src/assets/cotacao-sistema-hospitalar-9345d.pdf` |     2 páginas      | **PREFEITURA MUNICIPAL DE MIRANTE DA SERRA / PRÉ–COTAÇÃO DE PREÇOS** _(Item 01, 12 meses)_                              |  **RECEBIDO E LIDO**  |
 
 ---
 
@@ -44,159 +42,322 @@ Conforme diretriz do Codex, foi realizada consulta às fontes oficiais públicas
 
 ## 3. Regras de Classificação e Legenda de Conformidade
 
-Para evitar falsas conformidades ("não classificar módulo inteiro como atendido por ter uma tela"), cada item ou seção é classificado em uma das cinco categorias formais:
+Para evitar falsas conformidades ("não classificar módulo inteiro como atendido por ter uma tela"), cada item ou seção é classificado em uma das seis categorias formais:
 
 1. **ATENDE:** Requisito implementado de ponta a ponta com interface de usuário (`src/components/`), serviço/regras cliente (`src/services/`), persistência/regras backend (`pocketbase/migrations/` e/ou `pocketbase/hooks/`) e cenário automatizado no harness de testes (`src/tests/harnessTestes.ts`).
 2. **PARCIAL:** Funcionalidade possui tela, serviço ou schema funcional no protótipo, mas apresenta lacunas operacionais, falta de integração automatizada ou cobertura de teste apenas documental/parcial.
-3. **NÃO ATENDE:** Funcionalidade não implementada no sistema (ausência de tela, serviço ou coleção dedicada).
-4. **EXCLUÍDO:** Requisito deliberadamente retirado do escopo municipal por decisão expressa do usuário/Codex (itens amarelos do guia, vacinas/imunização integral, georreferenciamento, etc.).
+3. **NÃO ATENDE:** Funcionalidade não implementada no sistema (ausência de tela, serviço ou coleção dedicada), mas de desenvolvimento interno viável.
+4. **EXCLUÍDO:** Requisito deliberadamente retirado do escopo municipal por decisão expressa do usuário/Codex (os 69 itens amarelos do guia, vacinas/imunização integral, georreferenciamento, etc.).
 5. **DEPENDE DE INTEGRAÇÃO OU HOMOLOGAÇÃO:** Funcionalidade cuja conclusão legal depende de certificação externa (ex: ICP-Brasil), homologação em softwares federais (ex: Validador SIHD/BPA Magnético DATASUS) ou transmissão para webservices governamentais fechados (SINAN, CADSUS, e-SUS).
+6. **NÃO VERIFICADO:** Requisito cujo código ou schema ainda não passou por auditoria de detalhe item a item (nunca presumir conformidade sem evidência auditada).
 
 ---
 
-## 4. Relação dos 69 Itens Amarelos Excluídos do Escopo
+## 4. Preservação Rígida dos 69 Itens Amarelos Excluídos
 
-O usuário confirmou geometricamente os 69 itens marcados em amarelo no guia de referência ANEXO I ("Módulos - Modelo base", 27 páginas). Todos estão classificados obrigatoriamente como **EXCLUÍDO**:
+Os 69 itens marcados em amarelo no guia de referência ANEXO I (DOC-01, 27 páginas) permanecem **EXATAMENTE** como registrados e excluídos pelo usuário:
 
-| Faixa / Itens Excluídos | Quantidade | Seção do Guia / Título Excluído                                      | Justificativa / Deliberação do Projeto                                                      |
-| :---------------------- | :--------: | :------------------------------------------------------------------- | :------------------------------------------------------------------------------------------ |
-| **21, 24**              |     2      | Cadastros Gerais (Georreferenciamento domiciliar e microáreas APS)   | Atenção Primária fora do escopo hospitalar municipal.                                       |
-| **40, 57, 59, 60, 73**  |     5      | Atendimento Ambulatorial Básico / Fichas de Atenção Básica           | Foco hospitalar e pronto atendimento, não UBS/ESF.                                          |
-| **110**                 |     1      | Pronto Atendimento - Integração Territorial com Microárea ACS        | Urgência hospitalar não depende de microárea territorial.                                   |
-| **190 a 198**           |     9      | Programa Saúde da Família (PSF / e-SUS APS)                          | Módulo PSF inteiro fora do escopo do sistema hospitalar.                                    |
-| **217 a 225**           |     9      | Imunização e Controle de Vacinas                                     | **Imunização/Vacinas inteira FORA DE ESCOPO** (decisão do usuário; nada de vacinas no app). |
-| **280**                 |     1      | Farmácia - Dispensação Exclusiva de Vacinas / Imunobiológicos        | Vacinas fora de escopo; farmácia hospitalar foca em medicamentos/materiais.                 |
-| **331**                 |     1      | Vigilância em Saúde - Georreferenciamento e Mapas de Calor           | Sistema opera sem georreferenciamento (mapas/coordenadas GPS excluídos).                    |
-| **374 a 389**           |     16     | ACS Mobile / Tablets de Agentes Comunitários de Saúde                | Exclusão do aplicativo de ACS **NÃO exclui tablets hospitalares (Seção 7.4.9)**.            |
-| **404, 427**            |     2      | Portal do Cidadão (Agendamento web pelo munícipe e consulta externa) | Portal externo do cidadão fora do escopo hospitalar interno.                                |
-| **430 a 452**           |     23     | Sala de Situação da Atenção Primária / Territorial                   | Sala de Situação APS excluída; substituída pelo Painel de Gestão Hospitalar interno.        |
-| **TOTAL**               |   **69**   | **Itens Amarelos Excluídos Confirmados**                             | **Todos classificados como EXCLUÍDO.**                                                      |
+| Faixa / Itens Excluídos | Quantidade | Seção do Guia / Título Excluído                                                                                            | Justificativa / Deliberação do Projeto                                                                                            |
+| :---------------------- | :--------: | :------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| **21, 24**              |     2      | Cadastros Gerais (Áreas da família e famílias nas microáreas)                                                              | Atenção Primária/ACS fora do escopo hospitalar.                                                                                   |
+| **40, 57, 59, 60, 73**  |     5      | Atendimento Ambulatorial Básico / Odonto / Coletivo / ESF                                                                  | Foco hospitalar e pronto atendimento, não UBS/ESF.                                                                                |
+| **110**                 |     1      | Pronto Atendimento - Último atendimento APS com microárea                                                                  | Urgência hospitalar não depende de microárea territorial.                                                                         |
+| **190 a 198**           |     9      | Programa Saúde da Família (PSF / e-SUS APS)                                                                                | Módulo PSF integralmente fora do escopo hospitalar.                                                                               |
+| **217 a 225**           |     9      | Imunização e Controle de Vacinas                                                                                           | **Imunização/Vacinas inteira FORA DE ESCOPO** (decisão permanente: nada de vacinas no app).                                       |
+| **280**                 |     1      | Farmácia - Relatório nominal de pessoas que retiraram medicamentos/materiais                                               | Item amarelo do guia; farmácia opera por dispensação por atendimento/leito.                                                       |
+| **331**                 |     1      | Vigilância Sanitária - Georreferenciamento de famílias cadastradas                                                         | Sistema opera sem georreferenciamento (mapas/coordenadas GPS excluídos).                                                          |
+| **374 a 389**           |     16     | ACS Mobile / Tablets de Agentes Comunitários de Saúde                                                                      | Exclusão do aplicativo de ACS **NÃO exclui tablets hospitalares da seção 7.4.9**.                                                 |
+| **404, 427**            |     2      | Gabinete Prefeito (404: Famílias Cadastradas x Visitadas) e Transparência Farmácia (427: busca livre de estoque no portal) | Itens amarelos específicos fora de escopo. **Atenção:** não exclui o Portal do Paciente web nem a visão web do gestor da cotação. |
+| **430 a 452**           |     23     | Sala de Situação da Atenção Primária / Territorial                                                                         | Sala de Situação APS excluída; substituída pelo Painel de Gestão Hospitalar interno.                                              |
+| **TOTAL**               |   **69**   | **Itens Amarelos Excluídos Confirmados**                                                                                   | **Todos classificados rigorosamente como EXCLUÍDO.**                                                                              |
 
----
+_Nota de Limite Geográfico e de Imunização:_
 
-## 5. Matriz do Guia de Referência Vigente (ANEXO I – 474 Itens)
-
-A tabela abaixo mapeia cada intervalo e item do guia de 474 itens para os artefatos reais do projeto, distinguindo com precisão o que atende, o que é parcial, o que não existe e o que foi excluído:
-
-| Item / Faixa  | Descrição do Bloco no Guia (ANEXO I)                                  | Componente(s) de Tela (`src/components/`)                                | Serviço(s) Cliente (`src/services/`)                                            | Backend / Migração / Hook (`pocketbase/`)                                                  | Cenário no Harness (`src/tests/harnessTestes.ts`)       | Classificação | Justificativa Técnica / Limitações                                                                                                                                    |
-| :------------ | :-------------------------------------------------------------------- | :----------------------------------------------------------------------- | :------------------------------------------------------------------------------ | :----------------------------------------------------------------------------------------- | :------------------------------------------------------ | :-----------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1 a 10**    | Autenticação, Controle de Perfis e Acesso por Função                  | `LoginView.tsx`, `NavigationBar.tsx`, `Layout.tsx`                       | `AuthContext.tsx`                                                               | Migração 0001, 0014 (RLS por perfil)                                                       | Invariante de login e permissões                        |  **ATENDE**   | Perfis `admin`, `gestor`, `profissional`, `recepcao` com RLS estrito e sanitização no logout.                                                                         |
-| **11 a 20**   | Cadastros Fundamentais (Setores, Leitos, Profissionais)               | `SetoresLeitosView.tsx`, `ProfissionaisView.tsx`                         | `cadastros.ts`                                                                  | Migração 0001, 0002 (seed setores/leitos)                                                  | CRUD de setores e leitos                                |  **ATENDE**   | Setores hospitalares, capacidade operacional e leitos com status formal (vago, ocupado, etc.).                                                                        |
-| **21**        | Cadastro Domiciliar e Georreferenciamento de Imóveis                  | N/A                                                                      | N/A                                                                             | N/A                                                                                        | N/A                                                     | **EXCLUÍDO**  | Item amarelo excluído (Atribuição da Atenção Básica/ACS).                                                                                                             |
-| **22 a 23**   | Cadastro de Pacientes, Documentos e Identificação SUS                 | `PacientesView.tsx`, `SeletorPaciente.tsx`, `CabecalhoPacienteAtivo.tsx` | `cadastros.ts`, `identificacaoPaciente.ts`                                      | Migrações 0020, 0021, 0022; Hooks `pacientes_identificacao.pb.js`, `pacientes_busca.pb.js` | PAC-1 a PAC-12                                          |  **ATENDE**   | Módulo 11 oficial CPF, CNS definitivo/provisório, índices únicos parciais no SQLite, alerta de homônimo sem fusão e mascaramento LGPD.                                |
-| **24**        | Microáreas Territoriais de Saúde da Família                           | N/A                                                                      | N/A                                                                             | N/A                                                                                        | N/A                                                     | **EXCLUÍDO**  | Item amarelo excluído (Atenção Básica/ACS).                                                                                                                           |
-| **25 a 39**   | Agendamento de Consultas e Atendimentos Especializados                | `AgendamentosView.tsx`                                                   | `agendamentos.ts`, `dataFusoUnidade.ts`                                         | Migração 0001 (`agendamentos`)                                                             | Fuso da unidade e filtros                               |  **ATENDE**   | Fila ambulatorial, status de consulta, fuso de Mirante da Serra (`America/Porto_Velho`).                                                                              |
-| **40**        | Ficha de Atendimento Individual APS (e-SUS AB)                        | N/A                                                                      | N/A                                                                             | N/A                                                                                        | N/A                                                     | **EXCLUÍDO**  | Item amarelo excluído (Atenção Primária).                                                                                                                             |
-| **41 a 56**   | Recepção Hospitalar, Ficha de Atendimento e Acolhimento               | `ProntoAtendimentoView.tsx`                                              | `prontoAtendimento.ts`                                                          | Migração 0003 (`pronto_atendimento`)                                                       | Fluxo de acolhimento e PA                               |  **ATENDE**   | Entrada com queixa principal, identificação rápida e encaminhamento para triagem.                                                                                     |
-| **57**        | Atendimento Odontológico da Atenção Primária                          | N/A                                                                      | N/A                                                                             | N/A                                                                                        | N/A                                                     | **EXCLUÍDO**  | Item amarelo excluído (Saúde Bucal APS).                                                                                                                              |
-| **58**        | Acolhimento com Demanda Espontânea Hospitalar                         | `ProntoAtendimentoView.tsx`                                              | `prontoAtendimento.ts`                                                          | Migração 0003                                                                              | Triagem PA                                              |  **ATENDE**   | Coberto pelo fluxo de demanda espontânea no PA.                                                                                                                       |
-| **59 a 60**   | Fichas de Procedimentos Coletivos e Atividades em Grupo APS           | N/A                                                                      | N/A                                                                             | N/A                                                                                        | N/A                                                     | **EXCLUÍDO**  | Itens amarelos excluídos (Atenção Básica).                                                                                                                            |
-| **61 a 72**   | Triagem e Classificação de Risco (Protocolo Manchester)               | `ProntoAtendimentoView.tsx`                                              | `prontoAtendimento.ts`                                                          | Migração 0003                                                                              | PESO_RISCO e triagem PA                                 |  **ATENDE**   | Classificação em 5 cores (Vermelho, Laranja, Amarelo, Verde, Azul) com priorização de fila.                                                                           |
-| **73**        | Encaminhamento para Equipe de Saúde da Família (ESF)                  | N/A                                                                      | N/A                                                                             | N/A                                                                                        | N/A                                                     | **EXCLUÍDO**  | Item amarelo excluído (Fluxo reverso APS).                                                                                                                            |
-| **74 a 109**  | Consultório Médico de Urgência / Registro Clínico de PA               | `ProntoAtendimentoView.tsx`, `SecaoPrescricaoPAMedica.tsx`               | `prontoAtendimento.ts`, `prescricoes.ts`                                        | Migrações 0003, 0007                                                                       | ADM-1 a ADM-4                                           |  **ATENDE**   | Atendimento médico, hipótese diagnóstica CID-10, conduta e prescrição rápida de PA.                                                                                   |
-| **110**       | Integração Georreferenciada PA com Território ACS                     | N/A                                                                      | N/A                                                                             | N/A                                                                                        | N/A                                                     | **EXCLUÍDO**  | Item amarelo excluído (Georreferenciamento territorial).                                                                                                              |
-| **111 a 140** | Internação Hospitalar e Gestão do Mapa de Leitos                      | `InternacaoView.tsx`, `SetoresLeitosView.tsx`                            | `internacoes.ts`, `cadastros.ts`                                                | Migração 0001, 0002; Hook `internacoes.pb.js`                                              | Admissão, transferência e alta                          |  **ATENDE**   | Mapa visual de leitos por setor, admissão formal, transferência leito a leito e alta hospitalar.                                                                      |
-| **141 a 160** | Evolução Multiprofissional e Prontuário Clínico                       | `AssistencialView.tsx`                                                   | `internacoes.ts`                                                                | Migração 0001 (`evolucoes_clinicas`)                                                       | Evoluções e sinais vitais                               |  **ATENDE**   | Evoluções médicas e de enfermagem com data/hora, sinais vitais e CID-10 associado à internação.                                                                       |
-| **161 a 189** | Prescrição Médica e Aprazamento de Enfermagem                         | `PrescricaoEnfermagemTab.tsx`, `SecaoPrescricaoPAMedica.tsx`             | `prescricoes.ts`                                                                | Migrações 0005, 0007, 0023; Hook `prescricoes_administracao.pb.js`                         | ADM-1 a ADM-4                                           |  **ATENDE**   | Prescrição estruturada, aprazamento, checagem à beira do leito com idempotência server-side e retificação rastreável.                                                 |
-| **190 a 198** | Atenção Primária / Saúde da Família / e-SUS APS                       | N/A                                                                      | N/A                                                                             | N/A                                                                                        | N/A                                                     | **EXCLUÍDO**  | Itens amarelos excluídos (Módulo PSF integralmente fora do escopo hospitalar).                                                                                        |
-| **199 a 216** | Faturamento SUS / Apuração de Produção e Contas Hospitalares          | `FaturamentoView.tsx`                                                    | `faturamento.ts`, `consistenciaFaturamento.ts`, `importadorSigtapPosicional.ts` | Migrações 0019; coleções `contas_faturamento`, `producao_bpa`, `procedimentos_sigtap`      | Cenários (n) a (x), Cenários 1 a 7 do SIGTAP posicional |  **PARCIAL**  | Atende importação dinâmica SIGTAP posicional, cálculo de AIH/BPA e painel de consistência. Não gera arquivos binários/posicionais federais (BPA magnético, SISPROHO). |
-| **217 a 225** | Módulo de Imunização, Sala de Vacinas e Lotes de Vacinas              | N/A                                                                      | N/A                                                                             | Migração 0004 (estrutura residual sem uso)                                                 | N/A                                                     | **EXCLUÍDO**  | **Vacinas inteiramente fora do escopo hospitalar**. Decisão do usuário: nada de vacinas no app.                                                                       |
-| **226 a 250** | Exames Laboratoriais e Diagnóstico por Imagem                         | `ExamesLaudosView.tsx`, `ModalSolicitarExame.tsx`                        | `exames.ts`                                                                     | Migrações 0006, 0024; Hook `exames_laudos.pb.js`                                           | EXA-1 a EXA-8                                           |  **PARCIAL**  | Ciclo completo: solicitação, coleta, análise e laudo com retificação formal (v1/v2) e exibição SAME. Radiologia apenas como categoria de exame; sem PACS/DICOM.       |
-| **251 a 279** | Farmácia Hospitalar, Estoque e Dispensação ao Leito                   | `FarmaciaView.tsx`, `InventarioFarmaciaTab.tsx`                          | `farmacia.ts`                                                                   | Migrações 0004, 0015, 0017; Hook `farmacia.pb.js`                                          | Cenários (a) a (e) de estoque e inventário              |  **ATENDE**   | Catálogo, saldo atual/mínimo, baixa por paciente, inventário físico concorrente e rastreio de lote/validade.                                                          |
-| **280**       | Dispensação Exclusiva de Vacinas / Imunobiológicos                    | N/A                                                                      | N/A                                                                             | N/A                                                                                        | N/A                                                     | **EXCLUÍDO**  | Item amarelo excluído (Subitem de imunização).                                                                                                                        |
-| **281 a 310** | Centro Cirúrgico, Agendamento e Segurança do Paciente                 | `CentroCirurgicoView.tsx`                                                | `centroCirurgico.ts`                                                            | Migração 0008                                                                              | Agendamento, checklist OMS e SRPA                       |  **ATENDE**   | Gestão de salas cirúrgicas, checklist pré-operatório OMS/Safe Surgery, ato cirúrgico e recuperação pós-anestésica (Aldrete-Kroulik).                                  |
-| **311 a 330** | Vigilância Epidemiológica e Notificação Compulsória                   | `VigilanciaSaudeView.tsx`                                                | `vigilanciaSaude.ts`                                                            | Migrações 0011, 0012                                                                       | Fila administrativa restrita e catálogo de agravos      |  **PARCIAL**  | Notificação imediata (24h) e semanal com catálogo oficial e histórico de investigação. Sem exportação telemática para o SINAN federal.                                |
-| **331**       | Vigilância em Saúde - Georreferenciamento e Mapas de Calor            | N/A                                                                      | N/A                                                                             | N/A                                                                                        | N/A                                                     | **EXCLUÍDO**  | Item amarelo excluído (Sem georreferenciamento; decisão permanente do projeto).                                                                                       |
-| **332 a 350** | Centro Obstétrico, Sala de Parto e Acolhimento Materno                | `CentroObstetricoView.tsx`, `QuadroUnidadeObstetrica.tsx`                | `centroObstetrico.ts`                                                           | Migração 0012; Hook `regulacao_obstetricia.pb.js`                                          | Admissão obstétrica, partograma e RN                    |  **ATENDE**   | Admissão de gestante com risco, partograma simplificado, nascimento com escala de Apgar e desfecho puerperal.                                                         |
-| **351 a 373** | Central de Regulação de Leitos e Fila de Espera                       | `RegulacaoView.tsx`, `ModalCatalogoRegulacao.tsx`                        | `regulacao.ts`, `regulacaoRelogio.ts`                                           | Migrações 0013, 0018; Hook `regulacao_obstetricia.pb.js`                                   | Cenários (f) a (m) do relógio de espera                 |  **ATENDE**   | Solicitação leito a leito, triagem por médico regulador, fila administrativa com relógio de espera e proteção de contato telefônico contra recepção.                  |
-| **374 a 389** | ACS Mobile / Dispositivos Móveis de Agentes de Saúde                  | N/A                                                                      | N/A                                                                             | N/A                                                                                        | N/A                                                     | **EXCLUÍDO**  | Itens amarelos excluídos (Aplicativo de ACS). Nota: não exclui tablets hospitalares da seção 7.4.9.                                                                   |
-| **390 a 403** | SAME (Serviço de Arquivo Médico e Estatística) / Prontuário Unificado | `ProntuarioSAMEView.tsx`, `FolhaImpressoA4.tsx`                          | `prontuarioSAME.ts`, `impressosAssistenciais.ts`                                | Migrações 0005, 0024, 0025; Hook `impressos_assistenciais.pb.js`                           | IMPRESSOS-1 a IMPRESSOS-5                               |  **ATENDE**   | Prontuário unificado por CPF/CNS integrando PA, internações, cirurgias, obstetrícia, exames, dispensações e impressos oficiais com snapshot congelado.                |
-| **404**       | Agendamento Web de Consultas pelo Cidadão                             | N/A                                                                      | N/A                                                                             | N/A                                                                                        | N/A                                                     | **EXCLUÍDO**  | Item amarelo excluído (Portal externo do cidadão).                                                                                                                    |
-| **405 a 426** | Impressos Assistenciais Oficiais em Folha A4                          | `ModalEmissaoImpresso.tsx`, `FolhaImpressoA4.tsx`                        | `impressosAssistenciais.ts`, `dataFusoUnidade.ts`                               | Migrações 0010, 0025; Hook `impressos_assistenciais.pb.js`                                 | IMPRESSOS-1 a IMPRESSOS-5                               |  **ATENDE**   | Receituário simples/controlado, Atestado Médico e Resumo de Alta com snapshot congelado, opção de consentimento para CID-10 e retificação formal.                     |
-| **427**       | Consulta Externa de Resultados de Exames pelo Cidadão                 | N/A                                                                      | N/A                                                                             | N/A                                                                                        | N/A                                                     | **EXCLUÍDO**  | Item amarelo excluído (Portal externo do cidadão).                                                                                                                    |
-| **428 a 429** | Auditoria do Sistema e Trilha de Eventos                              | `AuditoriaView.tsx`                                                      | `auditoria.ts`                                                                  | Migrações 0001, 0014, 0017 (update/delete nulos)                                           | Trilha imutável                                         |  **ATENDE**   | Coleção `auditoria` gravando login, logout e transações assistenciais com usuário, IP e timestamp.                                                                    |
-| **430 a 452** | Sala de Situação da Atenção Primária / Territorial                    | N/A                                                                      | N/A                                                                             | N/A                                                                                        | N/A                                                     | **EXCLUÍDO**  | Itens amarelos excluídos (Sala de Situação da Atenção Básica).                                                                                                        |
-| **453 a 474** | Painel Executivo / Monitoramento Operacional Hospitalar               | `PainelGestaoView.tsx`, `SecoesPainelGestao.tsx`                         | `painelGestao.ts`, `dataFusoUnidade.ts`                                         | Hook `painel_gestao.pb.js`                                                                 | PAINEL-1 a PAINEL-9                                     |  **ATENDE**   | Painel de gestão em tempo real agregado no servidor, isolamento financeiro restrito a admin/gestor, sem dados pessoais (LGPD) e sem truncamento.                      |
+- **Imunização/Vacinas:** Inteiramente fora do escopo do sistema hospitalar municipal.
+- **Georreferenciamento:** Todos os itens de mapa espacial, coordenadas GPS ou triangulação (itens 70–73, 328–332, 442, 449) estão **FORA DO ESCOPO**.
 
 ---
 
-## 6. Matriz das Seções 7.4.1 a 7.4.9 (Auditadas por Nomes de Módulos Conhecidos)
+## 5. Reclassificação Material dos Requisitos Críticos (Correção v0.0.47)
 
-A tabela abaixo reconcilia as seções 7.4.1 a 7.4.9 da referência conhecida ("módulos (1).pdf", 45 páginas) contra a base de código do projeto:
+### 5.1. Portal do Cidadão / Área do Paciente Web
 
-| Seção     | Nome / Tema do Módulo Conhecido                              | Telas / Componentes Existentes                                          | Serviços Existentes                                                             | Migrações e Hooks Existentes                                                         | Classificação | Análise Racional de Conformidade / O que Existe vs O que Falta                                                                                                                                                                                                                                          |
-| :-------- | :----------------------------------------------------------- | :---------------------------------------------------------------------- | :------------------------------------------------------------------------------ | :----------------------------------------------------------------------------------- | :-----------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **7.4.1** | Internação e Gestão de Leitos Hospitalares                   | `InternacaoView.tsx`, `SetoresLeitosView.tsx`                           | `internacoes.ts`, `cadastros.ts`                                                | Migrações 0001, 0002; Hook `internacoes.pb.js`                                       |  **ATENDE**   | **Existe:** Admissão, transferência entre setores, mapa visual de leitos com status em tempo real, alta com sumário clínico. **Falta:** Telemetria de leito inteligente por IoT (fora do escopo).                                                                                                       |
-| **7.4.2** | Centro Cirúrgico e Recuperação Anestésica                    | `CentroCirurgicoView.tsx`                                               | `centroCirurgico.ts`                                                            | Migração 0008                                                                        |  **ATENDE**   | **Existe:** Agendamento de cirurgia, escala de sala cirúrgica, checklist pré-operatório Safe Surgery OMS, ficha de ato cirúrgico e monitoramento na SRPA (Aldrete-Kroulik).                                                                                                                             |
-| **7.4.3** | Faturamento Hospitalar e Ambulatorial SUS                    | `FaturamentoView.tsx`                                                   | `faturamento.ts`, `consistenciaFaturamento.ts`, `importadorSigtapPosicional.ts` | Migração 0019; coleções `contas_faturamento`, `producao_bpa`, `procedimentos_sigtap` |  **PARCIAL**  | **Existe:** Importação dinâmica de pacotes oficiais SIGTAP posicional (.zip), auditoria de AIH (SH/SA/SP), BPA-I, painel de consistência prévia. **Falta:** Gerador de arquivos binários/posicionais nos layouts oficiais do DATASUS (SISPROHO / BPA Magnético) para transmissão federal.               |
-| **7.4.4** | Farmácia Hospitalar, Dispensação e Estoque                   | `FarmaciaView.tsx`, `InventarioFarmaciaTab.tsx`                         | `farmacia.ts`                                                                   | Migrações 0004, 0015, 0017; Hook `farmacia.pb.js`                                    |  **ATENDE**   | **Existe:** Cadastro de medicamentos/materiais, saldo atual/mínimo, baixa atômica com idempotência, inventário físico com snapshot e detecção de concorrência. **Falta:** Controle de termolábeis/cadeia de frio e relatórios trimestrais SNGPC para controlados (ver Limitações).                      |
-| **7.4.5** | Prontuário Eletrônico do Paciente (PEP) e SAME               | `ProntuarioSAMEView.tsx`, `AssistencialView.tsx`, `FolhaImpressoA4.tsx` | `prontuarioSAME.ts`, `impressosAssistenciais.ts`                                | Migrações 0005, 0024, 0025; Hook `impressos_assistenciais.pb.js`                     |  **ATENDE**   | **Existe:** Linha do tempo unificada de atendimentos, internações, cirurgias, obstetrícia, exames, dispensações e impressos com snapshot cadastral congelado e retificação formal.                                                                                                                      |
-| **7.4.6** | Pronto Atendimento e Acolhimento com Classificação de Risco  | `ProntoAtendimentoView.tsx`, `SecaoPrescricaoPAMedica.tsx`              | `prontoAtendimento.ts`, `prescricoes.ts`                                        | Migrações 0003, 0007; Hook `prescricoes_administracao.pb.js`                         |  **ATENDE**   | **Existe:** Acolhimento, triagem com Protocolo Manchester (5 cores), consultório médico com CID-10, prescrição rápida e aprazamento.                                                                                                                                                                    |
-| **7.4.7** | Central de Regulação Interna e Fila de Leitos                | `RegulacaoView.tsx`, `ModalCatalogoRegulacao.tsx`                       | `regulacao.ts`, `regulacaoRelogio.ts`                                           | Migrações 0013, 0018; Hook `regulacao_obstetricia.pb.js`                             |  **ATENDE**   | **Existe:** Solicitação de transferência leito a leito, triagem médica com priorização, relógio de espera individual (imune a viradas UTC) e isolamento de contatos telefônicos contra perfil de recepção.                                                                                              |
-| **7.4.8** | Vigilância Epidemiológica Hospitalar e Notificações          | `VigilanciaSaudeView.tsx`                                               | `vigilanciaSaude.ts`                                                            | Migrações 0011, 0012                                                                 |  **PARCIAL**  | **Existe:** Fila de notificações compulsórias (imediatas 24h e semanais), catálogo oficial de agravos, histórico de investigação. **Excluído:** Georreferenciamento (item 331). **Falta:** Transmissão online para SINAN federal.                                                                       |
-| **7.4.9** | Dispositivos Móveis e Tablets Hospitalares (Uso Beira-Leito) | N/A (Interface web responsiva Tailwind adaptável a tablets)             | N/A (Sem aplicativo nativo de tablet)                                           | N/A                                                                                  |  **PARCIAL**  | **Equivalência com Contexto:** A exclusão de ACS Mobile (itens 374-389) **NÃO exclui tablets hospitalares desta seção**. A aplicação web é responsiva via Tailwind/React e pode ser operada em navegador de tablet à beira-leito, mas **não existe aplicativo móvel nativo nem modo offline dedicado**. |
+- **Erro na v0.0.46:** A versão anterior resumiu o portal aos itens 404 e 427 e declarou o módulo inteiro como "EXCLUÍDO / NÃO ATENDE", justificando isolamento de rede interna.
+- **Correção Material:**
+  - O item 404 (p. 21) é apenas um gráfico municipal de famílias visitadas por ACS (amarelo, excluído).
+  - O item 427 (p. 22) é apenas a consulta pública aberta com autocomplete do estoque geral da farmácia municipal no portal de transparência (amarelo, excluído).
+  - **A Cotação Oficial (DOC-03, p. 2) EXIGE expressamente:** _"O SISTEMA DEVE DISPONIBILIZAR AO PACIENTE VISUALIZAR SEUS ATENDIMENTOS REALIZADOS (VIA WEB) / AGENDAMENTOS DE CONSULTAS E PROCEDIMENTOS / RESULTADOS DE EXAMES / MEDICAMENTOS DISPENSADOS, ATRAVÉS DE ACESSO WEB."_
+  - **A Especificação Técnica (DOC-02, Seção 7.4.4.3.b.iv, p. 31) detalha:** _"Portal/Área do Cidadão (Acesso Restrito): Módulo de consulta individual onde o cidadão, mediante autenticação segura (via Gov.br, CPF/Senha ou CNS), poderá visualizar seu histórico de solicitações e sua posição exata na fila de espera."_
+  - **Nota de Proteção de Dados (LGPD - 7.4.4.3.b.iii, p. 31):** O acesso é individualizado para o próprio paciente com autenticação restrita, exigindo mascaramento de dados sensíveis e proibindo consulta aberta sem login.
+  - **Classificação Atual:** **NÃO ATENDE (Requisito Exigido da Cotação / Código Interno Planejado)**. O protótipo atual possui a visão interna do prontuário SAME (`ProntuarioSAMEView.tsx`), mas não possui a rota/portal web restrita para auto-consulta do munícipe.
+
+### 5.2. Mensageria Interna entre Usuários e Grupos
+
+- **Erro na v0.0.46:** A versão anterior classificou como "NÃO ATENDE" e sugeriu manter comunicação apenas via prontuário/SAME para valor jurídico, contornando a exigência do edital.
+- **Correção Material:**
+  - **A Cotação Oficial (DOC-03, p. 1) EXIGE expressamente:** _"O SISTEMA DEVE PERMITIR O ENVIO DE MENSAGENS ENTRE USUÁRIOS E OU GRUPOS DO SISTEMA; O SISTEMA DEVE POSSUIR CONTROLE DE AVISOS AOS PACIENTES QUANDO BUSCAREM ATENDIMENTO; O SISTEMA DEVE POSSUIR CONTROLE DE AVISOS AOS USUÁRIOS DO SISTEMA."_
+  - **O ANEXO I (DOC-01, pp. 21-22) contempla:** Item 419 (_"chat para os usuários do sistema"_), Item 420 (_"controle de avisos aos pacientes quando buscarem atendimento"_), Item 421 (_"controle de avisos aos usuários do sistema"_).
+  - **Diretriz Técnica:** Mensageria interna entre profissionais e equipes de plantão (avisos, recados e chat interno) é **código interno plenamente implementável**, sem custos de disparos externos (SMS/WhatsApp). Não contornar com outros fluxos.
+  - **Classificação Atual:** **NÃO ATENDE (Código Interno Planejado - Bloco 1)**.
+
+### 5.3. Cadastros Gerais e Auxiliares (Itens 1 a 36 do ANEXO I)
+
+- **Erro na v0.0.46:** A versão anterior agrupou os itens 1 a 20 e 22 a 23 sob uma única classificação genérica de "ATENDE", gerando risco de falsa conformidade.
+- **Correção Material:** Classificação granular item a item com evidência de código ou demarcação formal de **NÃO VERIFICADO** / **PARCIAL** / **NÃO ATENDE**:
+
+|   Item    | Texto do Requisito (DOC-01, pp. 1-3)                              | Evidência de Código / Backend                                 |                  Status                  | Análise Racional de Conformidade                                            |
+| :-------: | :---------------------------------------------------------------- | :------------------------------------------------------------ | :--------------------------------------: | :-------------------------------------------------------------------------- |
+|   **1**   | Cadastrar paciente gerando número único no SOFTWARE               | Migração 0001, id PocketBase e prontuário numérico            |                **ATENDE**                | ID único nativo gerado no cadastro de pacientes.                            |
+|   **2**   | Vincular número de cadastro ao cartão SUS                         | `cartao_sus` em `pacientes`, migrações 0020, 0021             |                **ATENDE**                | Vínculo estrutural no schema e UI.                                          |
+|   **3**   | Validação do número do cartão nacional                            | `validarCNSOficial` em `identificacaoPaciente.ts`             |                **ATENDE**                | Algoritmos oficiais DATASUS (definitivo e provisório).                      |
+|   **4**   | Vincular foto do paciente ao cadastro                             | Campo `foto` em `pacientes`                                   |                **ATENDE**                | Suporte a upload/visualização de avatar do paciente.                        |
+|   **5**   | Cadastrar a(s) deficiência(s) do paciente                         | Campo `tipo_necessidade_especial` em `pacientes`              |               **PARCIAL**                | Campo textual/select; falta catálogo estruturado multisseleção.             |
+|   **6**   | Não permitir duplicidade por dados informados                     | Migração 0020 (índices parciais únicos CPF/CNS)               |                **ATENDE**                | Bloqueio físico no SQLite e hook `pacientes_identificacao.pb.js`.           |
+|   **7**   | Impressão da ficha cadastral do paciente                          | `ModalEmissaoImpresso.tsx`, `FolhaImpressoA4.tsx`             |               **PARCIAL**                | Emite impressos assistenciais e resumo; ficha cadastral direta pendente.    |
+|   **8**   | Impressão da carteira do paciente                                 | N/A                                                           |              **NÃO ATENDE**              | Layout de carteirinha física de identificação não implementado.             |
+|   **9**   | Busca por número, nascimento, CNS ou mãe                          | `buscarPacientes` em `cadastros.ts` / `pacientes_busca.pb.js` |                **ATENDE**                | Busca combinada no servidor com proteção LGPD.                              |
+|  **10**   | Emissão de cartões com nome, nasc, mãe, cartão e SUS              | N/A                                                           |              **NÃO ATENDE**              | Emissão de cartão físico SUS/municipal não implementada.                    |
+|  **11**   | Informar se paciente é doador de sangue                           | Campo `doador_sangue` em `pacientes`                          |            **NÃO VERIFICADO**            | Campo não mapeado explicitamente no formulário de UI atual.                 |
+|  **12**   | Informar tipagem sanguínea do paciente                            | Campo `grupo_sanguineo` em `pacientes`                        |                **ATENDE**                | Seleção de grupo (A, B, AB, O) e fator Rh (+/-) presente.                   |
+|  **13**   | Controle de auditoria no cadastro Pessoa Física                   | Migrações 0001, 0014, 0017 (coleção `auditoria`)              |                **ATENDE**                | Log imutável de criação e edição com usuário e timestamp.                   |
+|  **14**   | Cadastrar profissionais com ocupações e perfis                    | `ProfissionaisView.tsx`, `cadastros.ts`, perfis RBAC          |                **ATENDE**                | Cadastro com CBO, conselho de classe e perfil de acesso.                    |
+| **[14b]** | Cadastrar Pessoas Jurídicas                                       | Coleção `fornecedores` / prestadores                          |            **NÃO VERIFICADO**            | Cadastro genérico de PJ/hospitais parceiros não auditado.                   |
+|  **15**   | Cadastrar novas CIDs ou alterações                                | `faturamento.ts`, `listarCID10`, `criarCID10`                 |                **ATENDE**                | Tabela dinâmica de CID-10 com inclusão operacional.                         |
+|  **16**   | Cadastrar novos Bairros, Endereços, regiões e domicílios          | `cadastros.ts`                                                |               **PARCIAL**                | Campos no paciente; cadastro independente de logradouros/bairros é parcial. |
+|  **17**   | Cadastrar estoque, entidade, guichês, produtos no gestor Hórus    | `FarmaciaView.tsx`, `farmacia.ts`                             |               **PARCIAL**                | Atende farmácia hospitalar interna; Hórus federal não integrado.            |
+|  **18**   | Cadastrar laboratórios e hospitais                                | `RegulacaoView.tsx` (catálogo destinos)                       |               **PARCIAL**                | Cadastro de destinos na regulação; PJ hospitalar completo pendente.         |
+|  **19**   | Profissionais, ocupação, INE, operações e consultório             | `ProfissionaisView.tsx`                                       |               **PARCIAL**                | Atende CBO e dados básicos; INE (Atenção Básica) não utilizado.             |
+|  **20**   | Formas de abastecimento de água                                   | N/A                                                           |            **NÃO VERIFICADO**            | Cadastro de saneamento básico (Atenção Básica).                             |
+|  **21**   | Áreas da família                                                  | N/A                                                           |               **EXCLUÍDO**               | Item amarelo excluído (Atenção Básica/ACS).                                 |
+|  **22**   | Destino de fezes e urinas                                         | N/A                                                           |            **NÃO VERIFICADO**            | Cadastro sanitário domiciliar (Atenção Básica).                             |
+|  **23**   | Destino do lixo                                                   | N/A                                                           |            **NÃO VERIFICADO**            | Cadastro sanitário domiciliar (Atenção Básica).                             |
+|  **24**   | Famílias e famílias nas microáreas                                | N/A                                                           |               **EXCLUÍDO**               | Item amarelo excluído (Atenção Básica/ACS).                                 |
+|  **25**   | Formas de tratamento de água                                      | N/A                                                           |            **NÃO VERIFICADO**            | Cadastro sanitário domiciliar (Atenção Básica).                             |
+|  **26**   | Centro de custo, fabricantes, insumos, medicamentos, unidades     | `FarmaciaView.tsx`, `farmacia.ts`                             |                **ATENDE**                | Cadastro estruturado de materiais, lotes, fabricantes e unidades.           |
+|  **27**   | Tipos de documentos no cadastro do paciente                       | `PacientesView.tsx`                                           |                **ATENDE**                | RG, CPF, Certidão de Nascimento, CNS suportados.                            |
+|  **28**   | Contas correntes, planos de contas e recursos                     | N/A                                                           |              **NÃO ATENDE**              | Módulo de contabilidade bancária municipal não implementado.                |
+|  **29**   | Acomodações, estruturas do hospital e leitos                      | `SetoresLeitosView.tsx`, `cadastros.ts`                       |                **ATENDE**                | Setores, leitos com tipos de acomodação (enfermaria, isolamento, UTI).      |
+|  **30**   | Bancadas, etiquetas, exame, grupos de resultados, métodos         | `ExamesLaudosView.tsx`, `exames.ts`                           |               **PARCIAL**                | Cadastro de exames e laudos existe; bancadas/etiquetas térmicas pendente.   |
+|  **31**   | Exames radiológicos, resultados e laudo de radiologia             | `ModalSolicitarExame.tsx`, `ExamesLaudosView.tsx`             |               **PARCIAL**                | Exame tipo 'imagem' com laudo textual e histórico; sem editor rico RIS.     |
+|  **32**   | Convênios, tipos de ocorrências e tipos de consulta               | `RegulacaoView.tsx`, `prontoAtendimento.ts`                   |               **PARCIAL**                | SUS exclusivo; tipos de ocorrência e consulta parametrizados.               |
+|  **33**   | Viaturas e tipos de origem                                        | N/A                                                           |              **NÃO ATENDE**              | Cadastro de frota/viaturas (ligado a Transporte e SAMU).                    |
+|  **34**   | Doses, especialidades, modelos de prescrição, grupos              | `prescricoes.ts`, `farmacia.ts`                               |               **PARCIAL**                | Prescrição médica estruturada; modelos pré-configurados parciais.           |
+|  **35**   | Tipos de desfechos                                                | `prontoAtendimento.ts`, `internacoes.ts`                      |                **ATENDE**                | Desfechos de PA e alta hospitalar (cura, transferência, óbito, etc.).       |
+|  **36**   | 100% integração com eSUS PEC (importação automática de cadastros) | `IntegracoesView.tsx`                                         | **DEPENDE DE INTEGRAÇÃO OU HOMOLOGAÇÃO** | Telas de parâmetros prontas; webservice online com eSUS PEC não homologado. |
+
+### 5.4. SAMU e Ocorrências Móveis (Itens 407 a 417 e Seção 7.4.5.1.e.i)
+
+- **Correção Conceitual:** O SAMU é composto por fluxos de registro administrativo interno e acolhimento hospitalar (tipo de ocorrência, solicitante, vítima, classificação de risco, unidade de destino, unidade móvel, relatórios por período/unidade).
+- **Não presumir dependência de telemetria:** O texto dos itens 407 a 417 do ANEXO I e da Seção 7.4.5.1.e.i do DOC-02 **NÃO exige** telemetria de ambulância via satélite, app móvel de rua ou equipamentos embarcados. Exige registro das ocorrências móveis e encaminhamento para a unidade de saúde receptora.
+- **Classificação:** **NÃO ATENDE (Requisito da Cotação / Código Interno Implementável)**.
+
+### 5.5. RIS / Radiologia e Diagnóstico por Imagem (Itens 313 a 322 e Seção 7.4.3.4)
+
+- **Correção Conceitual:** A versão anterior classificou como dependente de PACS externo pago.
+- **Requisitos Reais do Texto:** Lançamento de procedimentos diagnósticos por imagem (RX, Tomografia, ECG, Ultrassom), integração nativa com requisição no PEP, lista de exames aguardando laudo, resultados padrões/modelos pré-definidos, editor rico de laudos, visualização prévia, agendamento de exames, anexação do laudo ao PEP, controle de filmes radiológicos/perdas e relatórios gerenciais de exames.
+- **Não presumir PACS obrigatório:** O texto do edital não exige infraestrutura de servidor PACS/DICOM pago. Exige o sistema de informação radiológica (RIS) com laudo digitado, modelos e controle operacional.
+- **Classificação:** **PARCIAL (Código Interno Implementável - Bloco 5)**. O sistema possui solicitação e laudo de imagem genérico em `ExamesLaudosView.tsx`, mas carece de fila dedicada de laudos radiológicos, editor rico e controle de filmes.
+
+### 5.6. Transporte Sanitário e TFD (Itens 333 a 345 e Seção 7.4.4.2)
+
+- **Requisitos Reais do Texto:** Cadastro de frota (veículos, placas, chassi, extintor, motoristas CNH), rotas, viagens, passageiros e acompanhantes, custos, despesas de viagem, bilhete de passagem, processos de TFD (número, CID-10, justificativa, status, viagens em lote) e faturamento de transporte via BPA por km percorrido.
+- **Classificação:** **NÃO ATENDE (Requisito da Cotação / Código Interno Implementável - Bloco 4)**. Código 100% interno e viável no repositório.
+
+### 5.7. Gerenciamento de APACs (Seção 7.4.4.4 e Faturamento)
+
+- **Requisitos Reais do Texto:** Controle de sequenciamento de numeração autorizada (ano/UF/tipo), validade (início e fim), solicitações com tipificação de laudo (Geral, Medicamentos, Nefrologia, Quimioterapia, Radioterapia, Bariátrica), modalidade (Inicial, Continuidade, Sem Continuidade), mapeamento do paciente e geração a partir do PEP.
+- **Classificação:** **NÃO ATENDE (Código Interno Implementável - Bloco 3)**. A emissão de laudo e gestão de autorização de APAC é código clínico/administrativo interno viável; exportação em lote para faturamento federal é dependência separada.
+
+### 5.8. Serviço de Nutrição e Dietética - SND (Seção 7.4.3.5)
+
+- **Requisitos Reais do Texto:** Cadastro parametrizado de dietas (enterais, parenterais, orais, rotina), prescrição individualizada por paciente internado ou em observação com horários e restrições alimentares, mapa/relatório de refeições por período/leito e integração com estoque de nutrição.
+- **Classificação:** **PARCIAL (Código Interno Implementável)**. A prescrição de cuidados/dietas existe na `PrescricaoEnfermagemTab.tsx`, mas o mapa de copa/leito e catálogo do SND ainda não formam tela independente.
+
+### 5.9. Faturamento Ambulatorial e Hospitalar SUS (Seção 7.4.5.3 e Itens 453 a 474)
+
+- **Status Atual Mantido com Coerência:**
+  - Importação dinâmica do pacote oficial SIGTAP posicional (.zip) com decodificação ISO-8859-1 e layout dinâmico: **ATENDE (v0.0.28–v0.0.30)**.
+  - Painel de validação prévia de consistência de contas AIH e itens BPA com regras E001 a A603: **ATENDE (v0.0.27–v0.0.30)**.
+  - Geração física de arquivos de remessa nos layouts magnéticos federais (SISAIH01 / BPA Magnético) para transmissão: **DEPENDE DE INTEGRAÇÃO OU HOMOLOGAÇÃO** (Backlog técnico de layouts DATASUS).
+  - Avaliador de BPA (itens 453 a 474): módulo viável internamente para conciliação em tela, dependendo apenas dos layouts federais para importação direta de arquivos `.mag`.
+
+### 5.10. Dispositivos Móveis Hospitalares / Tablets (Seção 7.4.9)
+
+- **Clarificação de Escopo:** A exclusão dos itens 374 a 389 (ACS Mobile) refere-se estritamente ao aplicativo territorial dos Agentes Comunitários de Saúde (visitas domiciliares de Atenção Básica).
+- **A Seção 7.4.9 (p. 45 do DOC-02) está NO ESCOPO HOSPITALAR:** Exige usabilidade em tablets Android 9.0+, checagem à beira do leito, triagem/acolhimento, operação via Wi-Fi interno, controle de acesso e auditoria vinculando usuário e dispositivo.
+- **Classificação Atual:** **PARCIAL**. O sistema é totalmente web responsivo (Tailwind CSS) e operável em navegador de tablet à beira do leito (checagem de medicamentos entregue na v0.0.37/v0.0.38), mas ainda não possui módulo de auditoria com captura de `dispositivo_id` nem credenciamento formal de aparelhos.
 
 ---
 
-## 7. Investigação de Lacunas Reais no Repositório
+## 6. Matriz Geral Consolidada por Módulo
 
-Para cumprir a determinação de _verificar lacunas reais sem assumir antecipadamente que faltam_, inspecionou-se a base de código à procura de telas, serviços e schemas:
-
-| Área Investigada                                              | O Que Existe no Repositório                                                                                                                                                                                                | O Que NÃO Existe no Repositório                                                                                                                     |       Classificação       | Limite / Ação Recomendada                                                                                             |
-| :------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------- | :-----------------------: | :-------------------------------------------------------------------------------------------------------------------- |
-| **SAMU (Atendimento Pré-Hospitalar Móvel)**                   | Zero referências em código. O módulo de regulação (`RegulacaoView.tsx`) contempla apenas campo descritivo `condicoes_transporte` para transferência externa entre hospitais.                                               | Não há despacho de viaturas, telemetria de ambulância, regulação médica 192 ou aplicativo de equipe de rua.                                         |      **NÃO ATENDE**       | Escopo é estritamente intra-hospitalar. O SAMU é serviço regionalizado do Estado/Consórcio.                           |
-| **Radiologia e Diagnóstico por Imagem**                       | Em `ModalSolicitarExame.tsx` e `ExamesLaudosView.tsx`, existe o tipo de exame `'imagem'` ("Radiologia & Imagem (RX/USG/TC)") com laudo textual estruturado e histórico de versões.                                         | Não há servidor DICOM, visualizador PACS web, manipulação de arquivos DICOM (.dcm) nem integração HL7 com tomógrafos/raio-x.                        |        **PARCIAL**        | Atende fluxo documental e emissão de laudo digitado; depende de PACS externo para imagens pesadas.                    |
-| **Transporte Sanitário / TFD (Tratamento Fora do Domicílio)** | A Central de Regulação (`RegulacaoView.tsx`) possui registro do destino da transferência e campo descritivo `condicoes_transporte`.                                                                                        | Não há módulo de agendamento de frotas de ambulâncias, diárias de pacientes TFD, controle de combustível ou integração com sistema estadual de TFD. |        **PARCIAL**        | Atende o registro clínico da necessidade de transporte; não atende a gestão logística de frotas/TFD.                  |
-| **APAC (Alta Complexidade Ambulatorial SUS)**                 | No faturamento (`faturamento.ts`), há apuração de BPA (individualizado) e AIH (internação).                                                                                                                                | Não há módulo de emissão, laudo ou faturamento de APAC (quimioterapia, radioterapia, hemodiálise, nefrologia).                                      |      **NÃO ATENDE**       | Hospital municipal de pequeno/médio porte opera com AIH e BPA. APAC é de competência de centros de alta complexidade. |
-| **Nutrição e Dietas Hospitalares**                            | Campos de texto descritivo de dieta existem na prescrição médica (`PrescricaoEnfermagemTab.tsx`), nas orientações de alta cirúrgica (`CentroCirurgicoView.tsx`) e no resumo de alta impresso (`ModalEmissaoImpresso.tsx`). | Não há módulo de lactário, mapa de dietas para copa/cozinha, controle calórico por nutricionista nem estoque de gêneros alimentícios.               |        **PARCIAL**        | A prescrição médica de dieta existe; a gestão do serviço de nutrição e dietética (SND) é operacional/manual.          |
-| **Portal do Cidadão**                                         | Os itens 404 e 427 foram confirmados como **EXCLUÍDOS**. Zero telas públicas no repositório. O acesso exige login de operador municipal.                                                                                   | Não há área pública do munícipe para consultar agendamentos ou exames.                                                                              | **EXCLUÍDO / NÃO ATENDE** | Deliberado como fora de escopo para preservar a segurança da rede interna hospitalar.                                 |
-| **Mensageria Interna / Chat Hospitalar**                      | Zero coleções de chat ou mensageria em `schema.json`. A comunicação interna ocorre pelo registro de evoluções, pareceres na regulação e trilha de auditoria.                                                               | Não há módulo de chat em tempo real, avisos push no navegador ou mensageria direta entre profissionais.                                             |      **NÃO ATENDE**       | Recomenda-se manter comunicação por registros clínicos oficiais para valor jurídico.                                  |
-| **Cadastros Auxiliares**                                      | CRUD completo de Setores, Leitos, Pacientes, Profissionais e Catálogo de Recursos da Regulação. Importação de SIGTAP e CID-10.                                                                                             | Cadastros de fornecedores comerciais, manutenção predial e patrimônio imobiliário não foram implementados.                                          |        **PARCIAL**        | Cadastros essenciais à assistência atendem plenamente; suprimentos gerais são parciais.                               |
-
----
-
-## 8. Os 5 Próximos Blocos Viáveis e Priorizados
-
-A partir da presente reconciliação documental e da aderência com o `docs/PRONTIDAO.md`, definem-se os **5 próximos blocos viáveis**, categorizados rigorosamente por sua natureza executável:
-
-### Bloco 1: Código Interno Implementável — Exportador de Remessas Faturamento SUS (AIH / BPA)
-
-- **Natureza:** (a) Código interno implementável.
-- **Escopo Técnico:** Construção de gerador client-side de arquivos texto posicionais nos formatos oficiais do DATASUS: layout SISPROHO/SIHD para AIH e layout magnético BPA-I/BPA-C para produção ambulatorial, alimentados pelas contas já apuradas e validadas em `FaturamentoView.tsx`.
-- **Viabilidade:** Totalmente viável no repositório sem serviços pagos, utilizando rotinas puras de formatação de string posicional, cálculo de dígito verificador e download de arquivo `.txt`.
-- **Pré-requisito:** Conclusão da conferência de consistência (já entregue na v0.0.28).
-
-### Bloco 2: Código Interno Implementável — Alertas Clínicos Preventivos e Rastreabilidade Farmácia-Leito
-
-- **Natureza:** (a) Código interno implementável.
-- **Escopo Técnico:** Cruzamento preventivo automático entre alergias congeladas no cadastro do paciente e princípios ativos prescritos na `PrescricaoEnfermagemTab.tsx`; vínculo do lote/validade baixado na farmácia diretamente na ficha anestésica do centro cirúrgico e administração ao leito.
-- **Viabilidade:** 100% implementável em TypeScript e hooks do PocketBase, enriquecendo a segurança do paciente sem depender de fornecedores externos.
-
-### Bloco 3: Integrações Oficiais Não Comprovadas — Conectores Assíncronos com e-SUS / SINAN
-
-- **Natureza:** (d) Integrações oficiais não comprovadas.
-- **Escopo Técnico:** Geração de payloads em formato e-SUS Thrift / XML e fichas de notificação SINAN padronizadas para exportação em lote através da tela `IntegracoesView.tsx`.
-- **Limitação Obrigatória:** Requer credenciais municipais de webservice e homologação junto à Secretaria Estadual de Saúde de Rondônia (SES/RO) e DATASUS. No repositório, permanece restrito a gerador de lote para importação manual.
-
-### Bloco 4: Certificação Digital ICP-Brasil — Assinatura Qualificada de Impressos e Laudos
-
-- **Natureza:** (c) Certificação/ICP-Brasil.
-- **Escopo Técnico:** Módulo de integração com provedores de assinatura digital em nuvem (padrão PKCS#7 / PAdES com certificado A1/A3) para atestados, laudos laboratoriais e receitas de controle especial, atendendo à Resolução CFM nº 1.821/2007.
-- **Limitação Obrigatória:** Não implementável como código puro fechado sem contratação de serviço de autoridade certificadora credenciada (ITI/ICP-Brasil). Mantém-se a limitação formal declarada em PRONTIDAO.md.
-
-### Bloco 5: Serviços Comerciais / Presenciais — Infraestrutura de Servidor DICOM/PACS e Telemetria
-
-- **Natureza:** (b) Serviços comerciais/presenciais.
-- **Escopo Técnico:** Implantação presencial de servidor local de imagens médicas (ex: Orthanc PACS) com protocolo DICOM para armazenamento dos arquivos pesados de Raio-X e Tomografia, integrado via link seguro com a visualização no Prontuário SAME.
-- **Limitação Obrigatória:** Depende de hardware dedicado, links de rede de alta velocidade na unidade hospitalar e equipe técnica presencial em Mirante da Serra - RO. Fora do escopo de desenvolvimento web puro.
+| Módulo / Tema                        | Referência DOC-01 (Itens) | Referência DOC-02 (Seção) | Requisito Cotação DOC-03 | Componente / Serviço / Hook Existente                                       |            Status Consolidado            | Justificativa / Próxima Ação                                                     |
+| :----------------------------------- | :-----------------------: | :-----------------------: | :----------------------: | :-------------------------------------------------------------------------- | :--------------------------------------: | :------------------------------------------------------------------------------- |
+| **Segurança, Acesso e Auditoria**    |      1 a 14, 428–429      |          7.4.1.1          |      Sim (Item 01)       | `LoginView.tsx`, `AuditoriaView.tsx`, `auditoria.ts`, RLS                   |                **ATENDE**                | Perfis admin, gestor, profissional, recepcao com trilha imutável.                |
+| **Cadastros Gerais e Leitos**        |  1 a 35 (exceto 21, 24)   |     7.4.1.2, 7.4.1.3      |      Sim (Item 01)       | `SetoresLeitosView.tsx`, `ProfissionaisView.tsx`, `cadastros.ts`            |               **PARCIAL**                | Leitos e setores atendem; cadastros auxiliares têm itens não verificados.        |
+| **Identificação e Busca Paciente**   |        1 a 12, 27         |          7.4.2.2          |      Sim (Item 01)       | `PacientesView.tsx`, `identificacaoPaciente.ts`, hooks de busca             |                **ATENDE**                | CPF/CNS validados algorítmicamente, índices parciais e mascaramento LGPD.        |
+| **Integração eSUS PEC / CADSUS**     |            36             |          7.4.2.5          |      Sim (Item 01)       | `IntegracoesView.tsx`, `parametros.ts`                                      | **DEPENDE DE INTEGRAÇÃO OU HOMOLOGAÇÃO** | Telas de parâmetros prontas; integração com webservice federal não comprovada.   |
+| **Agendamento Ambulatorial**         |          38 a 55          |          7.4.4.1          |      Sim (Item 01)       | `AgendamentosView.tsx`, `agendamentos.ts`, `dataFusoUnidade.ts`             |                **ATENDE**                | Fila ambulatorial, fuso de Mirante da Serra (`America/Porto_Velho`).             |
+| **Pronto Atendimento (PA)**          |         106 a 128         |     7.4.2.3, 7.4.5.1      |      Sim (Item 01)       | `ProntoAtendimentoView.tsx`, `prontoAtendimento.ts`                         |                **ATENDE**                | Acolhimento, Manchester (5 cores), consultório médico, prescrição rápida.        |
+| **Consultório Médico / Prescrição**  |    78 a 105, 149 a 189    |     7.4.2.4, 7.4.5.2      |      Sim (Item 01)       | `PrescricaoEnfermagemTab.tsx`, `prescricoes.ts`, migração 0023              |                **ATENDE**                | Prescrição estruturada, checagem ao leito idempotente e retificação formal.      |
+| **Internação e Censo Hospitalar**    |         346 a 373         |          7.4.5.1          |      Sim (Item 01)       | `InternacaoView.tsx`, `internacoes.ts`, `internacoes.pb.js`                 |                **ATENDE**                | Mapa de leitos, admissão, transferência leito a leito e alta hospitalar.         |
+| **Centro Cirúrgico e SRPA**          |         281 a 310         |         7.4.5.1.d         |      Não explícito       | `CentroCirurgicoView.tsx`, `centroCirurgico.ts`                             |                **ATENDE**                | Escala de salas, checklist OMS Safe Surgery, ato cirúrgico e Aldrete-Kroulik.    |
+| **Centro Obstétrico e Parto**        |         332 a 350         |         7.4.2.2.h         |      Não explícito       | `CentroObstetricoView.tsx`, `centroObstetrico.ts`                           |                **ATENDE**                | Admissão com risco, partograma simplificado, escala de Apgar e desfecho.         |
+| **Central de Regulação de Leitos**   |   226 a 235, 351 a 373    |         7.4.4.1.f         |      Sim (Item 01)       | `RegulacaoView.tsx`, `regulacao.ts`, `regulacaoRelogio.ts`                  |                **ATENDE**                | Solicitação leito a leito, médico regulador, relógio de espera imune a UTC.      |
+| **Farmácia e Almoxarifado**          |  236 a 279 (exceto 280)   |          7.4.3.1          |      Sim (Item 01)       | `FarmaciaView.tsx`, `InventarioFarmaciaTab.tsx`, `farmacia.ts`              |                **ATENDE**                | Catálogo, dispensação rastreável por lote/validade, inventário concorrente.      |
+| **Laboratório de Análises Clínicas** |         286 a 312         |          7.4.3.3          |      Sim (Item 01)       | `ExamesLaudosView.tsx`, `exames.ts`, migração 0024                          |               **PARCIAL**                | Ciclo solicitação/coleta/laudo com retificação v1/v2; sem bancada/interface LIS. |
+| **Radiologia e Imagem (RIS)**        |         313 a 322         |          7.4.3.4          |      Sim (Item 01)       | `ModalSolicitarExame.tsx`, `ExamesLaudosView.tsx`                           |               **PARCIAL**                | Exames de imagem cadastrados; falta editor rico RIS e controle de filmes.        |
+| **SAME e Impressos Oficiais A4**     |   390 a 403, 405 a 426    |       7.4.5.1.e.ii        |      Não explícito       | `ProntuarioSAMEView.tsx`, `FolhaImpressoA4.tsx`, `ModalEmissaoImpresso.tsx` |                **ATENDE**                | Prontuário unificado por CPF/CNS, snapshot congelado de impressos e retificação. |
+| **Vigilância Epidemiológica**        | 323 a 330 (331 excluído)  |          7.4.8.1          |      Sim (Item 01)       | `VigilanciaSaudeView.tsx`, `vigilanciaSaude.ts`                             |               **PARCIAL**                | Notificação imediata/semanal e catálogo; sem envio telemático SINAN.             |
+| **Painel de Gestão Hospitalar**      |  453 a 474 (indicadores)  |          5.4.6.1          |      Sim (Item 01)       | `PainelGestaoView.tsx`, `painelGestao.ts`, hook server-side                 |                **ATENDE**                | Visão agregada web do gestor, proteção de dados LGPD e fuso de Mirante.          |
+| **Portal do Paciente Web**           |  390 a 397 (exceto 393)   |       7.4.4.3.b.iv        |      Sim (Item 01)       | N/A                                                                         |              **NÃO ATENDE**              | Requisito da cotação; consulta própria do paciente com login e LGPD.             |
+| **Mensageria Interna / Chat**        |         419 a 421         |          7.4.6.2          |      Sim (Item 01)       | N/A                                                                         |              **NÃO ATENDE**              | Requisito da cotação; chat interno entre usuários e grupos hospitalares.         |
+| **Transporte Sanitário e TFD**       |         333 a 345         |          7.4.4.2          |      Sim (Item 01)       | N/A                                                                         |              **NÃO ATENDE**              | Requisito da cotação; frotas, motoristas, viagens, diárias e TFD.                |
+| **Módulo de APAC**                   |         133, 162          |          7.4.4.4          |      Não explícito       | N/A                                                                         |              **NÃO ATENDE**              | Emissão e controle de laudos de alta complexidade e sequenciamento.              |
+| **Serviço de Nutrição e Dietética**  |            N/A            |          7.4.3.5          |      Não explícito       | `PrescricaoEnfermagemTab.tsx` (campo de dieta)                              |               **PARCIAL**                | Prescrição médica existe; gestão do SND e mapa de copas pendentes.               |
+| **SAMU (Ocorrências Móveis)**        |         407 a 417         |        7.4.5.1.e.i        |      Sim (Item 01)       | N/A                                                                         |              **NÃO ATENDE**              | Registro de acolhimento de ocorrências móveis e encaminhamento ao PA.            |
+| **Avaliador BPA-C / BPA-I**          |         453 a 474         |          7.4.5.3          |      Sim (Item 01)       | `FaturamentoView.tsx`, `consistenciaFaturamento.ts`                         |               **PARCIAL**                | Validação prévia implementada; conciliação visual estilo BPA-Mag em aberto.      |
+| **Certificação Digital ICP-Brasil**  |            N/A            |           7.4.7           |      Não explícito       | N/A                                                                         | **DEPENDE DE INTEGRAÇÃO OU HOMOLOGAÇÃO** | Assinatura qualificada A1/A3, carimbo do tempo RFC 3161 (requer AC credenciada). |
+| **Suporte a Tablets Hospitalares**   |            N/A            |           7.4.9           |      Não explícito       | Layout responsivo Tailwind (`PrescricaoEnfermagemTab.tsx`)                  |               **PARCIAL**                | Operável em navegadores de tablets Android; falta auditoria de dispositivo.      |
 
 ---
 
-## 9. Conclusão e Coerência com docs/PRONTIDAO.md
+## 7. Cinco Próximos Blocos de Código Interno Viáveis (Planejamento)
 
-A presente matriz reconcilia documentalmente o estado do projeto na versão 0.0.46:
+Priorizando as lacunas reais confirmadas nos documentos oficiais, definem-se os cinco próximos blocos estritamente de **código interno**, sem depender de serviços externos, contratos pagos ou envio de mensagens a operadoras telefônicas.  
+_(Nota: Nenhuma implementação de código foi realizada nesta rodada documental; o escopo abaixo é para deliberação do Codex/usuário)._
 
-1. **Rigor com Evidências:** Nenhum requisito ausente foi alegado como existente; nenhuma conformidade foi atribuída sem código auditado.
-2. **Exclusões Respeitadas:** Os 69 itens excluídos confirmados pelo usuário (incluindo a exclusão total do módulo de vacinas/imunização, PSF, ACS mobile e georreferenciamento) foram rigorosamente demarcados.
-3. **Equivalências Esclarecidas:** A exclusão do ACS Mobile **não prejudica** o uso do sistema hospitalar em tablets no ambiente hospitalar (Seção 7.4.9).
-4. **Coerência Geral:** As declarações de conformidade coincidem plenamente com as limitações de prontidão estabelecidas em `docs/PRONTIDAO.md` (sistema em homologação controlada, sem transmissão federal e sem assinatura digital qualificada).
+```
++----------------------------------------------------------------------------------------------------+
+| 5 PRÓXIMOS BLOCOS DE CÓDIGO INTERNO VIÁVEIS (Ordem Sugerida para Deliberação do Codex)             |
+|                                                                                                    |
+| 1. Mensageria Interna entre Usuários e Grupos (Cotação Item 01 / ANEXO I itens 419, 421)           |
+| 2. Portal do Paciente Web com Consulta Própria Mascarada (Cotação Item 01 / Seção 7.4.4.3.b.iv)     |
+| 3. Módulo de Gestão e Emissão de APAC no PEP (Seção 7.4.4.4 / ANEXO I itens 133, 162)              |
+| 4. Controle de Transporte Sanitário e TFD Completo (Cotação Item 01 / Seção 7.4.4.2 / Itens 333-345)|
+| 5. RIS - Serviço de Radiodiagnóstico e Imagem (Cotação Item 01 / Seção 7.4.3.4 / Itens 313-322)    |
++----------------------------------------------------------------------------------------------------+
+```
+
+---
+
+### Bloco 1: Mensageria Interna Hospitalar entre Usuários e Grupos
+
+- **Fundamento Documental:** Cotação Item 01 (_"O sistema deve permitir o envio de mensagens entre usuários e ou grupos do sistema; controle de avisos aos usuários"_), ANEXO I itens 419 e 421.
+- **Natureza:** Código interno implementável (PocketBase realtime / coleções internas).
+- **Escopo Exato:**
+  1. Criação da coleção `mensagens_internas` com remetente, destinatário (usuário ou grupo/setor), assunto, corpo da mensagem, indicador de leitura e timestamp UTC.
+  2. Criação da coleção `canais_grupos_mensageria` para grupos funcionais (ex: Plantão Médico, Enfermagem PA, Recepção, Regulação, Farmácia).
+  3. Componente de UI tipo gaveta/modal (`src/components/MensageriaInternaModal.tsx` ou view dedicada) permitindo ler mensagens recebidas, compor nova mensagem individual ou para grupo e marcar como lida.
+  4. Indicador visual na barra de navegação superior (`NavigationBar.tsx`) com badge de mensagens não lidas atualizado via subscrição em tempo real.
+- **Critérios de Aceite Testáveis:**
+  - Usuário A envia mensagem para Usuário B; Usuário B visualiza a mensagem em sua caixa de entrada;
+  - Usuário C envia mensagem para o grupo "Enfermagem PA"; todos os usuários vinculados a esse setor recebem o aviso;
+  - Marcação de mensagem como lida altera o contador do badge;
+  - Isolamento de acesso: Usuário sem permissão não consegue ler mensagens privadas de terceiros.
+
+---
+
+### Bloco 2: Portal do Paciente Web (Consulta Própria com Mascaramento LGPD)
+
+- **Fundamento Documental:** Cotação Item 01 (_"O sistema deve disponibilizar ao paciente visualizar seus atendimentos realizados (via web) / agendamentos de consultas e procedimentos / resultados de exames / medicamentos dispensados, através de acesso web"_), DOC-02 Seção 7.4.4.3.b.iv e conformidade LGPD da Seção 7.4.4.3.b.iii.
+- **Natureza:** Código interno implementável (nova rota e visão web restrita).
+- **Escopo Exato:**
+  1. Criação de rota pública dedicada de autenticação do cidadão (`/paciente/login`) com validação de CPF + Data de Nascimento + validação de segurança (ou CNS).
+  2. Tela de visão exclusiva do paciente logado (`src/components/PortalPacienteView.tsx`) apresentando abas:
+     - _Meus Atendimentos:_ histórico de passagens no PA e internações (data, unidade, especialidade);
+     - _Meus Agendamentos:_ consultas e procedimentos ambulatoriais futuros confirmados;
+     - _Meus Laudos de Exames:_ visualização e download dos laudos liberados e finalizados;
+     - _Meus Medicamentos:_ relação de itens dispensados pela farmácia hospitalar ao paciente.
+  3. Proteção estrita de dados (LGPD): token de sessão restrito à visualização exclusiva dos registros daquele CPF, sem acesso a nenhuma outra área administrativa do hospital.
+- **Critérios de Aceite Testáveis:**
+  - Paciente autenticado com CPF e data de nascimento correta acessa apenas seus próprios registros;
+  - Tentativa de consulta com dados divergentes é rejeitada com mensagem clara;
+  - Exibição de laudos de exames reflete fielmente os laudos liberados no módulo laboratorial;
+  - Interface não expõe dados de outros pacientes nem permite navegação para o painel de funcionários.
+
+---
+
+### Bloco 3: Módulo de Gerenciamento e Emissão de APAC
+
+- **Fundamento Documental:** DOC-02 Seção 7.4.4.4 (pp. 31-32), ANEXO I itens 133 e 162.
+- **Natureza:** Código interno implementável.
+- **Escopo Exato:**
+  1. Criação das coleções `apac_faixas_numeracao` (ano, UF, tipo de APAC, faixa inicial, faixa final, número atual) e `apac_solicitacoes` (paciente, solicitante, data, número do laudo, clínica/prestador, CIDs principal/secundário/causas associadas, tipo de laudo [Geral, Medicamentos, Nefrologia, Quimioterapia, Radioterapia, Bariátrica], modalidade [Inicial, Continuidade, Sem Continuidade] e validade).
+  2. Serviço cliente `src/services/apac.ts` com validação de prazos de validade e geração sequencial de numeração autorizada.
+  3. Integração com o atendimento médico (PEP/PA) permitindo emitir laudo de solicitação de APAC diretamente a partir dos dados do paciente.
+  4. Tela de gestão de APACs para o setor de faturamento/regulação acompanhar laudos pendentes e autorizados.
+- **Critérios de Aceite Testáveis:**
+  - Emissão de APAC preenche automaticamente os dados cadastrais do paciente (nome, mãe, CNS, data de nascimento, sexo);
+  - Sequenciamento respeita o ano, UF e tipo de laudo sem gerar números repetidos;
+  - Prazos de validade inicial e final calculados conforme o tipo de procedimento.
+
+---
+
+### Bloco 4: Controle de Frota, Transporte Sanitário e TFD
+
+- **Fundamento Documental:** Cotação Item 01 (_"Módulo Controle de Viagens"_), ANEXO I itens 333 a 345, DOC-02 Seção 7.4.4.2 (pp. 27-30).
+- **Natureza:** Código interno implementável.
+- **Escopo Exato:**
+  1. Criação das coleções:
+     - `transporte_veiculos`: placa, marca, modelo, tipo, capacidade de passageiros, combustível, vencimento do extintor, status operacional;
+     - `transporte_motoristas`: nome, CPF, CNH, categoria, vencimento da CNH, telefone, status ativo;
+     - `transporte_viagens`: rota/destino, data/hora de saída, previsão de retorno, veículo, motorista, km inicial, km final, km rodado, despesas/diárias;
+     - `transporte_passageiros`: vínculo da viagem com paciente e acompanhante, indicação de ida/volta, horário de aviso e documento de referência;
+     - `tfd_processos`: número do processo de TFD, paciente, diagnóstico CID-10, justificativa clínica, município de destino, tratamento solicitado e status (autorizado, cancelado, enviado ao estado, negado, concluído).
+  2. Serviço cliente `src/services/transporteTFD.ts` com cálculo de vagas remanescentes no veículo e controle de km.
+  3. Tela de gestão `src/components/TransporteTFDView.tsx` com agendamento de viagens, lista de passageiros e emissão de comprovante/bilhete de viagem.
+- **Critérios de Aceite Testáveis:**
+  - Alocação de passageiros respeita a capacidade de lotação cadastrada do veículo;
+  - Viagem não permite alocação de motorista com CNH vencida;
+  - Processo de TFD permite vincular múltiplas viagens ao mesmo tratamento;
+  - Emissão de bilhete de passagem do paciente e acompanhante com horário e local de embarque.
+
+---
+
+### Bloco 5: RIS - Serviço de Radiodiagnóstico e Imagem (Editor de Laudos e Fluxo)
+
+- **Fundamento Documental:** Cotação Item 01 (_"Módulo Radiologia"_), ANEXO I itens 313 a 322, DOC-02 Seção 7.4.3.4 (pp. 21-22).
+- **Natureza:** Código interno implementável.
+- **Escopo Exato:**
+  1. Criação das coleções `ris_modelos_laudo` (título, modalidade [RX, USG, TC, ECG], texto padrão pré-formatado) e expansão do fluxo de exames de imagem.
+  2. Tela dedicada `src/components/RadiologiaRISView.tsx` com:
+     - Fila de exames de imagem realizados aguardando confecção de laudo;
+     - Editor de laudo formatado com barra de ferramentas (negrito, itálico, listas, tabelas, quebra de linha);
+     - Seletor de modelos pré-definidos para agilizar a digitação médica;
+     - Visualização prévia da folha timbrada do laudo antes da liberação formal;
+     - Controle de filmes radiológicos utilizados/avariados.
+  3. Integração automática: laudo emitido pelo radiologista é vinculado imediatamente à linha do tempo do Prontuário SAME e disponibilizado para impressão.
+- **Critérios de Aceite Testáveis:**
+  - Médico radiologista seleciona exame na fila de espera e insere modelo de laudo padrão com 1 clique;
+  - Editor permite formatação e salva laudo com status liberado de forma imutável;
+  - Laudo finalizado é exibido imediatamente no Prontuário SAME do paciente e na folha impressa A4.
+
+---
+
+## 8. Dependências Externas Separadas (Não Tratadas como Próximas Tarefas)
+
+Para evitar falsas expectativas operacionais, as demandas que dependem de autorizações federais, certificados pagos ou contratações de serviços físicos ficam explicitamente isoladas como **DEPENDÊNCIAS EXTERNAS**:
+
+1. **Certificação Digital ICP-Brasil (DOC-02, Seção 7.4.7):**
+   - Assinatura qualificada com padrões CAdES/XAdES/PAdES, suporte a token PKCS#11/A3 e Carimbo do Tempo RFC 3161. Exige contratação de Autoridade Certificadora credenciada no ITI.
+2. **Integração Online com Bases Federais (e-SUS PEC, CADWEB, SISAB, SINAN):**
+   - Comunicação via webservices restritos governamentais requer chaves de acesso, credenciamento no Ministério da Saúde e homologação junto à Secretaria Estadual de Saúde de Rondônia (SES/RO).
+3. **Homologação DATASUS dos Arquivos de Remessa do Faturamento:**
+   - Transmissão dos arquivos gerados de AIH e BPA exige validação nos programas oficiais executáveis federais (Validador SIHD Desktop e BPA Magnético Desktop).
+4. **Servidor DICOM / PACS:**
+   - Armazenamento de arquivos pesados de imagem em formato DICOM (.dcm) e integração HL7 com aparelhos de tomografia/RX exigem servidor local dedicado (ex: Orthanc PACS) e infraestrutura física no hospital.
+5. **Serviços Contratuais e Presenciais da Cotação:**
+   - Suporte presencial na sede da SEMSAU, treinamento presencial de servidores e conversão da base legada do eSUS são obrigações de serviço da empresa contratada, e não tarefas de código de software.
+
+---
+
+## 9. Conclusão e Prontidão
+
+A presente matriz consolida a governança documental do projeto:
+
+- Persiste a leitura integral dos três arquivos PDF anexados;
+- Reclassifica com rigor portal do paciente e mensageria interna como requisitos exigidos pelo município;
+- Detalha item a item os cadastros gerais e afasta falsas conformidades;
+- Preserva todas as 69 exclusões deliberadas e os limites de vacinas e georreferenciamento;
+- Estabelece os cinco próximos blocos estritamente viáveis no repositório.

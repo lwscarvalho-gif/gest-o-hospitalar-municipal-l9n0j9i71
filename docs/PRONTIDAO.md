@@ -639,8 +639,19 @@ Todos os cenários do bloco de impressos utilizam funções **reais** importadas
 
 ---
 
-## 14. Referência Cruzada com a Matriz de Conformidade Documental (v0.0.46)
+## 14. Referência Cruzada com as Fontes de Escopo e Matriz de Conformidade (v0.0.47)
 
-Em complemento a este relatório de prontidão, consulte o documento formal consolidado:
+Em complemento a este relatório de prontidão e homologação técnica, consulte os documentos formais consolidados:
 
-- **`docs/MATRIZ_CONFORMIDADE.md`**: Mapeamento item a item do guia de referência vigente (ANEXO I, 474 itens), das seções conhecidas 7.4.1 a 7.4.9, dos 69 itens excluídos formalmente confirmados pelo usuário/Codex, das lacunas reais auditadas (SAMU, radiologia/PACS, transporte/TFD, APAC, nutrição, portal do cidadão, mensageria e cadastros) e dos 5 próximos blocos priorizados por categoria de viabilidade.
+- **`docs/FONTES_ESCOPO.md` (NOVO):** Registro documental completo dos **três PDFs recebidos em anexo nesta conversa e lidos em modo texto**:
+  1. `modulos-modelo-base-f0a3f.pdf` (27 páginas, ANEXO I – Teste de Conformidade, itens 1 a 474);
+  2. `modulos-1-ea88d.pdf` (45 páginas, ANEXO I – Módulos de Especificação Técnica Funcional, seções 7.4.1 a 7.4.9);
+  3. `cotacao-sistema-hospitalar-9345d.pdf` (2 páginas, pré-cotação oficial da Secretaria Municipal de Saúde de Mirante da Serra–RO).
+     O documento persiste trechos textuais, numeração de itens, subseções e páginas para eliminar a necessidade de novos uploads de anexos no fluxo de trabalho.
+
+- **`docs/MATRIZ_CONFORMIDADE.md` (Revisão Material v0.0.47):** Reconciliação rigorosa item a item contra as fontes reais, corrigindo distorções prévias:
+  - **Portal do Paciente Web:** Reclassificado como requisito exigido na Cotação (Item 01) e DOC-02 (7.4.4.3.b.iv), não se resumindo aos itens amarelos 404/427; requer login próprio do cidadão com mascaramento LGPD;
+  - **Mensageria Interna:** Reclassificada como requisito exigido na Cotação ("envio de mensagens entre usuários e ou grupos") e itens 419/421, planejada como código interno sem envio externo;
+  - **Cadastros Gerais e Auxiliares:** Mapeados item a item do 1 ao 36 com distinção entre Atende, Parcial, Não Atende, Excluído e Não Verificado, afastando alegações genéricas de conformidade sem evidência;
+  - **SAMU / RIS / TFD / APAC / Nutrição:** Mapeados como códigos internos implementáveis no repositório, sem inferência de dependências externas obrigatórias (como PACS ou telemetria) não exigidas pelo texto;
+  - **5 Próximos Blocos de Código Interno:** Priorização clara de Mensageria Interna, Portal do Paciente Web, Módulo APAC, Transporte/TFD e RIS (editor de laudos), com dependências externas (ICP-Brasil, webservices federais, homologações) devidamente isoladas.
