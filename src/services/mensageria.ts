@@ -1,9 +1,13 @@
 import pb from '@/lib/pocketbase/client'
 import {
+  AtualizarGrupoMensageriaParams,
   CanalGrupoMensageria,
+  CriarGrupoMensageriaParams,
   EnviarMensagemParams,
+  ListarDiretorioUsuariosParams,
   ListarMensagensFiltros,
   MensagemInterna,
+  ResultadoPaginadoDiretorioUsuarios,
   ResultadoPaginadoMensagens,
   UsuarioDiretorioFuncional,
 } from '@/types/hospital'
@@ -66,41 +70,79 @@ function normalizarMensagem(rec: any): MensagemInterna {
 /**
  * Consulta o diretório funcional de usuários autorizados (mínimo, sem dados pessoais sensíveis).
  * Não expõe CPF, CNS, telefones, endereços ou prontuários.
+ * Suporta paginação e busca segura.
  */
-export async function listarDiretorioUsuarios(): Promise<UsuarioDiretorioFuncional[]> {
+export async function listarDiretorioUsuariosPaginado(
+  params?: ListarDiretorioUsuariosParams,
+): Promise<ResultadoPaginadoDiretorioUsuarios> {
+  const page = Math.max(1, params?.pagina || 1)
+  const perPage = Math.min(100, Math.max(1, params?.por_pagina || 20))
+  const busca = params?.busca?.trim() || ''
+
   try {
-    // Tenta primeiro o endpoint seguro com projeção mínima
-    const res = await pb.send('/backend/v1/mensageria/diretorio-usuarios', {
+    const queryParts: string[] = [`page=${page}`, `perPage=${perPage}`]
+    if (busca) {
+      queryParts.push(`busca=${encodeURIComponent(busca)}`)
+    }
+    const res = await pb.send(`/backend/v1/mensageria/diretorio-usuarios?${queryParts.join('&')}`, {
       method: 'GET',
     })
     if (res && Array.isArray(res.usuarios)) {
-      return res.usuarios
+      return {
+        items: res.usuarios,
+        totalItems: res.totalItems ?? res.usuarios.length,
+        totalPages: res.totalPages ?? 1,
+        page: res.page ?? page,
+        perPage: res.perPage ?? perPage,
+      }
     }
   } catch (_) {
-    // Fallback via coleção de usuários com campos mínimos
+    // Fallback via coleção padrão caso rota customizada retorne falha
   }
 
-  const records = await pb.collection('_pb_users_auth_').getFullList({
+  let filter = ''
+  if (busca) {
+    filter = pb.filter('name ~ {:b} || cargo ~ {:b} || role ~ {:b}', { b: busca })
+  }
+
+  const resList = await pb.collection('_pb_users_auth_').getList(page, perPage, {
     sort: 'name',
     fields: 'id,name,email,cargo,role',
+    filter: filter || undefined,
   })
 
-  return records.map((u) => ({
-    id: u.id,
-    nome: (u.name as string) || (u.email as string) || 'Usuário',
-    cargo: (u.cargo as string) || '',
-    role: (u.role as string) || 'profissional',
-  }))
+  return {
+    items: resList.items.map((u) => ({
+      id: u.id,
+      nome: (u.name as string) || (u.email as string) || 'Usuário',
+      cargo: (u.cargo as string) || '',
+      role: (u.role as string) || 'profissional',
+    })),
+    totalItems: resList.totalItems,
+    totalPages: resList.totalPages,
+    page: resList.page,
+    perPage: resList.perPage,
+  }
 }
 
 /**
- * Lista canais e grupos de mensageria ativos para composição de envio.
+ * Consulta simplificada de diretório (compatibilidade com chamadas existentes).
  */
-export async function listarGruposMensageria(): Promise<CanalGrupoMensageria[]> {
+export async function listarDiretorioUsuarios(): Promise<UsuarioDiretorioFuncional[]> {
+  const pag = await listarDiretorioUsuariosPaginado({ pagina: 1, por_pagina: 100 })
+  return pag.items
+}
+
+/**
+ * Lista canais e grupos de mensageria para composição de envio ou gestão.
+ * Se apenasAtivos for false, inclui grupos inativos (permitido a gestores/criador).
+ */
+export async function listarGruposMensageria(apenasAtivos = true): Promise<CanalGrupoMensageria[]> {
+  const filter = apenasAtivos ? 'ativo = true' : ''
   const records = await pb.collection('canais_grupos_mensageria').getFullList({
-    filter: 'ativo = true',
+    filter: filter || undefined,
     sort: 'nome',
-    expand: 'membros',
+    expand: 'membros,criado_por',
   })
 
   return records.map((g) => ({
@@ -115,6 +157,120 @@ export async function listarGruposMensageria(): Promise<CanalGrupoMensageria[]> 
     created: g.created as string,
     updated: g.updated as string,
   }))
+}
+
+/**
+ * Cria um novo grupo de mensageria funcional com validação no servidor.
+ * Apenas gestores ou administradores possuem permissão.
+ */
+export async function criarGrupoMensageria(
+  params: CriarGrupoMensageriaParams,
+): Promise<CanalGrupoMensageria> {
+  const nomeLimpo = (params.nome || '').trim()
+  if (!nomeLimpo || nomeLimpo.length < 2) {
+    throw new Error('O nome do grupo deve ter no mínimo 2 caracteres.')
+  }
+  if (nomeLimpo.length > 120) {
+    throw new Error('O nome do grupo deve ter no máximo 120 caracteres.')
+  }
+
+  const payload: Record<string, any> = {
+    nome: nomeLimpo,
+    sigla: params.sigla?.trim() || '',
+    descricao: params.descricao?.trim() || '',
+    ativo: true,
+    membros: Array.isArray(params.membros) ? params.membros : [],
+    criado_por: pb.authStore.record?.id,
+  }
+
+  const record = await pb.collection('canais_grupos_mensageria').create(payload, {
+    expand: 'membros,criado_por',
+  })
+
+  return {
+    id: record.id,
+    nome: record.nome as string,
+    sigla: (record.sigla as string) || undefined,
+    descricao: (record.descricao as string) || undefined,
+    ativo: Boolean(record.ativo),
+    membros: Array.isArray(record.membros) ? (record.membros as string[]) : [],
+    criado_por: (record.criado_por as string) || undefined,
+    expand: record.expand as any,
+    created: record.created as string,
+    updated: record.updated as string,
+  }
+}
+
+/**
+ * Atualiza dados de um grupo de mensageria (nome, sigla, descrição, participantes ou status ativo/inativo).
+ * Validação no servidor garante que apenas gestor/admin ou criador execute a operação.
+ */
+export async function atualizarGrupoMensageria(
+  params: AtualizarGrupoMensageriaParams,
+): Promise<CanalGrupoMensageria> {
+  if (!params.id) {
+    throw new Error('Identificador do grupo é obrigatório.')
+  }
+
+  const payload: Record<string, any> = {}
+
+  if (params.nome !== undefined) {
+    const nomeLimpo = params.nome.trim()
+    if (!nomeLimpo || nomeLimpo.length < 2) {
+      throw new Error('O nome do grupo deve ter no mínimo 2 caracteres.')
+    }
+    if (nomeLimpo.length > 120) {
+      throw new Error('O nome do grupo deve ter no máximo 120 caracteres.')
+    }
+    payload.nome = nomeLimpo
+  }
+
+  if (params.sigla !== undefined) {
+    payload.sigla = params.sigla.trim()
+  }
+
+  if (params.descricao !== undefined) {
+    payload.descricao = params.descricao.trim()
+  }
+
+  if (params.ativo !== undefined) {
+    payload.ativo = Boolean(params.ativo)
+  }
+
+  if (params.membros !== undefined) {
+    payload.membros = Array.isArray(params.membros) ? params.membros : []
+  }
+
+  const record = await pb.collection('canais_grupos_mensageria').update(params.id, payload, {
+    expand: 'membros,criado_por',
+  })
+
+  return {
+    id: record.id,
+    nome: record.nome as string,
+    sigla: (record.sigla as string) || undefined,
+    descricao: (record.descricao as string) || undefined,
+    ativo: Boolean(record.ativo),
+    membros: Array.isArray(record.membros) ? (record.membros as string[]) : [],
+    criado_por: (record.criado_por as string) || undefined,
+    expand: record.expand as any,
+    created: record.created as string,
+    updated: record.updated as string,
+  }
+}
+
+/**
+ * Inativação lógica do grupo (sem exclusão física, preservando mensagens e históricos).
+ */
+export async function inativarGrupoMensageria(grupoId: string): Promise<CanalGrupoMensageria> {
+  return atualizarGrupoMensageria({ id: grupoId, ativo: false })
+}
+
+/**
+ * Reativação lógica do grupo caso necessário.
+ */
+export async function reativarGrupoMensageria(grupoId: string): Promise<CanalGrupoMensageria> {
+  return atualizarGrupoMensageria({ id: grupoId, ativo: true })
 }
 
 /**

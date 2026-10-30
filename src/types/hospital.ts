@@ -226,6 +226,36 @@ export interface CanalGrupoMensageria {
   updated: string
 }
 
+export interface CriarGrupoMensageriaParams {
+  nome: string
+  sigla?: string
+  descricao?: string
+  membros?: string[]
+}
+
+export interface AtualizarGrupoMensageriaParams {
+  id: string
+  nome?: string
+  sigla?: string
+  descricao?: string
+  ativo?: boolean
+  membros?: string[]
+}
+
+export interface ListarDiretorioUsuariosParams {
+  pagina?: number
+  por_pagina?: number
+  busca?: string
+}
+
+export interface ResultadoPaginadoDiretorioUsuarios {
+  items: UsuarioDiretorioFuncional[]
+  totalItems: number
+  totalPages: number
+  page: number
+  perPage: number
+}
+
 export interface MensagemInterna {
   id: string
   remetente: string

@@ -8,12 +8,16 @@ import {
   UsuarioDiretorioFuncional,
 } from '@/types/hospital'
 import {
+  atualizarGrupoMensageria,
+  criarGrupoMensageria,
   enviarMensagemInterna,
   gerarChaveIdempotenciaMensagem,
-  listarDiretorioUsuarios,
+  inativarGrupoMensageria,
+  listarDiretorioUsuariosPaginado,
   listarGruposMensageria,
   listarMensagensInternas,
   marcarMensagemComoLida,
+  reativarGrupoMensageria,
   sanitizarTextoMensagem,
 } from '@/services/mensageria'
 import { formatarDataHoraFuso } from '@/services/dataFusoUnidade'
@@ -56,6 +60,14 @@ import {
   Eye,
   Mail,
   MailCheck,
+  FolderCog,
+  Check,
+  X,
+  UserPlus,
+  UserMinus,
+  Edit2,
+  PowerOff,
+  Power,
 } from 'lucide-react'
 
 /**
@@ -118,6 +130,32 @@ export const MensageriaInternaView: React.FC<MensageriaInternaViewProps> = ({
   const [diretorioUsuarios, setDiretorioUsuarios] = useState<UsuarioDiretorioFuncional[]>([])
   const [gruposMensageria, setGruposMensageria] = useState<CanalGrupoMensageria[]>([])
   const [carregandoDiretorio, setCarregandoDiretorio] = useState<boolean>(false)
+
+  // Estado da Gestão de Grupos & Membros (apenas gestor / admin)
+  const [modalGruposAberto, setModalGruposAberto] = useState<boolean>(false)
+  const [gruposAdmin, setGruposAdmin] = useState<CanalGrupoMensageria[]>([])
+  const [carregandoGruposAdmin, setCarregandoGruposAdmin] = useState<boolean>(false)
+  const [grupoEmEdicao, setGrupoEmEdicao] = useState<CanalGrupoMensageria | null>(null)
+  const [modoCriarGrupo, setModoCriarGrupo] = useState<boolean>(false)
+
+  // Formulário de Grupo
+  const [formGrupoNome, setFormGrupoNome] = useState<string>('')
+  const [formGrupoSigla, setFormGrupoSigla] = useState<string>('')
+  const [formGrupoDescricao, setFormGrupoDescricao] = useState<string>('')
+  const [formGrupoMembros, setFormGrupoMembros] = useState<string[]>([])
+  const [salvandoGrupo, setSalvandoGrupo] = useState<boolean>(false)
+  const [erroGrupo, setErroGrupo] = useState<string | null>(null)
+
+  // Diretório Paginado para Adição/Seleção de Membros
+  const [diretorioPaginado, setDiretorioPaginado] = useState<UsuarioDiretorioFuncional[]>([])
+  const [pagDiretorio, setPagDiretorio] = useState<number>(1)
+  const [totalPagDiretorio, setTotalPagDiretorio] = useState<number>(1)
+  const [totalItensDiretorio, setTotalItensDiretorio] = useState<number>(0)
+  const [buscaDiretorioTexto, setBuscaDiretorioTexto] = useState<string>('')
+  const [carregandoMembrosDiretorio, setCarregandoMembrosDiretorio] = useState<boolean>(false)
+
+  // Permissão de gestão: admin, gestor ou criador do grupo
+  const ehGestorOuAdmin = user?.role === 'admin' || user?.role === 'gestor'
 
   // Ref sequencial para descarte de respostas assíncronas obsoletas em voo
   const seqCargaRef = useRef<number>(0)
@@ -232,12 +270,12 @@ export const MensageriaInternaView: React.FC<MensageriaInternaViewProps> = ({
   const carregarDiretorioEGrupos = async () => {
     setCarregandoDiretorio(true)
     try {
-      const [users, grupos] = await Promise.all([
-        listarDiretorioUsuarios(),
-        listarGruposMensageria(),
+      const [resUsers, grupos] = await Promise.all([
+        listarDiretorioUsuariosPaginado({ pagina: 1, por_pagina: 100 }),
+        listarGruposMensageria(true),
       ])
       // Filtrar o próprio usuário da lista individual para evitar confusão (ou deixar claro)
-      setDiretorioUsuarios(users.filter((u) => u.id !== user?.id))
+      setDiretorioUsuarios(resUsers.items.filter((u) => u.id !== user?.id))
       setGruposMensageria(grupos)
     } catch (err: any) {
       toast({
@@ -247,6 +285,179 @@ export const MensageriaInternaView: React.FC<MensageriaInternaViewProps> = ({
       })
     } finally {
       setCarregandoDiretorio(false)
+    }
+  }
+
+  // Carga de grupos para painel de administração (inclui inativos para reativação)
+  const carregarGruposAdmin = useCallback(async () => {
+    setCarregandoGruposAdmin(true)
+    try {
+      const lista = await listarGruposMensageria(false)
+      setGruposAdmin(lista)
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao carregar grupos',
+        description: err?.message || 'Falha ao buscar grupos de mensageria.',
+        variant: 'destructive',
+      })
+    } finally {
+      setCarregandoGruposAdmin(false)
+    }
+  }, [toast])
+
+  // Carga do diretório paginado para seleção de membros
+  const carregarDiretorioPaginado = useCallback(
+    async (paginaAlvo = 1, termoBusca = '') => {
+      setCarregandoMembrosDiretorio(true)
+      try {
+        const res = await listarDiretorioUsuariosPaginado({
+          pagina: paginaAlvo,
+          por_pagina: 8,
+          busca: termoBusca || undefined,
+        })
+        setDiretorioPaginado(res.items)
+        setPagDiretorio(res.page)
+        setTotalPagDiretorio(res.totalPages || 1)
+        setTotalItensDiretorio(res.totalItems)
+      } catch (err: any) {
+        toast({
+          title: 'Erro no diretório',
+          description: 'Não foi possível carregar profissionais do diretório.',
+          variant: 'destructive',
+        })
+      } finally {
+        setCarregandoMembrosDiretorio(false)
+      }
+    },
+    [toast],
+  )
+
+  const abrirModalGrupos = () => {
+    setModalGruposAberto(true)
+    setGrupoEmEdicao(null)
+    setModoCriarGrupo(false)
+    setErroGrupo(null)
+    carregarGruposAdmin()
+    carregarDiretorioPaginado(1, '')
+  }
+
+  const iniciarCriarGrupo = () => {
+    setModoCriarGrupo(true)
+    setGrupoEmEdicao(null)
+    setFormGrupoNome('')
+    setFormGrupoSigla('')
+    setFormGrupoDescricao('')
+    setFormGrupoMembros(user?.id ? [user.id] : [])
+    setErroGrupo(null)
+    setBuscaDiretorioTexto('')
+    carregarDiretorioPaginado(1, '')
+  }
+
+  const iniciarEditarGrupo = (grupo: CanalGrupoMensageria) => {
+    setModoCriarGrupo(false)
+    setGrupoEmEdicao(grupo)
+    setFormGrupoNome(grupo.nome)
+    setFormGrupoSigla(grupo.sigla || '')
+    setFormGrupoDescricao(grupo.descricao || '')
+    setFormGrupoMembros(Array.isArray(grupo.membros) ? [...grupo.membros] : [])
+    setErroGrupo(null)
+    setBuscaDiretorioTexto('')
+    carregarDiretorioPaginado(1, '')
+  }
+
+  const alternarMembroGrupo = (userId: string) => {
+    setFormGrupoMembros((prev) => {
+      if (prev.includes(userId)) {
+        return prev.filter((id) => id !== userId)
+      }
+      return [...prev, userId]
+    })
+  }
+
+  const handleSalvarGrupo = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (salvandoGrupo) return
+
+    const nomeLimpo = formGrupoNome.trim()
+    if (!nomeLimpo || nomeLimpo.length < 2) {
+      setErroGrupo('O nome do grupo é obrigatório e deve ter no mínimo 2 caracteres.')
+      return
+    }
+
+    setSalvandoGrupo(true)
+    setErroGrupo(null)
+
+    try {
+      if (modoCriarGrupo) {
+        await criarGrupoMensageria({
+          nome: nomeLimpo,
+          sigla: formGrupoSigla.trim() || undefined,
+          descricao: formGrupoDescricao.trim() || undefined,
+          membros: formGrupoMembros,
+        })
+        toast({
+          title: 'Grupo Criado',
+          description: `O grupo "${nomeLimpo}" foi registrado com sucesso no servidor.`,
+        })
+      } else if (grupoEmEdicao) {
+        await atualizarGrupoMensageria({
+          id: grupoEmEdicao.id,
+          nome: nomeLimpo,
+          sigla: formGrupoSigla.trim() || undefined,
+          descricao: formGrupoDescricao.trim() || undefined,
+          membros: formGrupoMembros,
+        })
+        toast({
+          title: 'Grupo Atualizado',
+          description: `As alterações do grupo "${nomeLimpo}" foram salvas.`,
+        })
+      }
+
+      setModoCriarGrupo(false)
+      setGrupoEmEdicao(null)
+      carregarGruposAdmin()
+      // Atualiza também grupos disponíveis na composição de envio
+      listarGruposMensageria(true)
+        .then(setGruposMensageria)
+        .catch(() => {})
+    } catch (err: any) {
+      const msg = err?.data?.message || err?.message || 'Falha ao salvar grupo.'
+      setErroGrupo(msg)
+      toast({
+        title: 'Erro ao Salvar Grupo',
+        description: msg,
+        variant: 'destructive',
+      })
+    } finally {
+      setSalvandoGrupo(false)
+    }
+  }
+
+  const handleAlternarStatusAtivo = async (grupo: CanalGrupoMensageria) => {
+    try {
+      if (grupo.ativo) {
+        await inativarGrupoMensageria(grupo.id)
+        toast({
+          title: 'Grupo Inativado',
+          description: `O grupo "${grupo.nome}" foi inativado. Novos envios estão bloqueados. Histórico preservado.`,
+        })
+      } else {
+        await reativarGrupoMensageria(grupo.id)
+        toast({
+          title: 'Grupo Reativado',
+          description: `O grupo "${grupo.nome}" voltou a aceitar envios de mensagens.`,
+        })
+      }
+      carregarGruposAdmin()
+      listarGruposMensageria(true)
+        .then(setGruposMensageria)
+        .catch(() => {})
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao alterar status',
+        description: err?.message || 'Falha ao inativar/reativar grupo.',
+        variant: 'destructive',
+      })
     }
   }
 
@@ -464,6 +675,20 @@ export const MensageriaInternaView: React.FC<MensageriaInternaViewProps> = ({
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Atualizar</span>
           </Button>
+
+          {/* Botão de Gestão de Grupos: visível para admin/gestor */}
+          {ehGestorOuAdmin && (
+            <Button
+              onClick={abrirModalGrupos}
+              variant="outline"
+              size="sm"
+              className="border-slate-300 bg-white text-slate-800 hover:bg-slate-50 flex items-center gap-1.5"
+              title="Gerenciar grupos, equipes e participantes"
+            >
+              <FolderCog className="w-4 h-4 text-slate-600" />
+              <span>Gerenciar Grupos</span>
+            </Button>
+          )}
 
           <Button
             onClick={() => abrirModalCompor()}
@@ -1129,6 +1354,390 @@ export const MensageriaInternaView: React.FC<MensageriaInternaViewProps> = ({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* 6. MODAL DE GESTÃO DE GRUPOS & MEMBROS (RESTRITO A GESTOR/ADMIN NO CLIENTE E NO SERVIDOR) */}
+      <Dialog open={modalGruposAberto} onOpenChange={setModalGruposAberto}>
+        <DialogContent className="sm:max-w-[760px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2 text-slate-900 text-lg">
+                <FolderCog className="w-5 h-5 text-blue-600" />
+                Gestão de Grupos e Equipes de Mensageria
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-slate-500">
+              Administração restrita a gestores autorizados com validação estrita no servidor.
+              Inativação lógica preserva todo o histórico; sem exclusão física.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Se estiver no formulário de criação ou edição */}
+          {modoCriarGrupo || grupoEmEdicao ? (
+            <form onSubmit={handleSalvarGrupo} className="space-y-4 py-2">
+              <div className="flex items-center justify-between border-b pb-2">
+                <span className="text-xs font-bold uppercase text-slate-700">
+                  {modoCriarGrupo
+                    ? 'Novo Grupo Hospitalar'
+                    : `Editar Grupo: ${grupoEmEdicao?.nome}`}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setModoCriarGrupo(false)
+                    setGrupoEmEdicao(null)
+                    setErroGrupo(null)
+                  }}
+                  className="text-xs h-7 text-slate-600"
+                >
+                  Voltar à Lista de Grupos
+                </Button>
+              </div>
+
+              {erroGrupo && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <span>{erroGrupo}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2 space-y-1">
+                  <label className="text-xs font-semibold text-slate-700">Nome do Grupo *</label>
+                  <Input
+                    type="text"
+                    placeholder="Ex.: Plantão UTI Geral, Enfermagem PA..."
+                    value={formGrupoNome}
+                    onChange={(e) => setFormGrupoNome(e.target.value)}
+                    maxLength={120}
+                    disabled={salvandoGrupo}
+                    className="text-xs"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700">Sigla (opcional)</label>
+                  <Input
+                    type="text"
+                    placeholder="Ex.: UTI-GERAL"
+                    value={formGrupoSigla}
+                    onChange={(e) => setFormGrupoSigla(e.target.value)}
+                    maxLength={20}
+                    disabled={salvandoGrupo}
+                    className="text-xs uppercase"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Descrição Funcional</label>
+                <Input
+                  type="text"
+                  placeholder="Finalidade do grupo e setor hospitalar correspondente..."
+                  value={formGrupoDescricao}
+                  onChange={(e) => setFormGrupoDescricao(e.target.value)}
+                  maxLength={500}
+                  disabled={salvandoGrupo}
+                  className="text-xs"
+                />
+              </div>
+
+              {/* Seção de Participantes / Membros com Diretório Paginado */}
+              <div className="space-y-2 border-t pt-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                      <Users className="w-4 h-4 text-blue-600" />
+                      Participantes do Grupo ({formGrupoMembros.length} selecionado(s))
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      Selecione apenas profissionais cadastrados. Membros adicionados não recebem
+                      histórico pregresso.
+                    </p>
+                  </div>
+
+                  {/* Busca no Diretório */}
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      type="text"
+                      placeholder="Filtrar por nome/cargo..."
+                      value={buscaDiretorioTexto}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setBuscaDiretorioTexto(val)
+                        carregarDiretorioPaginado(1, val)
+                      }}
+                      className="text-xs h-8 w-48 bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Lista Paginada de Usuários do Diretório Mínimo */}
+                <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50/50">
+                  {carregandoMembrosDiretorio ? (
+                    <div className="py-6 flex items-center justify-center text-xs text-slate-500 gap-2">
+                      <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                      Carregando profissionais do diretório...
+                    </div>
+                  ) : diretorioPaginado.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-slate-500">
+                      Nenhum profissional localizado no diretório.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100 max-h-52 overflow-y-auto">
+                      {diretorioPaginado.map((u) => {
+                        const isMembro = formGrupoMembros.includes(u.id)
+                        return (
+                          <div
+                            key={u.id}
+                            className={`p-2.5 flex items-center justify-between text-xs transition-colors ${
+                              isMembro ? 'bg-blue-50/70' : 'bg-white hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="min-w-0 pr-2">
+                              <span className="font-medium text-slate-800 block truncate">
+                                {u.nome}
+                              </span>
+                              <span className="text-[11px] text-slate-500 block truncate">
+                                {u.cargo ? `${u.cargo} • ` : ''}Perfil: {u.role}
+                              </span>
+                            </div>
+
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={isMembro ? 'default' : 'outline'}
+                              onClick={() => alternarMembroGrupo(u.id)}
+                              disabled={salvandoGrupo}
+                              className={`h-7 text-xs px-2.5 flex items-center gap-1 ${
+                                isMembro
+                                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                  : 'border-slate-300 text-slate-700 hover:bg-slate-100'
+                              }`}
+                            >
+                              {isMembro ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5" />
+                                  Participante
+                                </>
+                              ) : (
+                                <>
+                                  <UserPlus className="w-3.5 h-3.5" />
+                                  Adicionar
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Controles de Paginação do Diretório */}
+                  {totalPagDiretorio > 1 && (
+                    <div className="p-2 bg-slate-100/80 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-600">
+                      <span>
+                        Pág. {pagDiretorio} de {totalPagDiretorio} ({totalItensDiretorio}{' '}
+                        profissionais)
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={pagDiretorio <= 1 || carregandoMembrosDiretorio}
+                          onClick={() =>
+                            carregarDiretorioPaginado(pagDiretorio - 1, buscaDiretorioTexto)
+                          }
+                          className="h-6 px-2 text-[11px]"
+                        >
+                          Anterior
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={pagDiretorio >= totalPagDiretorio || carregandoMembrosDiretorio}
+                          onClick={() =>
+                            carregarDiretorioPaginado(pagDiretorio + 1, buscaDiretorioTexto)
+                          }
+                          className="h-6 px-2 text-[11px]"
+                        >
+                          Próxima
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setModoCriarGrupo(false)
+                    setGrupoEmEdicao(null)
+                  }}
+                  disabled={salvandoGrupo}
+                  className="text-xs"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={salvandoGrupo}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs flex items-center gap-1.5"
+                >
+                  {salvandoGrupo ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Salvando no Servidor...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      {modoCriarGrupo ? 'Criar Grupo Hospitalar' : 'Salvar Alterações'}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            /* Lista de Grupos Existentes com Ações de Edição e Inativação */
+            <div className="space-y-4 py-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                    Grupos Hospitalares Cadastrados
+                  </h3>
+                  <span className="text-[11px] text-slate-500">
+                    Total de {gruposAdmin.length} grupo(s) no sistema
+                  </span>
+                </div>
+                <Button
+                  onClick={iniciarCriarGrupo}
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs flex items-center gap-1.5"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  Criar Novo Grupo
+                </Button>
+              </div>
+
+              {carregandoGruposAdmin ? (
+                <div className="py-10 flex items-center justify-center text-xs text-slate-500 gap-2">
+                  <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
+                  Carregando lista de grupos...
+                </div>
+              ) : gruposAdmin.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 border rounded-lg space-y-2">
+                  <Users className="w-8 h-8 text-slate-300 mx-auto" />
+                  <p className="text-sm font-semibold text-slate-700">Nenhum grupo cadastrado</p>
+                  <p className="text-xs text-slate-500">
+                    Crie o primeiro grupo funcional para organizar as comunicações entre equipes do
+                    hospital.
+                  </p>
+                </div>
+              ) : (
+                <div className="border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                  {gruposAdmin.map((g) => (
+                    <div
+                      key={g.id}
+                      className={`p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                        g.ativo ? 'bg-white' : 'bg-slate-100/70 opacity-80'
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <strong className="text-xs text-slate-900 font-semibold">{g.nome}</strong>
+                          {g.sigla && (
+                            <Badge variant="outline" className="text-[10px] font-mono">
+                              {g.sigla}
+                            </Badge>
+                          )}
+                          <Badge
+                            variant={g.ativo ? 'secondary' : 'destructive'}
+                            className={`text-[9px] px-1.5 py-0 h-4 ${
+                              g.ativo
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {g.ativo ? 'Ativo' : 'Inativo'}
+                          </Badge>
+                        </div>
+                        {g.descricao && <p className="text-[11px] text-slate-600">{g.descricao}</p>}
+                        <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                          <span>{g.membros.length} participante(s)</span>
+                          {g.expand?.criado_por?.name && (
+                            <span>• Criado por: {g.expand.criado_por.name}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 self-end sm:self-center">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => iniciarEditarGrupo(g)}
+                          className="h-8 text-xs border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center gap-1"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 text-slate-500" />
+                          Editar / Membros
+                        </Button>
+
+                        <Button
+                          type="button"
+                          variant={g.ativo ? 'ghost' : 'outline'}
+                          size="sm"
+                          onClick={() => handleAlternarStatusAtivo(g)}
+                          className={`h-8 text-xs flex items-center gap-1 ${
+                            g.ativo
+                              ? 'text-rose-600 hover:bg-rose-50'
+                              : 'text-emerald-700 hover:bg-emerald-50 border-emerald-300'
+                          }`}
+                          title={
+                            g.ativo
+                              ? 'Inativar grupo (bloqueia novos envios; histórico preservado)'
+                              : 'Reativar grupo para novos envios'
+                          }
+                        >
+                          {g.ativo ? (
+                            <>
+                              <PowerOff className="w-3.5 h-3.5" />
+                              Inativar
+                            </>
+                          ) : (
+                            <>
+                              <Power className="w-3.5 h-3.5" />
+                              Reativar
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-start gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <p>
+                  <strong>Regra de Imutabilidade Histórica:</strong> Alterações de nome ou
+                  composição de participantes são validadas pelo servidor e <u>nunca reescrevem</u>{' '}
+                  o snapshot de mensagens passadas. Novos participantes só recebem mensagens
+                  transmitidas após sua inclusão.
+                </p>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

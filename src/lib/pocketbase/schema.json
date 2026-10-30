@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T14:18:23.544Z",
+  "generatedAt": "2026-10-30T14:35:20.101Z",
   "collections": [
     {
       "name": "users",
@@ -5752,10 +5752,10 @@
       "name": "canais_grupos_mensageria",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != '' && ativo = true",
+        "list": "@request.auth.id != '' && (ativo = true || @request.auth.role = 'admin' || @request.auth.role = 'gestor' || criado_por = @request.auth.id)",
         "view": "@request.auth.id != ''",
         "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor')",
-        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || criado_por = @request.auth.id)",
         "delete": null
       },
       "fields": [

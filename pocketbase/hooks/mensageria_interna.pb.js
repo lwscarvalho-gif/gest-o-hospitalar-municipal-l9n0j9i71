@@ -229,7 +229,126 @@ onRecordDelete((e) => {
   )
 }, 'mensagens_internas')
 
-// Rota customizada para diretório mínimo de usuários funcionais
+// Hook para canais_grupos_mensageria:
+// Validações server-side de criação, alteração de membros/nome e inativação de grupos
+onRecordCreate((e) => {
+  var auth = e.auth
+  if (!auth) {
+    throw new ForbiddenError('Operação não autorizada: sessão ausente.')
+  }
+
+  var role = auth.getString('role')
+  var podeGerenciar = role === 'admin' || role === 'gestor'
+  if (!podeGerenciar) {
+    throw new ForbiddenError('Apenas administradores e gestores podem criar grupos hospitalares.')
+  }
+
+  // Define criado_por a partir do auth atual caso não definido
+  if (!e.record.getString('criado_por')) {
+    e.record.set('criado_por', auth.id)
+  }
+
+  var nome = (e.record.getString('nome') || '').trim()
+  if (!nome || nome.length < 2) {
+    throw new BadRequestError('O nome do grupo é obrigatório e deve ter no mínimo 2 caracteres.')
+  }
+  if (nome.length > 120) {
+    throw new BadRequestError('O nome do grupo deve ter no máximo 120 caracteres.')
+  }
+  e.record.set('nome', nome)
+
+  var sigla = (e.record.getString('sigla') || '').trim()
+  if (sigla.length > 20) {
+    throw new BadRequestError('A sigla do grupo deve ter no máximo 20 caracteres.')
+  }
+  e.record.set('sigla', sigla)
+
+  var descricao = (e.record.getString('descricao') || '').trim()
+  if (descricao.length > 500) {
+    throw new BadRequestError('A descrição do grupo deve ter no máximo 500 caracteres.')
+  }
+  e.record.set('descricao', descricao)
+
+  // Grupo novo nasce ativo se não especificado
+  if (e.record.get('ativo') === undefined || e.record.get('ativo') === null) {
+    e.record.set('ativo', true)
+  }
+
+  // Validação dos membros participantes: todos devem ser usuários válidos existentes
+  var membros = e.record.getStringSlice('membros') || []
+  var membrosValidados = []
+  for (var mIdx = 0; mIdx < membros.length; mIdx++) {
+    var userId = membros[mIdx]
+    try {
+      var uRec = e.app.findRecordById('_pb_users_auth_', userId)
+      if (uRec && membrosValidados.indexOf(userId) === -1) {
+        membrosValidados.push(userId)
+      }
+    } catch (_) {
+      throw new BadRequestError('Usuário participante ID ' + userId + ' não existe no diretório.')
+    }
+  }
+  e.record.set('membros', membrosValidados)
+
+  e.next()
+}, 'canais_grupos_mensageria')
+
+onRecordUpdate((e) => {
+  var auth = e.auth
+  if (!auth) {
+    throw new ForbiddenError('Operação não autorizada: sessão ausente.')
+  }
+
+  var role = auth.getString('role')
+  var criadoPor = e.record.getString('criado_por') || e.record.original().getString('criado_por')
+  var podeGerenciar = role === 'admin' || role === 'gestor' || auth.id === criadoPor
+  if (!podeGerenciar) {
+    throw new ForbiddenError(
+      'Permissão negada: apenas gestores ou o criador do grupo podem alterar grupos e membros.',
+    )
+  }
+
+  // Validação do nome
+  var nome = (e.record.getString('nome') || '').trim()
+  if (!nome || nome.length < 2) {
+    throw new BadRequestError('O nome do grupo é obrigatório e deve ter no mínimo 2 caracteres.')
+  }
+  if (nome.length > 120) {
+    throw new BadRequestError('O nome do grupo deve ter no máximo 120 caracteres.')
+  }
+  e.record.set('nome', nome)
+
+  // Validação de membros
+  var membros = e.record.getStringSlice('membros') || []
+  var membrosValidados = []
+  for (var mIdx2 = 0; mIdx2 < membros.length; mIdx2++) {
+    var uId = membros[mIdx2]
+    try {
+      var uRec2 = e.app.findRecordById('_pb_users_auth_', uId)
+      if (uRec2 && membrosValidados.indexOf(uId) === -1) {
+        membrosValidados.push(uId)
+      }
+    } catch (_) {
+      throw new BadRequestError('Usuário participante ID ' + uId + ' não existe no diretório.')
+    }
+  }
+  e.record.set('membros', membrosValidados)
+
+  // Criado por não deve ser reescrito
+  if (e.record.original().getString('criado_por')) {
+    e.record.set('criado_por', e.record.original().getString('criado_por'))
+  }
+
+  e.next()
+}, 'canais_grupos_mensageria')
+
+onRecordDelete((e) => {
+  throw new ForbiddenError(
+    'Exclusão física de grupos de mensageria é vedada. Utilize a inativação lógica para preservar histórico de mensagens.',
+  )
+}, 'canais_grupos_mensageria')
+
+// Rota customizada para diretório mínimo de usuários funcionais com paginação e busca
 routerAdd('GET', '/backend/v1/mensageria/diretorio-usuarios', (c) => {
   var auth = c.auth
   if (!auth) {
@@ -237,7 +356,38 @@ routerAdd('GET', '/backend/v1/mensageria/diretorio-usuarios', (c) => {
   }
 
   try {
-    var users = c.app.findRecordsByFilter('_pb_users_auth_', '', 'name,email', 200, 0)
+    var pageParam = parseInt(c.request.url.query().get('page') || '1', 10)
+    var perPageParam = parseInt(c.request.url.query().get('perPage') || '20', 10)
+    var buscaParam = (c.request.url.query().get('busca') || '').trim()
+
+    var page = isNaN(pageParam) || pageParam < 1 ? 1 : pageParam
+    var perPage = isNaN(perPageParam) || perPageParam < 1 ? 20 : Math.min(perPageParam, 100)
+
+    var filterExpr = ''
+    if (buscaParam) {
+      // Busca segura por nome, cargo ou role sem expor dados pessoais
+      var buscaSanitizada = buscaParam.replace(/'/g, "\\'")
+      filterExpr =
+        "name ~ '" +
+        buscaSanitizada +
+        "' || cargo ~ '" +
+        buscaSanitizada +
+        "' || role ~ '" +
+        buscaSanitizada +
+        "'"
+    }
+
+    var totalRecords = c.app.countRecords('_pb_users_auth_', filterExpr)
+    var totalPages = Math.ceil(totalRecords / perPage) || 1
+    var offset = (page - 1) * perPage
+
+    var users = c.app.findRecordsByFilter(
+      '_pb_users_auth_',
+      filterExpr,
+      'name,email',
+      perPage,
+      offset,
+    )
 
     var lista = []
     for (var k = 0; k < users.length; k++) {
@@ -253,6 +403,10 @@ routerAdd('GET', '/backend/v1/mensageria/diretorio-usuarios', (c) => {
     return c.json(200, {
       sucesso: true,
       usuarios: lista,
+      page: page,
+      perPage: perPage,
+      totalItems: totalRecords,
+      totalPages: totalPages,
     })
   } catch (err) {
     return c.json(500, {
