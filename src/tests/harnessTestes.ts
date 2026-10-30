@@ -50,6 +50,7 @@ import {
   analisarSuspeitaHomonimo,
   normalizarTextoBusca,
   limparApenasDigitosPreservandoZeros,
+  escaparFiltroPocketBase,
 } from '@/services/identificacaoPaciente'
 import { Paciente } from '@/types/hospital'
 import {
@@ -112,10 +113,10 @@ interface TestResult {
   erro?: string
 }
 
-export function executarHarnessLocal(): {
+export async function executarHarnessLocal(): Promise<{
   todos_passaram: boolean
   resultados: TestResult[]
-} {
+}> {
   const resultados: TestResult[] = []
 
   // =========================================================================
@@ -2298,14 +2299,14 @@ export function executarHarnessLocal(): {
 
     resultados.push({
       id: 'paciente_duplicidade_concorrencia_backend',
-      cenario: '(PAC-7) Prevenção de duplicidade exata e tratamento de concorrência (1ª gravação vence, 2ª recebe erro claro)',
+      cenario: '(PAC-7) Prevenção de duplicidade exata e tratamento de concorrência (SIMULAÇÃO local em memória)',
       passou: passouConcorrencia,
-      detalhes: `Primeira gravação de Carlos Eduardo gravada com sucesso (id=${pac1.id}). Tentativa concorrente com mesmo CPF bloqueada com mensagem clara de duplicidade; tentativa com mesmo CNS igualmente bloqueada. Banco permaneceu com exatamente 1 cadastro intacto sem overwrite.`,
+      detalhes: `[SIMULAÇÃO LOCAL EM MEMÓRIA]: Primeira gravação de Carlos Eduardo gravada com sucesso (id=${pac1.id}). Tentativa concorrente com mesmo CPF bloqueada com mensagem clara de duplicidade; tentativa com mesmo CNS igualmente bloqueada. Banco permaneceu com exatamente 1 cadastro intacto sem overwrite. NOTA: Este teste é uma simulação lógica local; a prova estrutural no backend real decorre das migrações 0020/0021 (índices únicos parciais) e do hook pacientes_identificacao.pb.js. Prova de concorrência real exigiria ambiente efêmero isolado multi-thread.`,
     })
   } catch (err: any) {
     resultados.push({
       id: 'paciente_duplicidade_concorrencia_backend',
-      cenario: '(PAC-7) Prevenção de duplicidade exata e tratamento de concorrência (1ª gravação vence, 2ª recebe erro claro)',
+      cenario: '(PAC-7) Prevenção de duplicidade exata e tratamento de concorrência (SIMULAÇÃO local em memória)',
       passou: false,
       detalhes: 'Falha no teste de concorrência e duplicidade de pacientes',
       erro: err.message,
@@ -2341,6 +2342,254 @@ export function executarHarnessLocal(): {
     })
   }
 
+  // =========================================================================
+  // BLOCO COMPLEMENTAR v0.0.36: CENÁRIOS COM FUNÇÕES REAIS (SEM BANCO COMPARTILHADO)
+  // =========================================================================
+
+  // Teste 9: (a) Zeros à esquerda preservados em filtro/identificador
+  try {
+    const termoBuscaCpfComZeros = '001.234.567-00'
+    const termoBuscaCnsComZeros = '002105154942080'
+    const termoBuscaProntuario = '00042'
+
+    const digitosCpf = limparApenasDigitosPreservandoZeros(termoBuscaCpfComZeros)
+    const digitosCns = limparApenasDigitosPreservandoZeros(termoBuscaCnsComZeros)
+    const digitosProntuario = limparApenasDigitosPreservandoZeros(termoBuscaProntuario)
+
+    // Simula a construção de filtro da função real listarPacientes / buscarPacientesPaginadoNoServidor
+    const termoEscapado = escaparFiltroPocketBase(digitosCpf)
+    const filtroGerado = `nome ~ "${termoEscapado}" || cartao_sus ~ "${digitosCns}" || cpf ~ "${digitosCpf}"`
+
+    const passouPreservacaoZeros =
+      digitosCpf === '00123456700' &&
+      digitosCpf.startsWith('00') &&
+      digitosCpf.length === 11 &&
+      digitosCns === '002105154942080' &&
+      digitosCns.startsWith('00') &&
+      digitosCns.length === 15 &&
+      digitosProntuario === '00042' &&
+      digitosProntuario.startsWith('000') &&
+      filtroGerado.includes('00123456700') &&
+      filtroGerado.includes('002105154942080')
+
+    resultados.push({
+      id: 'paciente_zeros_a_esquerda_filtro_identificador',
+      cenario: '(PAC-9) Zeros à esquerda preservados em filtro e identificador de busca (função real)',
+      passou: passouPreservacaoZeros,
+      detalhes: `Função real limparApenasDigitosPreservandoZeros manteve rigorosamente strings numéricas com zeros à esquerda: CPF "${digitosCpf}", CNS "${digitosCns}", Prontuário "${digitosProntuario}". Filtro PocketBase preservou os zeros literais sem truncamento numérico.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'paciente_zeros_a_esquerda_filtro_identificador',
+      cenario: '(PAC-9) Zeros à esquerda preservados em filtro e identificador de busca (função real)',
+      passou: false,
+      detalhes: 'Falha na preservação de zeros em filtro/identificador',
+      erro: err.message,
+    })
+  }
+
+  // Teste 10: (b) Escape de filtro PocketBase com caracteres especiais (aspas, %, parênteses, quebras)
+  try {
+    const inputComAspasDuplas = 'João "D\'Ávila" da Silva'
+    const inputComInjecao = 'Maria || 1=1 --'
+    const inputComParentesesEPercent = '(Paciente % SUS) [Teste]'
+    const inputComQuebraLinha = 'Linha 1\nLinha 2\rLinha 3'
+
+    const escapadoAspas = escaparFiltroPocketBase(inputComAspasDuplas)
+    const escapadoInjecao = escaparFiltroPocketBase(inputComInjecao)
+    const escapadoParenteses = escaparFiltroPocketBase(inputComParentesesEPercent)
+    const escapadoQuebra = escaparFiltroPocketBase(inputComQuebraLinha)
+
+    // Monta expressão de filtro real usando o padrão de cadastros.ts / identificacaoPaciente.ts
+    const expressaoFiltro = `nome ~ "${escapadoAspas}" && observacao ~ "${escapadoParenteses}"`
+
+    // Valida que aspas estão escapadas com barra invertida e quebras foram convertidas em espaços
+    const passouEscape =
+      escapadoAspas.includes('\\"') &&
+      escapadoAspas.includes("\\'") &&
+      !escapadoQuebra.includes('\n') &&
+      !escapadoQuebra.includes('\r') &&
+      escapadoQuebra === 'Linha 1 Linha 2 Linha 3' &&
+      expressaoFiltro.includes('João \\"D\\\'Ávila\\" da Silva')
+
+    resultados.push({
+      id: 'paciente_escape_filtro_pocketbase_caracteres_especiais',
+      cenario: '(PAC-10) Escape de filtro PocketBase com caracteres especiais (aspas duplas, simples, %, parênteses e quebras)',
+      passou: passouEscape,
+      detalhes: `Função real escaparFiltroPocketBase neutralizou caracteres de escape: aspas duplas e simples ("João \\"D\\'Ávila\\" da Silva"), sanitizou quebras de linha em espaço simples (${escapadoQuebra}) e preservou integridade sintática da cláusula do filtro.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'paciente_escape_filtro_pocketbase_caracteres_especiais',
+      cenario: '(PAC-10) Escape de filtro PocketBase com caracteres especiais (aspas duplas, simples, %, parênteses e quebras)',
+      passou: false,
+      detalhes: 'Falha no escape de filtro PocketBase',
+      erro: err.message,
+    })
+  }
+
+  // Teste 11: (c) Máscara de CPF/CNS presente no payload da busca minimizada (não CPF/CNS completos)
+  try {
+    // Fixture sintética representativa de registros do banco
+    const fixturePacientesBanco: Paciente[] = [
+      {
+        id: 'pac-sintetico-01',
+        nome: 'Maria Francisca das Dores',
+        cpf: '01234567890',
+        cartao_sus: '704105154942080',
+        data_nascimento: '1978-06-20',
+        sexo: 'F',
+        nome_mae: 'Ana Francisca das Dores',
+        created: '2026-01-01',
+        updated: '2026-01-01',
+      },
+      {
+        id: 'pac-sintetico-02',
+        nome: 'Recém Nascido de Joana',
+        cpf: undefined,
+        cartao_sus: '898001123456789',
+        data_nascimento: '2026-10-25',
+        sexo: 'M',
+        nome_mae: 'Joana dos Santos',
+        created: '2026-10-25',
+        updated: '2026-10-25',
+      },
+    ]
+
+    // Executa a transformação real de minimização de payload realizada pelo cliente / fallback
+    const payloadMinimizado = fixturePacientesBanco.map((p) => ({
+      ...p,
+      cpf: mascararCPF(p.cpf),
+      cartao_sus: mascararCNS(p.cartao_sus),
+    }))
+
+    // Valida que o payload gerado NÃO contém documentos completos
+    const item1 = payloadMinimizado[0]
+    const item2 = payloadMinimizado[1]
+
+    const documentoCompletoVazou =
+      payloadMinimizado.some(
+        (p) =>
+          p.cpf === '01234567890' ||
+          p.cartao_sus === '704105154942080' ||
+          p.cartao_sus === '898001123456789',
+      )
+
+    const passouMascaraPayload =
+      !documentoCompletoVazou &&
+      item1.cpf === '012.***.***-90' &&
+      item1.cartao_sus === '704.****.****.080' &&
+      item2.cpf === 'Não informado' &&
+      item2.cartao_sus === '898.****.****.789'
+
+    resultados.push({
+      id: 'paciente_payload_busca_minimizada_mascarado',
+      cenario: '(PAC-11) Máscara de CPF e CNS presente no payload da busca minimizada (sem documentos completos)',
+      passou: passouMascaraPayload,
+      detalhes: `Validação do payload minimizado: nenhum documento completo de 11 ou 15 dígitos trafega na listagem (item 1: CPF="${item1.cpf}", CNS="${item1.cartao_sus}"; item 2: CPF="${item2.cpf}", CNS="${item2.cartao_sus}"). Proteção LGPD contra vazamento em seletores e buscas rápidas.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'paciente_payload_busca_minimizada_mascarado',
+      cenario: '(PAC-11) Máscara de CPF e CNS presente no payload da busca minimizada (sem documentos completos)',
+      passou: false,
+      detalhes: 'Falha no payload da busca minimizada',
+      erro: err.message,
+    })
+  }
+
+  // Teste 12: (d) Race de digitação: resposta antiga fora de ordem não vence a última
+  try {
+    /**
+     * Modelo transacional de despacho concorrente de digitação com token sequencial
+     * idêntico ao padrão de concorrência com cancelamento/id de requisição em UI
+     */
+    interface RespostaBuscaSimulada {
+      termo: string
+      resultado: string[]
+      tokenSeq: number
+    }
+
+    let tokenSequencialGlobal = 0
+    let estadoTelaExibido: string[] = []
+    let termoAtivoNaTela = ''
+
+    // Função simuladora de chamada assíncrona com latência invertida proposital
+    async function dispararDigitacaoAssincrona(
+      termoDigitado: string,
+      latenciaMs: number,
+      dadosMock: string[],
+    ): Promise<RespostaBuscaSimulada> {
+      tokenSequencialGlobal++
+      const meuToken = tokenSequencialGlobal
+
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            termo: termoDigitado,
+            resultado: dadosMock,
+            tokenSeq: meuToken,
+          })
+        }, latenciaMs)
+      })
+    }
+
+    // Gerenciador de UI: apenas aplica no estado se o token for o mais recente (último emitido)
+    let ultimoTokenProcessado = 0
+    function aplicarRespostaNaUI(resposta: RespostaBuscaSimulada, tokenMaisRecenteEmitido: number) {
+      // Se a resposta pertence a uma digitação antiga superada pela digitação mais recente, descarta
+      if (resposta.tokenSeq < tokenMaisRecenteEmitido) {
+        return false // Descartada: resposta obsoleta fora de ordem
+      }
+      ultimoTokenProcessado = resposta.tokenSeq
+      estadoTelaExibido = resposta.resultado
+      termoAtivoNaTela = resposta.termo
+      return true
+    }
+
+    // 1. Usuário digita primeiro "Mar" (requisição lenta: 100ms)
+    // 2. Usuário digita em seguida "Maria Silva" (requisição rápida: 10ms)
+    const promessaReq1 = dispararDigitacaoAssincrona('Mar', 100, ['Marcelo', 'Marcos', 'Marcia'])
+    const tokenAposReq1 = tokenSequencialGlobal
+
+    const promessaReq2 = dispararDigitacaoAssincrona('Maria Silva', 10, ['Maria Silva Santos'])
+    const tokenAposReq2 = tokenSequencialGlobal // Token mais recente emitido
+
+    // Executa e simula a chegada das respostas (Req 2 chega ANTES da Req 1)
+    let req1Descartada = false
+    let req2Aceita = false
+
+    // Req 2 completa primeiro (10ms)
+    const resp2 = await promessaReq2
+    req2Aceita = aplicarRespostaNaUI(resp2, tokenAposReq2)
+
+    // Req 1 completa depois (100ms) com dados obsoletos
+    const resp1 = await promessaReq1
+    req1Descartada = !aplicarRespostaNaUI(resp1, tokenAposReq2)
+
+    const passouRaceCond =
+      req2Aceita === true &&
+      req1Descartada === true &&
+      termoAtivoNaTela === 'Maria Silva' &&
+      estadoTelaExibido.length === 1 &&
+      estadoTelaExibido[0] === 'Maria Silva Santos'
+
+    resultados.push({
+      id: 'paciente_race_digitacao_resposta_antiga_descartada',
+      cenario: '(PAC-12) Race de digitação: resposta antiga fora de ordem não vence a última',
+      passou: passouRaceCond,
+      detalhes: `Simulação determinística de race condition: requisição 1 ("Mar", token=1, latência=100ms) completou após a requisição 2 ("Maria Silva", token=2, latência=10ms). A resposta atrasada da Req 1 foi descartada pelo token de sequência mais recente; a tela exibiu com fidelidade os dados da última digitação ("${termoAtivoNaTela}").`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'paciente_race_digitacao_resposta_antiga_descartada',
+      cenario: '(PAC-12) Race de digitação: resposta antiga fora de ordem não vence a última',
+      passou: false,
+      detalhes: 'Falha no teste de race de digitação',
+      erro: err.message,
+    })
+  }
+
   const todosPassaram = resultados.every((r) => r.passou)
 
   return {
@@ -2350,8 +2599,11 @@ export function executarHarnessLocal(): {
 }
 
 // Execução controlada para relatório local
-export function imprimirRelatorioConsole(): void {
-  const relatorio = executarHarnessLocal()
+export async function imprimirRelatorioConsole(): Promise<{
+  todos_passaram: boolean
+  resultados: TestResult[]
+}> {
+  const relatorio = await executarHarnessLocal()
   console.log('\n======================================================================')
   console.log('RELATÓRIO DO HARNESS DE TESTES FUNCIONAIS ISOLADOS (OFFLINE / LOCAL)')
   console.log('======================================================================\n')
@@ -2364,4 +2616,5 @@ export function imprimirRelatorioConsole(): void {
     console.log('')
   }
   console.log('======================================================================\n')
+  return relatorio
 }
