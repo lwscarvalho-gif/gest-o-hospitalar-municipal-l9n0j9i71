@@ -1,7 +1,7 @@
 // Connectors of the signed-in user: each user connects THEIR OWN accounts
 // (Google Sheets, Gmail…) and the app acts with them. Served by the app's
 // PocketBase — don't write routes or OAuth code for this, use these helpers.
-import pb from '@/lib/pocketbase/client'
+import pb from './pocketbase/client'
 
 export type ConnectorStatus = 'connected' | 'not_connected' | 'expired'
 

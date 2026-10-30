@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T10:20:37.916Z",
+  "generatedAt": "2026-10-30T11:01:31.908Z",
   "collections": [
     {
       "name": "users",
@@ -1613,8 +1613,8 @@
         "list": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
         "view": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
         "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
-        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
-        "delete": "@request.auth.id != '' && @request.auth.role = 'admin'"
+        "update": null,
+        "delete": null
       },
       "fields": [
         {
@@ -1721,13 +1721,47 @@
           "required": false,
           "system": false,
           "collectionRef": "pronto_atendimento"
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tipo_registro",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["ato_original", "retificacao", "anotacao_complementar"]
+        },
+        {
+          "name": "registro_original",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "administracao_medicamentos"
+        },
+        {
+          "name": "motivo_correcao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "usuario_id",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
         "CREATE INDEX idx_adm_paciente ON administracao_medicamentos (paciente)",
         "CREATE INDEX idx_adm_item ON administracao_medicamentos (prescricao_item)",
         "CREATE INDEX idx_adm_data ON administracao_medicamentos (data_hora_administracao)",
-        "CREATE INDEX `idx_adm_pa` ON `administracao_medicamentos` (atendimento_pa)"
+        "CREATE INDEX `idx_adm_pa` ON `administracao_medicamentos` (atendimento_pa)",
+        "CREATE INDEX `idx_adm_idempotency` ON `administracao_medicamentos` (idempotency_key)",
+        "CREATE INDEX `idx_adm_original` ON `administracao_medicamentos` (registro_original)"
       ]
     },
     {
