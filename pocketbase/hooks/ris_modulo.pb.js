@@ -9,6 +9,179 @@
  */
 
 // ----------------------------------------------------------------------------
+// SANITIZADOR DE HTML SERVER-SIDE RIGOROSO COM ALLOWLIST (Seção 7.4.3.4.b.i)
+// Bloqueia script, atributos on*, javascript:, vbscript:, data:, iframes,
+// tags perigosas e links/imagens externos.
+// Apenas imagens internas (/api/files/ris_imagens_anexas/...) são permitidas.
+// ----------------------------------------------------------------------------
+function sanitizarHtmlServidorRIS(inputHtml) {
+  if (!inputHtml) return ''
+  var str = String(inputHtml)
+
+  // 1. Remoção de blocos perigosos inteiros
+  str = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+  str = str.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+  str = str.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+  str = str.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+  str = str.replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
+  str = str.replace(/<applet\b[^<]*(?:(?!<\/applet>)<[^<]*)*<\/applet>/gi, '')
+  str = str.replace(/<!--[\s\S]*?-->/g, '')
+
+  // 2. Remoção de handlers de eventos (on* ex: onload, onclick, onerror, onmouseover, etc.)
+  str = str.replace(/\son[a-zA-Z_]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+
+  // 3. Bloqueio de protocolos executáveis em href e src
+  str = str.replace(/href\s*=\s*["']?\s*(?:javascript|vbscript|data):[^"'>\s]*/gi, 'href="#"')
+
+  // 4. Sanitização estrita de imagens (src): permitir SOMENTE imagens internas do Skip/PocketBase
+  str = str.replace(/<img\b([^>]*?)>/gi, function (match, attrs) {
+    var srcMatch = attrs.match(/src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+    var srcVal = srcMatch ? srcMatch[1] || srcMatch[2] || srcMatch[3] || '' : ''
+    srcVal = srcVal.trim()
+
+    var isInternoValido =
+      srcVal.indexOf('/api/files/ris_imagens_anexas/') !== -1 ||
+      srcVal.indexOf('/api/files/exames/') !== -1 ||
+      srcVal.indexOf('/assets/') === 0 ||
+      srcVal.indexOf('/ris-internal-image/') === 0
+
+    if (!isInternoValido) {
+      return '<span class="ris-img-bloqueada text-slate-400 italic text-xs">[Imagem externa bloqueada por segurança do RIS]</span>'
+    }
+
+    var altMatch = attrs.match(/alt\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+    var altVal = altMatch ? altMatch[1] || altMatch[2] || 'Imagem do Exame' : 'Imagem do Exame'
+    var widthMatch = attrs.match(/width\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+    var heightMatch = attrs.match(/height\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+    var idMatch = attrs.match(/data-imagem-id\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+
+    var safeAttrs =
+      'src="' + srcVal.replace(/"/g, '&quot;') + '" alt="' + altVal.replace(/"/g, '&quot;') + '"'
+    if (widthMatch)
+      safeAttrs +=
+        ' width="' + (widthMatch[1] || widthMatch[2] || widthMatch[3]).replace(/"/g, '&quot;') + '"'
+    if (heightMatch)
+      safeAttrs +=
+        ' height="' +
+        (heightMatch[1] || heightMatch[2] || heightMatch[3]).replace(/"/g, '&quot;') +
+        '"'
+    if (idMatch)
+      safeAttrs += ' data-imagem-id="' + (idMatch[1] || idMatch[2]).replace(/"/g, '&quot;') + '"'
+    safeAttrs += ' class="ris-imagem-laudo-interna max-w-full rounded border border-slate-300 my-2"'
+
+    return '<img ' + safeAttrs + ' />'
+  })
+
+  // 5. Allowlist de tags e atributos permitidos (Seção 7.4.3.4.b.i-iii)
+  var allowlistTags = [
+    'p',
+    'br',
+    'hr',
+    'strong',
+    'b',
+    'em',
+    'i',
+    'u',
+    's',
+    'mark',
+    'span',
+    'div',
+    'ul',
+    'ol',
+    'li',
+    'a',
+    'table',
+    'thead',
+    'tbody',
+    'tfoot',
+    'tr',
+    'th',
+    'td',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'blockquote',
+    'input',
+    'label',
+  ]
+
+  str = str.replace(
+    /<(\/?)([a-zA-Z0-9_-]+)([^>]*)>/gi,
+    function (fullMatch, closingSlash, tagName, restAttrs) {
+      var tagLower = tagName.toLowerCase()
+      if (tagLower === 'img') {
+        return fullMatch
+      }
+      if (allowlistTags.indexOf(tagLower) === -1) {
+        return ''
+      }
+
+      if (tagLower === 'input') {
+        if (!restAttrs.match(/type\s*=\s*["']?checkbox["']?/i)) {
+          return ''
+        }
+        var isChecked = !!restAttrs.match(/\bchecked\b/i)
+        return (
+          '<input type="checkbox"' +
+          (isChecked ? ' checked' : '') +
+          ' disabled class="ris-checklist-item" />'
+        )
+      }
+
+      var safeTagAttrs = ''
+      if (tagLower === 'a') {
+        var hrefMatch = restAttrs.match(/href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+        var hVal = hrefMatch ? hrefMatch[1] || hrefMatch[2] || hrefMatch[3] || '#' : '#'
+        if (
+          hVal.toLowerCase().indexOf('javascript:') !== -1 ||
+          hVal.toLowerCase().indexOf('data:') !== -1
+        ) {
+          hVal = '#'
+        }
+        safeTagAttrs +=
+          ' href="' + hVal.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer"'
+      }
+
+      if (tagLower === 'td' || tagLower === 'th') {
+        var colMatch = restAttrs.match(/colspan\s*=\s*["']?(\d+)["']?/i)
+        var rowMatch = restAttrs.match(/rowspan\s*=\s*["']?(\d+)["']?/i)
+        if (colMatch) safeTagAttrs += ' colspan="' + colMatch[1] + '"'
+        if (rowMatch) safeTagAttrs += ' rowspan="' + rowMatch[1] + '"'
+      }
+
+      var classMatch = restAttrs.match(/class\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+      if (classMatch) {
+        var clsVal = (classMatch[1] || classMatch[2] || '').trim()
+        safeTagAttrs += ' class="' + clsVal.replace(/["<>]/g, '') + '"'
+      }
+
+      var styleMatch = restAttrs.match(/style\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+      if (styleMatch) {
+        var rawStyle = (styleMatch[1] || styleMatch[2] || '').trim()
+        rawStyle = rawStyle.replace(/url\s*\([^)]*\)/gi, '')
+        rawStyle = rawStyle.replace(/expression\s*\([^)]*\)/gi, '')
+        rawStyle = rawStyle.replace(/javascript\s*:/gi, '')
+        safeTagAttrs += ' style="' + rawStyle.replace(/"/g, '&quot;') + '"'
+      }
+
+      var dataMatches = restAttrs.match(/data-[a-zA-Z0-9_-]+\s*=\s*(?:"[^"]*"|'[^']*')/gi)
+      if (dataMatches && dataMatches.length > 0) {
+        for (var d = 0; d < dataMatches.length; d++) {
+          safeTagAttrs += ' ' + dataMatches[d]
+        }
+      }
+
+      return '<' + closingSlash + tagLower + safeTagAttrs + '>'
+    },
+  )
+
+  return str
+}
+
+// ----------------------------------------------------------------------------
 // 1. POST /backend/v1/ris/requisicao-pep
 // Requisição de RX/TC/ECG/US a partir da solicitação do PEP sem duplicar
 // ----------------------------------------------------------------------------
@@ -1080,6 +1253,10 @@ routerAdd('POST', '/backend/v1/ris/modelos', (c) => {
       } catch (_) {}
     }
 
+    var conteudoFormatado =
+      body.conteudo_formatado !== undefined ? String(body.conteudo_formatado) : ''
+    var configEditor = body.config_editor || null
+
     var colMod = c.app.findCollectionByNameOrId('ris_modelos_laudo')
     var novoMod = new Record(colMod)
     novoMod.set('titulo', titulo)
@@ -1087,6 +1264,14 @@ routerAdd('POST', '/backend/v1/ris/modelos', (c) => {
     if (codigoProcedimento) novoMod.set('codigo_procedimento', codigoProcedimento)
     novoMod.set('procedimento_nome', procedimentoNome)
     novoMod.set('texto_padrao', textoPadrao)
+    if (conteudoFormatado) {
+      novoMod.set('conteudo_formatado', sanitizarHtmlServidorRIS(conteudoFormatado))
+    } else {
+      novoMod.set('conteudo_formatado', sanitizarHtmlServidorRIS(textoPadrao))
+    }
+    if (configEditor) {
+      novoMod.set('config_editor', JSON.stringify(configEditor))
+    }
     novoMod.set('versao', versao)
     novoMod.set('ativo', true)
     if (modeloAnteriorId) novoMod.set('modelo_anterior_id', modeloAnteriorId)
@@ -1139,6 +1324,7 @@ routerAdd('POST', '/backend/v1/ris/modelos/{id}/inativar', (c) => {
 // 9. POST /backend/v1/ris/exames/{id}/aplicar-modelo
 // Aplicação do modelo GERA APENAS RASCUNHO para revisão humana
 // JAMAIS sobrescreve laudo já liberado
+// Suporta tanto texto puro legado quanto conteúdo formatado rico (v0.0.59+)
 // ----------------------------------------------------------------------------
 routerAdd('POST', '/backend/v1/ris/exames/{id}/aplicar-modelo', (c) => {
   function sanitizar(val) {
@@ -1182,10 +1368,18 @@ routerAdd('POST', '/backend/v1/ris/exames/{id}/aplicar-modelo', (c) => {
 
     var modeloRec = c.app.findRecordById('ris_modelos_laudo', modeloId)
     var textoModelo = modeloRec.getString('texto_padrao')
+    var formatadoModelo = modeloRec.getString('conteudo_formatado') || textoModelo
+    var configModeloRaw = modeloRec.getString('config_editor')
 
-    // Gera APENAS rascunho_laudo, preservando status e campos de liberação
+    // Gera APENAS rascunho_laudo e conteudo_formatado_rascunho, preservando status e campos de liberação
     exameRec.set('rascunho_laudo', textoModelo)
+    exameRec.set('conteudo_formatado_rascunho', formatadoModelo)
+    if (configModeloRaw) {
+      exameRec.set('config_editor_rascunho', configModeloRaw)
+    }
     exameRec.set('modelo_laudo_id', modeloId)
+    var vAtual = exameRec.getInt('versao_conteudo_rascunho') || 0
+    exameRec.set('versao_conteudo_rascunho', vAtual + 1)
     c.app.save(exameRec)
 
     return c.json(200, {
@@ -1196,6 +1390,903 @@ routerAdd('POST', '/backend/v1/ris/exames/{id}/aplicar-modelo', (c) => {
       modelo_titulo: modeloRec.getString('titulo'),
       modelo_versao: modeloRec.getInt('versao'),
       rascunho_gerado: textoModelo,
+      conteudo_formatado_rascunho: formatadoModelo,
+      versao_conteudo_rascunho: vAtual + 1,
+    })
+  } catch (err) {
+    return c.json(400, { erro: err.message || String(err) })
+  }
+})
+
+// ----------------------------------------------------------------------------
+// SANITIZADOR DE HTML SERVER-SIDE RIGOROSO COM ALLOWLIST (Seção 7.4.3.4.b.i)
+// Bloqueia script, atributos on*, javascript:, vbscript:, data:, iframes,
+// tags perigosas e links/imagens externos.
+// Apenas imagens internas (/api/files/ris_imagens_anexas/...) são permitidas.
+// ----------------------------------------------------------------------------
+function sanitizarHtmlServidorRIS(inputHtml) {
+  if (!inputHtml) return ''
+  var str = String(inputHtml)
+
+  // 1. Remoção de blocos perigosos inteiros: <script>...</script>, <style>...</style>, <iframe>...</iframe>, <object>, <embed>, <applet>
+  str = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+  str = str.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+  str = str.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+  str = str.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+  str = str.replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
+  str = str.replace(/<applet\b[^<]*(?:(?!<\/applet>)<[^<]*)*<\/applet>/gi, '')
+  str = str.replace(/<!--[\s\S]*?-->/g, '')
+
+  // 2. Remoção de handlers de eventos (on* ex: onload, onclick, onerror, onmouseover, etc.)
+  str = str.replace(/\son[a-zA-Z_]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+
+  // 3. Bloqueio de protocolos executáveis em href e src (javascript:, vbscript:, data: exceto texto puro)
+  str = str.replace(/href\s*=\s*["']?\s*(?:javascript|vbscript|data):[^"'>\s]*/gi, 'href="#"')
+
+  // 4. Sanitização estrita de imagens (src): permitir SOMENTE imagens internas do Skip/PocketBase
+  // Rejeita rastreadores externos, http://, https:// de terceiros e data: image externas não autorizadas
+  str = str.replace(/<img\b([^>]*?)>/gi, function (match, attrs) {
+    var srcMatch = attrs.match(/src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+    var srcVal = srcMatch ? srcMatch[1] || srcMatch[2] || srcMatch[3] || '' : ''
+    srcVal = srcVal.trim()
+
+    // Permite apenas caminhos internos de arquivos do backend local ou caminhos relativos internos
+    // ex: /api/files/ris_imagens_anexas/... ou /api/files/exames/...
+    var isInternoValido =
+      srcVal.indexOf('/api/files/ris_imagens_anexas/') !== -1 ||
+      srcVal.indexOf('/api/files/exames/') !== -1 ||
+      srcVal.indexOf('/assets/') === 0 ||
+      srcVal.indexOf('/ris-internal-image/') === 0
+
+    if (!isInternoValido) {
+      // Bloqueia imagem externa/rastreador e substitui por aviso seguro
+      return '<span class="ris-img-bloqueada text-slate-400 italic text-xs">[Imagem externa bloqueada por segurança do RIS]</span>'
+    }
+
+    // Preserva atributos seguros permitidos na tag interna: src, alt, title, width, height, class, data-imagem-id
+    var altMatch = attrs.match(/alt\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+    var altVal = altMatch ? altMatch[1] || altMatch[2] || 'Imagem do Exame' : 'Imagem do Exame'
+    var widthMatch = attrs.match(/width\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+    var heightMatch = attrs.match(/height\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+    var idMatch = attrs.match(/data-imagem-id\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+
+    var safeAttrs =
+      'src="' + srcVal.replace(/"/g, '&quot;') + '" alt="' + altVal.replace(/"/g, '&quot;') + '"'
+    if (widthMatch)
+      safeAttrs +=
+        ' width="' + (widthMatch[1] || widthMatch[2] || widthMatch[3]).replace(/"/g, '&quot;') + '"'
+    if (heightMatch)
+      safeAttrs +=
+        ' height="' +
+        (heightMatch[1] || heightMatch[2] || heightMatch[3]).replace(/"/g, '&quot;') +
+        '"'
+    if (idMatch)
+      safeAttrs += ' data-imagem-id="' + (idMatch[1] || idMatch[2]).replace(/"/g, '&quot;') + '"'
+    safeAttrs += ' class="ris-imagem-laudo-interna max-w-full rounded border border-slate-300 my-2"'
+
+    return '<img ' + safeAttrs + ' />'
+  })
+
+  // 5. Allowlist de tags e atributos permitidos:
+  // Tags obrigatórias do 7.4.3.4.b.i:
+  // p, br, hr, strong, b, em, i, u, s, mark, span, div,
+  // ul, ol, li, a, table, thead, tbody, tfoot, tr, th, td,
+  // h1, h2, h3, h4, h5, h6, blockquote, input (checkbox disabled)
+  // Tags e classes especiais para 'box', 'lista', 'flutuante', 'quebra-pagina'
+  var allowlistTags = [
+    'p',
+    'br',
+    'hr',
+    'strong',
+    'b',
+    'em',
+    'i',
+    'u',
+    's',
+    'mark',
+    'span',
+    'div',
+    'ul',
+    'ol',
+    'li',
+    'a',
+    'table',
+    'thead',
+    'tbody',
+    'tfoot',
+    'tr',
+    'th',
+    'td',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'blockquote',
+    'input',
+    'label',
+  ]
+
+  // Filtra tags fechadas e abertas não permitidas (transforma em texto neutro ou descarta)
+  // Preserva inputs apenas se forem checkbox (para checklists clínicos)
+  str = str.replace(
+    /<(\/?)([a-zA-Z0-9_-]+)([^>]*)>/gi,
+    function (fullMatch, closingSlash, tagName, restAttrs) {
+      var tagLower = tagName.toLowerCase()
+      if (tagLower === 'img') {
+        return fullMatch // já foi processado
+      }
+      if (allowlistTags.indexOf(tagLower) === -1) {
+        return '' // Descarta tags fora da allowlist (ex: <form>, <button>, <select>, <textarea>, <link>, <meta>)
+      }
+
+      // Se for <input>, permitir APENAS se type="checkbox"
+      if (tagLower === 'input') {
+        if (!restAttrs.match(/type\s*=\s*["']?checkbox["']?/i)) {
+          return ''
+        }
+        var isChecked = !!restAttrs.match(/\bchecked\b/i)
+        return (
+          '<input type="checkbox"' +
+          (isChecked ? ' checked' : '') +
+          ' disabled class="ris-checklist-item" />'
+        )
+      }
+
+      // Sanitiza atributos da tag permitida (class, style, href, title, colspan, rowspan, data-*)
+      var safeTagAttrs = ''
+      if (tagLower === 'a') {
+        var hrefMatch = restAttrs.match(/href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+        var hVal = hrefMatch ? hrefMatch[1] || hrefMatch[2] || hrefMatch[3] || '#' : '#'
+        if (
+          hVal.toLowerCase().indexOf('javascript:') !== -1 ||
+          hVal.toLowerCase().indexOf('data:') !== -1
+        ) {
+          hVal = '#'
+        }
+        safeTagAttrs +=
+          ' href="' + hVal.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer"'
+      }
+
+      if (tagLower === 'td' || tagLower === 'th') {
+        var colMatch = restAttrs.match(/colspan\s*=\s*["']?(\d+)["']?/i)
+        var rowMatch = restAttrs.match(/rowspan\s*=\s*["']?(\d+)["']?/i)
+        if (colMatch) safeTagAttrs += ' colspan="' + colMatch[1] + '"'
+        if (rowMatch) safeTagAttrs += ' rowspan="' + rowMatch[1] + '"'
+      }
+
+      // Preserva classes css permitidas (para estilos, caixas, cores, alinhamentos e quebra de página)
+      var classMatch = restAttrs.match(/class\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+      if (classMatch) {
+        var clsVal = (classMatch[1] || classMatch[2] || '').trim()
+        // Filtra classes potencialmente maliciosas ou irrelevantes
+        safeTagAttrs += ' class="' + clsVal.replace(/["<>]/g, '') + '"'
+      }
+
+      // Preserva inline styles controlados para cores de texto, caixa, tamanho de fonte e recuos
+      var styleMatch = restAttrs.match(/style\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+      if (styleMatch) {
+        var rawStyle = (styleMatch[1] || styleMatch[2] || '').trim()
+        // Remove qualquer url(), expression(), javascript:, behavior
+        rawStyle = rawStyle.replace(/url\s*\([^)]*\)/gi, '')
+        rawStyle = rawStyle.replace(/expression\s*\([^)]*\)/gi, '')
+        rawStyle = rawStyle.replace(/javascript\s*:/gi, '')
+        safeTagAttrs += ' style="' + rawStyle.replace(/"/g, '&quot;') + '"'
+      }
+
+      // Preserva atributos de dados controlados (data-campo-tipo, data-box, data-flutuante, data-lista)
+      var dataMatches = restAttrs.match(/data-[a-zA-Z0-9_-]+\s*=\s*(?:"[^"]*"|'[^']*')/gi)
+      if (dataMatches && dataMatches.length > 0) {
+        for (var d = 0; d < dataMatches.length; d++) {
+          safeTagAttrs += ' ' + dataMatches[d]
+        }
+      }
+
+      return '<' + closingSlash + tagLower + safeTagAttrs + '>'
+    },
+  )
+
+  return str
+}
+
+// ----------------------------------------------------------------------------
+// 10. POST /backend/v1/ris/exames/{id}/salvar-rascunho
+// Salva rascunho com sanitização server-side, concorrência otimista (409)
+// e autor autêntico da sessão PocketBase (@request.auth.id)
+// ----------------------------------------------------------------------------
+routerAdd('POST', '/backend/v1/ris/exames/{id}/salvar-rascunho', (c) => {
+  function sanitizar(val) {
+    if (val === null || val === undefined) return ''
+    return String(val).trim()
+  }
+
+  var auth = c.auth
+  if (!auth) {
+    return c.json(401, { erro: 'Não autorizado: faça login para editar rascunho de laudo.' })
+  }
+
+  var role = auth.getString('role')
+  if (role === 'recepcao') {
+    return c.json(403, {
+      erro: 'Acesso negado: Perfil de recepção não tem autorização para redigir ou salvar rascunhos de laudo.',
+    })
+  }
+
+  var exameId = c.request.pathValue('id')
+  var reqInfo = c.requestInfo()
+  var body = reqInfo && reqInfo.body ? reqInfo.body : {}
+
+  var conteudoFormatado =
+    body.conteudo_formatado !== undefined ? String(body.conteudo_formatado) : ''
+  var configEditor = body.config_editor || {}
+  var versaoEsperada = parseInt(body.versao_esperada, 10)
+  var resultadoSumario = sanitizar(body.resultado_sumario)
+
+  try {
+    var exameRec = c.app.findRecordById('exames', exameId)
+
+    // Laudo liberado é imutável contra sobrescrita direta de rascunho
+    var statusExame = exameRec.getString('status_ris') || exameRec.getString('status')
+    if (statusExame === 'laudado' || exameRec.getString('status') === 'liberado') {
+      return c.json(400, {
+        erro: 'LAUDO LIBERADO IMUTÁVEL: Não é permitido alterar rascunho de exame já liberado. Utilize o fluxo de retificação.',
+      })
+    }
+
+    if (statusExame === 'cancelado') {
+      return c.json(400, { erro: 'Não é possível alterar rascunho de exame cancelado.' })
+    }
+
+    // Concorrência de edição otimista (versão / conflito 409)
+    var versaoAtual = exameRec.getInt('versao_conteudo_rascunho') || 0
+    if (!isNaN(versaoEsperada) && versaoEsperada > 0 && versaoEsperada !== versaoAtual) {
+      return c.json(409, {
+        erro: 'CONFLITO_CONCORRENCIA_EDICAO: O rascunho deste laudo foi modificado por outro profissional. Atualize sua visualização antes de salvar.',
+        versao_atual_servidor: versaoAtual,
+        versao_esperada_cliente: versaoEsperada,
+      })
+    }
+
+    // Sanitização server-side obrigatória (fonte da verdade)
+    var htmlSanitizado = sanitizarHtmlServidorRIS(conteudoFormatado)
+
+    // Extrai texto puro mantendo legibilidade para compatibilidade com buscas e legado
+    var textoPuro = htmlSanitizado
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    var novaVersao = versaoAtual + 1
+    exameRec.set('conteudo_formatado_rascunho', htmlSanitizado)
+    exameRec.set('config_editor_rascunho', JSON.stringify(configEditor))
+    exameRec.set('versao_conteudo_rascunho', novaVersao)
+    exameRec.set('rascunho_laudo', textoPuro)
+    if (resultadoSumario) {
+      exameRec.set('resultado_sumario', resultadoSumario)
+    }
+
+    c.app.save(exameRec)
+
+    return c.json(200, {
+      sucesso: true,
+      mensagem: 'Rascunho formatado salvo com sanitização do servidor com sucesso.',
+      exame_id: exameId,
+      versao_conteudo_rascunho: novaVersao,
+      autor_id: auth.id,
+      autor_nome: auth.getString('name') || 'Profissional',
+    })
+  } catch (err) {
+    return c.json(400, { erro: err.message || String(err) })
+  }
+})
+
+// ----------------------------------------------------------------------------
+// 11. POST /backend/v1/ris/exames/{id}/publicar-laudo
+// Liberação formal do laudo: congela conteúdo formatado E configuração usada,
+// cria versão 1 imutável em `laudos_versoes`, autor derivado da sessão (@request.auth.id),
+// atualiza status do exame para 'laudado' / 'liberado', idempotência persistente.
+// ----------------------------------------------------------------------------
+routerAdd('POST', '/backend/v1/ris/exames/{id}/publicar-laudo', (c) => {
+  function sanitizar(val) {
+    if (val === null || val === undefined) return ''
+    return String(val).trim()
+  }
+
+  var auth = c.auth
+  if (!auth) {
+    return c.json(401, { erro: 'Não autorizado: faça login para liberar laudo no RIS.' })
+  }
+
+  var role = auth.getString('role')
+  if (role === 'recepcao') {
+    return c.json(403, {
+      erro: 'Acesso negado: Perfil de recepção não tem autorização clínica para liberar laudos médicos no RIS.',
+    })
+  }
+
+  var exameId = c.request.pathValue('id')
+  var reqInfo = c.requestInfo()
+  var body = reqInfo && reqInfo.body ? reqInfo.body : {}
+
+  var conteudoFormatado =
+    body.conteudo_formatado !== undefined ? String(body.conteudo_formatado) : ''
+  var configEditor = body.config_editor || {}
+  var resultadoSumario = sanitizar(body.resultado_sumario)
+  var idempotencyKey = sanitizar(body.idempotency_key)
+
+  if (!resultadoSumario) {
+    return c.json(400, {
+      erro: 'Parecer conclusivo / sumário do resultado é obrigatório para liberação do laudo.',
+    })
+  }
+
+  // Idempotência persistente
+  if (idempotencyKey) {
+    try {
+      var versExistentes = c.app.findRecordsByFilter(
+        'laudos_versoes',
+        'idempotency_key = {:k}',
+        '-created',
+        1,
+        0,
+        { k: idempotencyKey },
+      )
+      if (versExistentes && versExistentes.length > 0) {
+        var vOrig = versExistentes[0]
+        if (vOrig.getString('exame') !== exameId) {
+          return c.json(409, {
+            erro: 'IDEMPOTENCY_PAYLOAD_CONFLICT: A mesma chave já foi usada para outro exame.',
+          })
+        }
+        return c.json(200, {
+          sucesso: true,
+          idempotente: true,
+          mensagem: 'Laudo já publicado anteriormente para esta chave de idempotência.',
+          exame_id: exameId,
+          versao_numero: vOrig.getInt('numero_versao') || 1,
+          versao_id: vOrig.id,
+        })
+      }
+    } catch (_) {}
+  }
+
+  try {
+    var exameRec = c.app.findRecordById('exames', exameId)
+
+    if (
+      exameRec.getString('status_ris') === 'cancelado' ||
+      exameRec.getString('status') === 'cancelado'
+    ) {
+      return c.json(400, { erro: 'Não é possível publicar laudo para exame cancelado.' })
+    }
+
+    var stAnt = exameRec.getString('status_ris') || exameRec.getString('status')
+    if (stAnt === 'laudado' || exameRec.getString('status') === 'liberado') {
+      return c.json(400, {
+        erro: 'LAUDO JÁ EMITIDO: O exame já possui laudo homologado. Para emitir correções, utilize o fluxo de retificação.',
+      })
+    }
+
+    // Sanitização server-side
+    var htmlSanitizado = sanitizarHtmlServidorRIS(conteudoFormatado)
+    if (!htmlSanitizado || htmlSanitizado.trim().length === 0) {
+      // Se não veio no body, busca do rascunho prévio sanitizado
+      htmlSanitizado = exameRec.getString('conteudo_formatado_rascunho') || ''
+    }
+    if (!htmlSanitizado || htmlSanitizado.trim().length === 0) {
+      return c.json(400, { erro: 'Conteúdo do laudo não pode ser vazio para homologação.' })
+    }
+
+    var textoPuro = htmlSanitizado
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    // Consulta imagens anexas ativas vinculadas a este exame para snapshot congelado
+    var imagensSnapshot = []
+    try {
+      var imgRecs = c.app.findRecordsByFilter(
+        'ris_imagens_anexas',
+        'exame = {:exId}',
+        'ordem',
+        50,
+        0,
+        { exId: exameId },
+      )
+      for (var i = 0; i < imgRecs.length; i++) {
+        var im = imgRecs[i]
+        imagensSnapshot.push({
+          id: im.id,
+          arquivo: im.getString('arquivo'),
+          legenda: im.getString('legenda'),
+          ordem: im.getInt('ordem') || i + 1,
+          mime_type: im.getString('mime_type'),
+          tamanho_bytes: im.getInt('tamanho_bytes') || 0,
+        })
+      }
+    } catch (_) {}
+
+    var agora = new Date()
+    var dataLaudo = agora.toISOString().slice(0, 10) + ' ' + agora.toTimeString().slice(0, 5)
+    var autorNome = auth.getString('name') || 'Médico Radiologista'
+    var autorCargo = auth.getString('cargo') || auth.getString('role')
+    var autorId = auth.id
+
+    // Busca vínculo com profissionais se existir
+    var profResponsavelId = ''
+    try {
+      var profs = c.app.findRecordsByFilter(
+        'profissionais',
+        'email = {:em} || nome = {:nm}',
+        '-created',
+        1,
+        0,
+        { em: auth.getString('email') || '', nm: autorNome },
+      )
+      if (profs && profs.length > 0) {
+        profResponsavelId = profs[0].id
+      }
+    } catch (_) {}
+
+    // Grava atomicamente na coleção `laudos_versoes` com snapshot imutável
+    var colVersoes = c.app.findCollectionByNameOrId('laudos_versoes')
+    var novaVersao = new Record(colVersoes)
+    novaVersao.set('exame', exameId)
+    novaVersao.set('numero_versao', 1)
+    novaVersao.set('resultado_sumario', resultadoSumario)
+    novaVersao.set('laudo_texto', textoPuro)
+    novaVersao.set('conteudo_formatado', htmlSanitizado)
+    novaVersao.set('config_editor_snapshot', JSON.stringify(configEditor))
+    novaVersao.set('imagens_anexas_snapshot', JSON.stringify(imagensSnapshot))
+    novaVersao.set('responsavel_laudo', profResponsavelId || null)
+    novaVersao.set('responsavel_laudo_nome', autorNome)
+    novaVersao.set('responsavel_laudo_cargo', autorCargo)
+    novaVersao.set('data_laudo', dataLaudo)
+    novaVersao.set('usuario_id', autorId)
+    novaVersao.set('motivo_retificacao', 'Homologação e liberação inicial do laudo RIS')
+    if (idempotencyKey) {
+      novaVersao.set('idempotency_key', idempotencyKey)
+    }
+    c.app.save(novaVersao)
+
+    // Atualiza exame principal para estado liberado
+    exameRec.set('status_ris', 'laudado')
+    exameRec.set('status', 'liberado')
+    exameRec.set('resultado_sumario', resultadoSumario)
+    exameRec.set('laudo_texto', textoPuro)
+    exameRec.set('conteudo_formatado_rascunho', htmlSanitizado)
+    exameRec.set('versao_atual', 1)
+    exameRec.set('data_laudo', dataLaudo)
+    exameRec.set('responsavel_laudo', profResponsavelId || null)
+    exameRec.set('responsavel_laudo_nome', autorNome)
+    c.app.save(exameRec)
+
+    // Trilha auditável
+    try {
+      var colHist = c.app.findCollectionByNameOrId('ris_historico_transicoes')
+      var hRec = new Record(colHist)
+      hRec.set('exame', exameId)
+      hRec.set('status_anterior', stAnt)
+      hRec.set('status_novo', 'laudado')
+      hRec.set(
+        'motivo_justificativa',
+        'Liberação formal do laudo no módulo RIS (Versão 1 congelada)',
+      )
+      hRec.set('usuario_autor_id', autorId)
+      hRec.set('usuario_autor_nome', autorNome)
+      hRec.set('usuario_cargo', autorCargo)
+      hRec.set('data_hora', dataLaudo)
+      hRec.set(
+        'detalhes',
+        JSON.stringify({
+          versao_id: novaVersao.id,
+          versao_numero: 1,
+          resultado_sumario: resultadoSumario,
+          total_imagens_anexadas: imagensSnapshot.length,
+        }),
+      )
+      c.app.save(hRec)
+    } catch (_) {}
+
+    return c.json(201, {
+      sucesso: true,
+      mensagem: 'Laudo RIS publicado e congelado na Versão 1 com sucesso.',
+      exame_id: exameId,
+      versao_id: novaVersao.id,
+      versao_numero: 1,
+      status_ris: 'laudado',
+      data_laudo: dataLaudo,
+      responsavel_nome: autorNome,
+    })
+  } catch (err) {
+    return c.json(400, { erro: err.message || String(err) })
+  }
+})
+
+// ----------------------------------------------------------------------------
+// 12. POST /backend/v1/ris/exames/{id}/retificar-laudo
+// Retificação formal: cria NOVA versão em `laudos_versoes`, NUNCA altera nem sobrescreve
+// as versões emitidas anteriores (preservando histórico imutável da v0.0.59),
+// exige justificativa clínica e autor da sessão autenticada.
+// ----------------------------------------------------------------------------
+routerAdd('POST', '/backend/v1/ris/exames/{id}/retificar-laudo', (c) => {
+  function sanitizar(val) {
+    if (val === null || val === undefined) return ''
+    return String(val).trim()
+  }
+
+  var auth = c.auth
+  if (!auth) {
+    return c.json(401, { erro: 'Não autorizado: faça login para retificar laudo.' })
+  }
+
+  var role = auth.getString('role')
+  if (role === 'recepcao') {
+    return c.json(403, {
+      erro: 'Acesso negado: Perfil de recepção não tem autorização para retificar laudos.',
+    })
+  }
+
+  var exameId = c.request.pathValue('id')
+  var reqInfo = c.requestInfo()
+  var body = reqInfo && reqInfo.body ? reqInfo.body : {}
+
+  var conteudoFormatado =
+    body.conteudo_formatado !== undefined ? String(body.conteudo_formatado) : ''
+  var configEditor = body.config_editor || {}
+  var resultadoSumario = sanitizar(body.resultado_sumario)
+  var motivoRetificacao = sanitizar(body.motivo_retificacao)
+  var idempotencyKey = sanitizar(body.idempotency_key)
+
+  if (!motivoRetificacao || motivoRetificacao.length < 5) {
+    return c.json(400, {
+      erro: 'JUSTIFICATIVA OBRIGATÓRIA: A retificação de laudo exige justificativa clínica detalhada (mínimo 5 caracteres).',
+    })
+  }
+
+  if (!resultadoSumario) {
+    return c.json(400, {
+      erro: 'Parecer conclusivo / sumário do resultado é obrigatório para nova versão do laudo.',
+    })
+  }
+
+  // Idempotência
+  if (idempotencyKey) {
+    try {
+      var versExistentes = c.app.findRecordsByFilter(
+        'laudos_versoes',
+        'idempotency_key = {:k}',
+        '-created',
+        1,
+        0,
+        { k: idempotencyKey },
+      )
+      if (versExistentes && versExistentes.length > 0) {
+        var vOrig = versExistentes[0]
+        if (vOrig.getString('exame') !== exameId) {
+          return c.json(409, {
+            erro: 'IDEMPOTENCY_PAYLOAD_CONFLICT: A chave já foi usada para outro exame.',
+          })
+        }
+        return c.json(200, {
+          sucesso: true,
+          idempotente: true,
+          mensagem: 'Retificação já registrada para esta chave de idempotência.',
+          exame_id: exameId,
+          versao_numero: vOrig.getInt('numero_versao'),
+          versao_id: vOrig.id,
+        })
+      }
+    } catch (_) {}
+  }
+
+  try {
+    var exameRec = c.app.findRecordById('exames', exameId)
+
+    if (
+      exameRec.getString('status_ris') === 'cancelado' ||
+      exameRec.getString('status') === 'cancelado'
+    ) {
+      return c.json(400, { erro: 'Não é possível retificar exame cancelado.' })
+    }
+
+    // Busca histórico de versões para determinar próxima versão
+    var versoesAnteriores = c.app.findRecordsByFilter(
+      'laudos_versoes',
+      'exame = {:exId}',
+      '-numero_versao',
+      100,
+      0,
+      { exId: exameId },
+    )
+
+    var maiorVersao = 1
+    var versaoAnteriorId = ''
+    if (versoesAnteriores && versoesAnteriores.length > 0) {
+      maiorVersao = versoesAnteriores[0].getInt('numero_versao') || 1
+      versaoAnteriorId = versoesAnteriores[0].id
+    }
+    var proximaVersao = maiorVersao + 1
+
+    // Sanitização server-side
+    var htmlSanitizado = sanitizarHtmlServidorRIS(conteudoFormatado)
+    var textoPuro = htmlSanitizado
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    // Snapshot das imagens anexas ativas vinculadas
+    var imagensSnapshot = []
+    try {
+      var imgRecs = c.app.findRecordsByFilter(
+        'ris_imagens_anexas',
+        'exame = {:exId}',
+        'ordem',
+        50,
+        0,
+        { exId: exameId },
+      )
+      for (var i = 0; i < imgRecs.length; i++) {
+        var im = imgRecs[i]
+        imagensSnapshot.push({
+          id: im.id,
+          arquivo: im.getString('arquivo'),
+          legenda: im.getString('legenda'),
+          ordem: im.getInt('ordem') || i + 1,
+          mime_type: im.getString('mime_type'),
+          tamanho_bytes: im.getInt('tamanho_bytes') || 0,
+        })
+      }
+    } catch (_) {}
+
+    var agora = new Date()
+    var dataLaudo = agora.toISOString().slice(0, 10) + ' ' + agora.toTimeString().slice(0, 5)
+    var autorNome = auth.getString('name') || 'Médico Radiologista'
+    var autorCargo = auth.getString('cargo') || auth.getString('role')
+    var autorId = auth.id
+
+    var profResponsavelId = ''
+    try {
+      var profs = c.app.findRecordsByFilter(
+        'profissionais',
+        'email = {:em} || nome = {:nm}',
+        '-created',
+        1,
+        0,
+        { em: auth.getString('email') || '', nm: autorNome },
+      )
+      if (profs && profs.length > 0) {
+        profResponsavelId = profs[0].id
+      }
+    } catch (_) {}
+
+    // Cria NOVA versão (sem alterar o registro da versão anterior!)
+    var colVersoes = c.app.findCollectionByNameOrId('laudos_versoes')
+    var novaVersaoRec = new Record(colVersoes)
+    novaVersaoRec.set('exame', exameId)
+    novaVersaoRec.set('numero_versao', proximaVersao)
+    novaVersaoRec.set('versao_anterior_id', versaoAnteriorId)
+    novaVersaoRec.set('motivo_retificacao', motivoRetificacao)
+    novaVersaoRec.set('resultado_sumario', resultadoSumario)
+    novaVersaoRec.set('laudo_texto', textoPuro)
+    novaVersaoRec.set('conteudo_formatado', htmlSanitizado)
+    novaVersaoRec.set('config_editor_snapshot', JSON.stringify(configEditor))
+    novaVersaoRec.set('imagens_anexas_snapshot', JSON.stringify(imagensSnapshot))
+    novaVersaoRec.set('responsavel_laudo', profResponsavelId || null)
+    novaVersaoRec.set('responsavel_laudo_nome', autorNome)
+    novaVersaoRec.set('responsavel_laudo_cargo', autorCargo)
+    novaVersaoRec.set('data_laudo', dataLaudo)
+    novaVersaoRec.set('usuario_id', autorId)
+    if (idempotencyKey) {
+      novaVersaoRec.set('idempotency_key', idempotencyKey)
+    }
+    c.app.save(novaVersaoRec)
+
+    // Atualiza exame principal para apontar para a versão vigente e marcar retificação
+    exameRec.set('versao_atual', proximaVersao)
+    exameRec.set('tem_retificacao', true)
+    exameRec.set('resultado_sumario', resultadoSumario)
+    exameRec.set('laudo_texto', textoPuro)
+    exameRec.set('conteudo_formatado_rascunho', htmlSanitizado)
+    exameRec.set('data_laudo', dataLaudo)
+    exameRec.set('responsavel_laudo', profResponsavelId || null)
+    exameRec.set('responsavel_laudo_nome', autorNome)
+    c.app.save(exameRec)
+
+    // Trilha auditável
+    try {
+      var colHist = c.app.findCollectionByNameOrId('ris_historico_transicoes')
+      var hRec = new Record(colHist)
+      hRec.set('exame', exameId)
+      hRec.set('status_anterior', 'laudado')
+      hRec.set('status_novo', 'laudado')
+      hRec.set(
+        'motivo_justificativa',
+        'Retificação de Laudo: Versão ' + proximaVersao + ' — ' + motivoRetificacao,
+      )
+      hRec.set('usuario_autor_id', autorId)
+      hRec.set('usuario_autor_nome', autorNome)
+      hRec.set('usuario_cargo', autorCargo)
+      hRec.set('data_hora', dataLaudo)
+      hRec.set(
+        'detalhes',
+        JSON.stringify({
+          versao_nova_id: novaVersaoRec.id,
+          versao_anterior_id: versaoAnteriorId,
+          numero_versao: proximaVersao,
+          motivo_retificacao: motivoRetificacao,
+        }),
+      )
+      c.app.save(hRec)
+    } catch (_) {}
+
+    return c.json(201, {
+      sucesso: true,
+      mensagem:
+        'Laudo retificado com sucesso criando Versão ' +
+        proximaVersao +
+        ' sem alterar as emitidas anteriores.',
+      exame_id: exameId,
+      versao_id: novaVersaoRec.id,
+      versao_numero: proximaVersao,
+      versao_anterior_id: versaoAnteriorId,
+      data_laudo: dataLaudo,
+      responsavel_nome: autorNome,
+    })
+  } catch (err) {
+    return c.json(400, { erro: err.message || String(err) })
+  }
+})
+
+// ----------------------------------------------------------------------------
+// 13. GET /backend/v1/ris/exames/{id}/previa-laudo
+// Serve prévia fiel do laudo formatado com layout municipal de impressão assistencial,
+// dados do paciente, histórico de versões e imagens anexas vinculadas.
+// Recepção é estritamente bloqueada.
+// ----------------------------------------------------------------------------
+routerAdd('GET', '/backend/v1/ris/exames/{id}/previa-laudo', (c) => {
+  var auth = c.auth
+  if (!auth) {
+    return c.json(401, { erro: 'Não autorizado.' })
+  }
+
+  var role = auth.getString('role')
+  if (role === 'recepcao') {
+    return c.json(403, {
+      erro: 'Acesso negado: Perfil de recepção não tem acesso aos dados clínicos do laudo.',
+    })
+  }
+
+  var exameId = c.request.pathValue('id')
+
+  try {
+    var exameRec = c.app.findRecordById('exames', exameId)
+    var pacienteId = exameRec.getString('paciente')
+    var pacRec = c.app.findRecordById('pacientes', pacienteId)
+
+    // Busca versão vigente ou rascunho
+    var versoes = c.app.findRecordsByFilter(
+      'laudos_versoes',
+      'exame = {:exId}',
+      '-numero_versao',
+      50,
+      0,
+      { exId: exameId },
+    )
+
+    var versaoVigente = versoes && versoes.length > 0 ? versoes[0] : null
+
+    var conteudoHtml = ''
+    var configEditor = {}
+    var imagens = []
+
+    if (versaoVigente) {
+      conteudoHtml =
+        versaoVigente.getString('conteudo_formatado') || versaoVigente.getString('laudo_texto')
+      var cfgRaw = versaoVigente.getString('config_editor_snapshot')
+      if (cfgRaw) {
+        try {
+          configEditor = JSON.parse(cfgRaw)
+        } catch (_) {}
+      }
+      var imgRaw = versaoVigente.getString('imagens_anexas_snapshot')
+      if (imgRaw) {
+        try {
+          imagens = JSON.parse(imgRaw)
+        } catch (_) {}
+      }
+    } else {
+      // Prévia de rascunho antes da publicação
+      conteudoHtml =
+        exameRec.getString('conteudo_formatado_rascunho') || exameRec.getString('rascunho_laudo')
+      var cfgRascRaw = exameRec.getString('config_editor_rascunho')
+      if (cfgRascRaw) {
+        try {
+          configEditor = JSON.parse(cfgRascRaw)
+        } catch (_) {}
+      }
+      // Busca imagens anexas vinculadas
+      try {
+        var imList = c.app.findRecordsByFilter(
+          'ris_imagens_anexas',
+          'exame = {:exId}',
+          'ordem',
+          50,
+          0,
+          { exId: exameId },
+        )
+        for (var i = 0; i < imList.length; i++) {
+          var imObj = imList[i]
+          imagens.push({
+            id: imObj.id,
+            arquivo: imObj.getString('arquivo'),
+            legenda: imObj.getString('legenda'),
+            ordem: imObj.getInt('ordem') || i + 1,
+            mime_type: imObj.getString('mime_type'),
+          })
+        }
+      } catch (_) {}
+    }
+
+    var historicoFormatado = []
+    if (versoes && versoes.length > 0) {
+      for (var v = 0; v < versoes.length; v++) {
+        var ver = versoes[v]
+        historicoFormatado.push({
+          id: ver.id,
+          numero_versao: ver.getInt('numero_versao'),
+          data_laudo: ver.getString('data_laudo'),
+          responsavel_laudo_nome: ver.getString('responsavel_laudo_nome'),
+          responsavel_laudo_cargo: ver.getString('responsavel_laudo_cargo'),
+          motivo_retificacao: ver.getString('motivo_retificacao'),
+          versao_anterior_id: ver.getString('versao_anterior_id'),
+        })
+      }
+    }
+
+    return c.json(200, {
+      sucesso: true,
+      exame_id: exameId,
+      paciente: {
+        id: pacRec.id,
+        nome: pacRec.getString('nome'),
+        cpf_mascarado: pacRec.getString('cpf')
+          ? pacRec.getString('cpf').replace(/(\d{3})\d{5}(\d{2})/, '$1.***.**$2')
+          : '',
+        cns_mascarado: pacRec.getString('cartao_sus')
+          ? pacRec.getString('cartao_sus').replace(/(\d{3})\d{8}(\d{4})/, '$1.****.****.$2')
+          : '',
+        data_nascimento: pacRec.getString('data_nascimento'),
+        sexo: pacRec.getString('sexo'),
+        tipo_sanguineo: pacRec.getString('tipo_sanguineo'),
+        alergias: pacRec.getString('alergias'),
+      },
+      exame: {
+        tipo_exame: exameRec.getString('tipo_exame'),
+        modalidade_ris: exameRec.getString('modalidade_ris') || 'outro',
+        data_solicitacao: exameRec.getString('data_solicitacao'),
+        solicitante_nome: exameRec.getString('solicitante_nome'),
+        status_ris: exameRec.getString('status_ris') || exameRec.getString('status'),
+        data_laudo: exameRec.getString('data_laudo'),
+        responsavel_laudo_nome: exameRec.getString('responsavel_laudo_nome'),
+        resultado_sumario: exameRec.getString('resultado_sumario'),
+        versao_vigente: exameRec.getInt('versao_atual') || 1,
+        tem_retificacao: exameRec.getBool('tem_retificacao'),
+        tipo_execucao: exameRec.getString('tipo_execucao') || 'interno',
+        prestador_externo_nome: exameRec.getString('prestador_externo_nome'),
+      },
+      previa: {
+        tipo_conteudo: versaoVigente ? 'publicado' : 'rascunho',
+        conteudo_formatado_sanitizado: conteudoHtml,
+        config_editor: configEditor,
+        imagens_anexas: imagens,
+        historico_versoes: historicoFormatado,
+        unidade_nome: 'Hospital Municipal de Mirante da Serra',
+        municipio_uf: 'Mirante da Serra - RO',
+        aviso_legal:
+          'Documento clínico assistencial oficial emitido no Sistema Hospitalar Municipal. Válido com assinatura física ou carimbo profissional. Não constitui certificação ICP-Brasil.',
+      },
     })
   } catch (err) {
     return c.json(400, { erro: err.message || String(err) })
