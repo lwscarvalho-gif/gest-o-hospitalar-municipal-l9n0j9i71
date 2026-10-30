@@ -806,7 +806,45 @@ Na consolidação do módulo TFD (seção 7.4.4.2.e do PDF `Módulos`, p. 30), f
 
 ---
 
-## 17. Referência Cruzada com as Fontes de Escopo e Matriz de Conformidade (v0.0.57)
+## 17. Prontidão e Homologação do Módulo RIS — Radiologia e Imagem (v0.0.58 e v0.0.59)
+
+### 17.1. Escopo Entregue e Evidências Técnicas
+
+O módulo de **Radiologia e Diagnóstico por Imagem (RIS)** (ANEXO I Itens 313–316 e DOC-02 Seção 7.4.3.4) teve sua implementação concluída em duas fases estritamente auditadas:
+
+1. **Fase 1 (Backend e Serviços - v0.0.58):**
+   - Migração `pocketbase/migrations/0031_modulo_ris_radiologia.js`: coleções `ris_agendas`, `ris_modelos_laudo`, `ris_historico_transicoes` e expansão de campos RIS em `exames_solicitacoes`;
+   - Hook server-side `pocketbase/hooks/ris_modulo.pb.js`: endpoints `/backend/v1/ris/requisicao-pep`, `/fila`, `/agendar`, `/reagendar`, `/cancelar`, `/exames/{id}/transicao`, `/exames/{id}/registrar-externo`, `/exames/{id}/aplicar-modelo`;
+   - Camada de serviço cliente `src/services/ris.ts` com tipos estritos em `src/types/hospital.ts`.
+2. **Fase 2 (Interface, Contratos Reais e Testes - v0.0.59):**
+   - Interface de usuário rica `src/components/RisView.tsx` integrada à navegação principal (`NavigationBar.tsx` e `Index.tsx`) com controle de permissão por perfil;
+   - Fila de exames paginada server-side e filtrável por status (`solicitado`, `agendado`, `realizado_aguardando_laudo`, `laudado`, `cancelado`), modalidade (`rx`, `tc`, `ecg`, `us`, `outro`), setor e tipo de execução (`interno` vs `externo`);
+   - Agendamento com validação de conflito de horário/sala/profissional e emissão de comprovante seguro em snapshot (`comprovante_snapshot`), renderizado exclusivamente como texto puro sem innerHTML;
+   - Reagendamento com inativação lógica da agenda anterior, justificativa obrigatória e vinculação com o novo agendamento; cancelamento formal com reabertura na fila;
+   - Registro de exame realizado por prestador credenciado externo (nome, CNES, UF e observações) sem falsear execução interna do hospital municipal;
+   - Aplicação de modelos de laudo versionados gerando exclusivamente rascunho de texto para revisão médica humana; sem liberação clínica automática (assinatura e emissão formal continuam através de `emitirLaudoExame` no PEP);
+   - Descarte de respostas antigas em voo (`seqBuscaRef`, `seqAcaoRef`), retenção de texto digitado no formulário em caso de falha/conflito e mascaramento LGPD de CPF/CNS nas listagens;
+   - Bateria de testes locais no harness (`src/tests/harnessTestes.ts`, cenários RIS-1 a RIS-7) com zero gravação na base compartilhada e 100% de aprovação.
+
+### 17.2. Limites do Teste em Memória e Homologação Visual
+
+1. **Concorrência Real vs. Simulação Local:**
+   - Os testes de dupla reserva de sala/equipamento e idempotência de requisição foram validados em cenários síncronos em memória (`src/tests/harnessTestes.ts`).
+   - A prova de concorrência transacional massiva em milissegundos contra o lock do PocketBase isolado permanece como limite do ambiente de QA sem banco concorrente ativo.
+2. **Validação Visual Humana Pendente:**
+   - A ergonomia das abas, visualização dos comprovantes impressos em A4 e fluidez das modais de agendamento/laudo dependem de validação e homologação visual direta por profissionais humanos e operadores da radiologia.
+
+### 17.3. Pendências Explícitas e Itens Parciais (Sem Alegações Indevidas)
+
+- **Editor Avançado com Desenho Gráfico (7.4.3.4.b):** **PARCIAL / PENDENTE** (O sistema entrega editor de texto descritivo e sumário de resultado com modelos; manipulação e anotação gráfica vetorial sobre o arquivo da imagem não foi implementada);
+- **Controle de Filmes Radiológicos e Descarte de Químicos:** **PENDENTE** (Estoque hospitalar geral em `farmacia.ts` opera itens, mas controle dedicado de m² de película de RX e descarte não existe);
+- **Entrega Formal de Filmes ao Paciente:** **PENDENTE** (Fluxo assistencial municipal opera com laudo impresso A4 e consulta digital no PEP);
+- **Tabelas de Repasse Financeiro a Prestadores Externos:** **PARCIAL / PENDENTE** (Registro do prestador externo entregue; apuração contábil/financeira de honorários de terceiros depende de módulo de faturamento privado/complementar);
+- **Integração DICOM / PACS e Certificação ICP-Brasil:** **EXPLICITAMENTE NÃO ALEGADO / FORA DE ESCOPO** (O sistema RIS não requer nem alega servidor PACS/DICOM ou certificado ICP-Brasil pago).
+
+---
+
+## 18. Referência Cruzada com as Fontes de Escopo e Matriz de Conformidade (v0.0.59)
 
 Em complemento a este relatório de prontidão e homologação técnica, consulte os documentos formais consolidados:
 

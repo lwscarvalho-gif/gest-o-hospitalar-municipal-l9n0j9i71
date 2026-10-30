@@ -26,6 +26,7 @@ import { MensageriaInternaView } from '@/components/MensageriaInternaView'
 import { ApacView } from '@/components/ApacView'
 import { TransporteView } from '@/components/TransporteView'
 import { TfdView } from '@/components/TfdView'
+import { RisView } from '@/components/RisView'
 import { verificarInvariantesFuncionais } from '@/tests'
 import { Loader2 } from 'lucide-react'
 
@@ -149,6 +150,15 @@ const Index: React.FC = () => {
         {activeTab === 'vigilancia_saude' &&
           temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && (
             <VigilanciaSaudeView
+              onNavegarSAME={(pacienteId) => {
+                if (pacienteId) setFocoPacienteId(pacienteId)
+                setActiveTab('prontuario_same')
+              }}
+            />
+          )}
+        {activeTab === 'ris_radiologia' &&
+          temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && (
+            <RisView
               onNavegarSAME={(pacienteId) => {
                 if (pacienteId) setFocoPacienteId(pacienteId)
                 setActiveTab('prontuario_same')

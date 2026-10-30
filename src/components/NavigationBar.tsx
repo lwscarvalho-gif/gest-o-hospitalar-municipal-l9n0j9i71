@@ -28,6 +28,7 @@ import {
   Share2,
   Mail,
   Bus,
+  Camera,
 } from 'lucide-react'
 
 export type ActiveTab =
@@ -42,6 +43,7 @@ export type ActiveTab =
   | 'centro_cirurgico'
   | 'centro_obstetrico'
   | 'vigilancia_saude'
+  | 'ris_radiologia'
   | 'prontuario_same'
   | 'faturamento_sus'
   | 'exames_laudos'
@@ -131,6 +133,12 @@ const NAV_ITEMS: NavItem[] = [
     allowedRoles: ['admin', 'gestor', 'profissional'],
   },
   {
+    id: 'ris_radiologia',
+    label: 'Radiologia & Imagem (RIS)',
+    icon: Camera,
+    allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
+  },
+  {
     id: 'faturamento_sus',
     label: 'Faturamento SUS',
     icon: Receipt,
@@ -138,7 +146,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     id: 'exames_laudos',
-    label: 'Exames & Laudos',
+    label: 'Exames Laboratoriais',
     icon: FlaskConical,
     allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
   },
