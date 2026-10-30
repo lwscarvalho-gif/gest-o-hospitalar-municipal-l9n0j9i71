@@ -35,6 +35,7 @@ export type ActiveTab =
   | 'pronto_atendimento'
   | 'mensageria'
   | 'regulacao'
+  | 'apac'
   | 'centro_cirurgico'
   | 'centro_obstetrico'
   | 'vigilancia_saude'
@@ -88,6 +89,12 @@ const NAV_ITEMS: NavItem[] = [
     id: 'regulacao',
     label: 'Central de Regulação',
     icon: Share2,
+    allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
+  },
+  {
+    id: 'apac',
+    label: 'APAC (Alta Complexidade)',
+    icon: FileText,
     allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
   },
   {

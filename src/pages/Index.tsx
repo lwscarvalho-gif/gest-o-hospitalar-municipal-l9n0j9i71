@@ -23,6 +23,7 @@ import { FaturamentoView } from '@/components/FaturamentoView'
 import { VigilanciaSaudeView } from '@/components/VigilanciaSaudeView'
 import { RegulacaoView } from '@/components/RegulacaoView'
 import { MensageriaInternaView } from '@/components/MensageriaInternaView'
+import { ApacView } from '@/components/ApacView'
 import { verificarInvariantesFuncionais } from '@/tests'
 import { Loader2 } from 'lucide-react'
 
@@ -113,6 +114,14 @@ const Index: React.FC = () => {
               }}
             />
           )}
+        {activeTab === 'apac' && temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && (
+          <ApacView
+            onNavegarSAME={(pacienteId) => {
+              if (pacienteId) setFocoPacienteId(pacienteId)
+              setActiveTab('prontuario_same')
+            }}
+          />
+        )}
         {activeTab === 'centro_cirurgico' &&
           temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && <CentroCirurgicoView />}
         {activeTab === 'centro_obstetrico' &&
