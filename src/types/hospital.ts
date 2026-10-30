@@ -1343,6 +1343,64 @@ export interface SolicitacaoRegulacaoResumoAdmin {
   updated: string
 }
 
+// -------------------------------------------------------------
+// GESTÃO ADMINISTRATIVA DA REGULAÇÃO: CATÁLOGO PARAMETRIZÁVEL & TEMPOS
+// -------------------------------------------------------------
+export type CategoriaRecursoRegulacao = 'leito' | 'especialidade' | 'procedimento' | 'suporte'
+
+export interface ItemCatalogoRecurso {
+  id: string
+  codigo: string
+  nome: string
+  categoria: CategoriaRecursoRegulacao
+  descricao?: string
+  ativo: boolean
+  tempo_alvo_minutos?: number
+  ordem?: number
+  created: string
+  updated: string
+}
+
+export type TipoDestinoInterno =
+  | 'enfermaria'
+  | 'uti'
+  | 'centro_cirurgico'
+  | 'ambulatorio'
+  | 'isolamento'
+  | 'outro'
+
+export interface ItemDestinoInterno {
+  id: string
+  codigo: string
+  nome: string
+  tipo: TipoDestinoInterno
+  setor_vinculado?: string
+  bloco_ala?: string
+  capacidade_operacional?: number
+  ativo: boolean
+  observacoes?: string
+  ordem?: number
+  expand?: {
+    setor_vinculado?: Setor
+  }
+  created: string
+  updated: string
+}
+
+/**
+ * Resultado do cálculo de tempo de espera individual de uma solicitação de regulação
+ */
+export interface CalculoTempoEspera {
+  minutosEsperaTotal: number
+  minutosEsperaLiquida: number // Descontadas eventuais pausas
+  tempoFormatado: string
+  dataOrigemIso: string
+  dataFimIso?: string
+  statusRelogio: 'ativo' | 'pausado' | 'concluido' | 'cancelado' | 'indeterminado'
+  alertaAtraso?: boolean
+  detalhesCalculo: string
+}
+
 export interface FichaProntoAtendimento {
   id: string
   paciente: string

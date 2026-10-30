@@ -9,7 +9,16 @@ import {
   SituacaoRegulacao,
   DecisaoRegulador,
   ItemTransicaoRegulacao,
+  ItemCatalogoRecurso,
+  ItemDestinoInterno,
+  CategoriaRecursoRegulacao,
+  TipoDestinoInterno,
 } from '@/types/hospital'
+import {
+  calcularTempoEsperaIndividual,
+  formatarMinutosEspera,
+  FUSO_HORARIO_REGULACAO,
+} from './regulacaoRelogio'
 import { registrarAuditoria } from './auditoria'
 import { atualizarLeito } from './cadastros'
 import { transferirLeito } from './internacoes'
@@ -587,6 +596,183 @@ export async function cancelarSolicitacaoRegulacao(
 // -------------------------------------------------------------
 // INDICADORES AGREGADOS DA REGULAÇÃO (SEM DADOS PESSOAIS)
 // -------------------------------------------------------------
+// -------------------------------------------------------------
+// CATÁLOGO DE RECURSOS / ESPECIALIDADES E DESTINOS INTERNOS
+// -------------------------------------------------------------
+
+export async function listarCatalogoRecursos(apenasAtivos = false): Promise<ItemCatalogoRecurso[]> {
+  const filter = apenasAtivos ? 'ativo = true' : ''
+  const records = await pb
+    .collection('regulacao_catalogo_recursos')
+    .getFullList<ItemCatalogoRecurso>({
+      filter,
+      sort: 'ordem,nome',
+    })
+  return records
+}
+
+export async function alternarStatusRecurso(
+  id: string,
+  ativo: boolean,
+  usuarioNome: string,
+): Promise<ItemCatalogoRecurso> {
+  const record = await pb
+    .collection('regulacao_catalogo_recursos')
+    .update<ItemCatalogoRecurso>(id, {
+      ativo,
+    })
+
+  await registrarAuditoria({
+    acao: ativo ? 'CATALOGO_RECURSO_ATIVADO' : 'CATALOGO_RECURSO_INATIVADO',
+    modulo: 'Central de Regulação',
+    detalhes: `Recurso "${record.nome}" (${record.codigo}) foi ${ativo ? 'ativado' : 'inativado'} por ${usuarioNome}. Histórico preservado.`,
+    registro_id: id,
+  })
+
+  return record
+}
+
+export async function salvarItemRecurso(dados: {
+  id?: string
+  codigo: string
+  nome: string
+  categoria: CategoriaRecursoRegulacao
+  descricao?: string
+  ativo: boolean
+  tempo_alvo_minutos?: number
+  ordem?: number
+  usuarioNome: string
+}): Promise<ItemCatalogoRecurso> {
+  let record: ItemCatalogoRecurso
+  if (dados.id) {
+    record = await pb
+      .collection('regulacao_catalogo_recursos')
+      .update<ItemCatalogoRecurso>(dados.id, {
+        nome: dados.nome,
+        categoria: dados.categoria,
+        descricao: dados.descricao || '',
+        ativo: dados.ativo,
+        tempo_alvo_minutos: dados.tempo_alvo_minutos || 120,
+        ordem: dados.ordem || 10,
+      })
+  } else {
+    record = await pb.collection('regulacao_catalogo_recursos').create<ItemCatalogoRecurso>({
+      codigo: dados.codigo,
+      nome: dados.nome,
+      categoria: dados.categoria,
+      descricao: dados.descricao || '',
+      ativo: dados.ativo,
+      tempo_alvo_minutos: dados.tempo_alvo_minutos || 120,
+      ordem: dados.ordem || 10,
+    })
+  }
+
+  await registrarAuditoria({
+    acao: dados.id ? 'CATALOGO_RECURSO_ATUALIZADO' : 'CATALOGO_RECURSO_CRIADO',
+    modulo: 'Central de Regulação',
+    detalhes: `Recurso "${record.nome}" (${record.codigo}) salvo por ${dados.usuarioNome}.`,
+    registro_id: record.id,
+  })
+
+  return record
+}
+
+export async function listarDestinosInternos(apenasAtivos = false): Promise<ItemDestinoInterno[]> {
+  const filter = apenasAtivos ? 'ativo = true' : ''
+  const records = await pb
+    .collection('regulacao_destinos_internos')
+    .getFullList<ItemDestinoInterno>({
+      filter,
+      sort: 'ordem,nome',
+      expand: 'setor_vinculado',
+    })
+  return records
+}
+
+export async function alternarStatusDestino(
+  id: string,
+  ativo: boolean,
+  usuarioNome: string,
+): Promise<ItemDestinoInterno> {
+  const record = await pb.collection('regulacao_destinos_internos').update<ItemDestinoInterno>(id, {
+    ativo,
+  })
+
+  await registrarAuditoria({
+    acao: ativo ? 'DESTINO_INTERNO_ATIVADO' : 'DESTINO_INTERNO_INATIVADO',
+    modulo: 'Central de Regulação',
+    detalhes: `Destino interno "${record.nome}" (${record.codigo}) foi ${ativo ? 'ativado' : 'inativado'} por ${usuarioNome}. Histórico de solicitações antigas preservado.`,
+    registro_id: id,
+  })
+
+  return record
+}
+
+export async function salvarDestinoInterno(dados: {
+  id?: string
+  codigo: string
+  nome: string
+  tipo: TipoDestinoInterno
+  setor_vinculado?: string
+  bloco_ala?: string
+  capacidade_operacional?: number
+  ativo: boolean
+  observacoes?: string
+  ordem?: number
+  usuarioNome: string
+}): Promise<ItemDestinoInterno> {
+  let record: ItemDestinoInterno
+  if (dados.id) {
+    record = await pb
+      .collection('regulacao_destinos_internos')
+      .update<ItemDestinoInterno>(dados.id, {
+        nome: dados.nome,
+        tipo: dados.tipo,
+        setor_vinculado: dados.setor_vinculado || '',
+        bloco_ala: dados.bloco_ala || '',
+        capacidade_operacional: dados.capacidade_operacional || 10,
+        ativo: dados.ativo,
+        observacoes: dados.observacoes || '',
+        ordem: dados.ordem || 10,
+      })
+  } else {
+    record = await pb.collection('regulacao_destinos_internos').create<ItemDestinoInterno>({
+      codigo: dados.codigo,
+      nome: dados.nome,
+      tipo: dados.tipo,
+      setor_vinculado: dados.setor_vinculado || '',
+      bloco_ala: dados.bloco_ala || '',
+      capacidade_operacional: dados.capacidade_operacional || 10,
+      ativo: dados.ativo,
+      observacoes: dados.observacoes || '',
+      ordem: dados.ordem || 10,
+    })
+  }
+
+  await registrarAuditoria({
+    acao: dados.id ? 'DESTINO_INTERNO_ATUALIZADO' : 'DESTINO_INTERNO_CRIADO',
+    modulo: 'Central de Regulação',
+    detalhes: `Destino "${record.nome}" salvo por ${dados.usuarioNome}.`,
+    registro_id: record.id,
+  })
+
+  return record
+}
+
+// -------------------------------------------------------------
+// INDICADORES AGREGADOS DA REGULAÇÃO (SEM DADOS PESSOAIS)
+// COM TEMPOS MÉDIOS DE ESPERA POR ETAPA
+// -------------------------------------------------------------
+export interface IndicadoresEsperaEtapa {
+  etapaNome: string
+  quantidadeCasos: number
+  tempoMedioMinutos: number
+  tempoMedioFormatado: string
+  tempoMaximoMinutos: number
+  tempoMaximoFormatado: string
+  criterioCalculo: string
+}
+
 export interface IndicadoresAgregadosRegulacao {
   totalSolicitacoes: number
   solicitadas: number
@@ -608,10 +794,20 @@ export interface IndicadoresAgregadosRegulacao {
     transferencia_externa: number
     encaminhamento_especialidade: number
   }
+  // Indicadores de tempo de espera agregados por etapa
+  esperaPorEtapa: {
+    aguardandoAvaliacao: IndicadoresEsperaEtapa
+    emAnaliseTecnica: IndicadoresEsperaEtapa
+    aguardandoEfetivacaoLeito: IndicadoresEsperaEtapa
+    cicloCompletoEfetivadas: IndicadoresEsperaEtapa
+  }
+  periodoApuracao: string
+  fusoHorario: string
 }
 
 export function calcularIndicadoresRegulacao(
   solicitacoes: SolicitacaoRegulacao[] | SolicitacaoRegulacaoResumoAdmin[],
+  periodoFiltro = 'Histórico completo selecionado',
 ): IndicadoresAgregadosRegulacao {
   let solicitadas = 0
   let emAvaliacao = 0
@@ -635,6 +831,12 @@ export function calcularIndicadoresRegulacao(
     encaminhamento_especialidade: 0,
   }
 
+  // Acumuladores de tempo
+  const temposAguardandoAval: number[] = []
+  const temposEmAnalise: number[] = []
+  const temposAguardandoEfet: number[] = []
+  const temposCicloCompleto: number[] = []
+
   solicitacoes.forEach((s) => {
     if (s.situacao === 'solicitada') solicitadas++
     if (s.situacao === 'em_avaliacao') emAvaliacao++
@@ -654,7 +856,58 @@ export function calcularIndicadoresRegulacao(
     if (s.tipo && porTipo[s.tipo] !== undefined) {
       porTipo[s.tipo]++
     }
+
+    // Cálculo dos tempos de espera
+    const calc = calcularTempoEsperaIndividual({
+      situacao: s.situacao,
+      dataHoraSolicitacao: s.data_hora_solicitacao,
+      created: s.created,
+      dataHoraAvaliacao: s.data_hora_avaliacao,
+      dataHoraEfetivacao: s.data_hora_efetivacao,
+      dataHoraCancelamento: (s as any).data_hora_cancelamento,
+      historicoTransicoes: (s as any).historico_transicoes,
+    })
+
+    if (s.situacao === 'solicitada') {
+      temposAguardandoAval.push(calc.minutosEsperaLiquida)
+    } else if (s.situacao === 'em_avaliacao') {
+      temposEmAnalise.push(calc.minutosEsperaLiquida)
+    } else if (s.situacao === 'aceita') {
+      temposAguardandoEfet.push(calc.minutosEsperaLiquida)
+    } else if (s.situacao === 'efetivada') {
+      temposCicloCompleto.push(calc.minutosEsperaLiquida)
+    }
   })
+
+  function gerarResumoEtapa(
+    etapaNome: string,
+    tempos: number[],
+    criterio: string,
+  ): IndicadoresEsperaEtapa {
+    if (tempos.length === 0) {
+      return {
+        etapaNome,
+        quantidadeCasos: 0,
+        tempoMedioMinutos: 0,
+        tempoMedioFormatado: '0 min',
+        tempoMaximoMinutos: 0,
+        tempoMaximoFormatado: '0 min',
+        criterioCalculo: criterio,
+      }
+    }
+    const soma = tempos.reduce((a, b) => a + b, 0)
+    const media = Math.round(soma / tempos.length)
+    const maximo = Math.max(...tempos)
+    return {
+      etapaNome,
+      quantidadeCasos: tempos.length,
+      tempoMedioMinutos: media,
+      tempoMedioFormatado: formatarMinutosEspera(media),
+      tempoMaximoMinutos: maximo,
+      tempoMaximoFormatado: formatarMinutosEspera(maximo),
+      criterioCalculo: criterio,
+    }
+  }
 
   return {
     totalSolicitacoes: solicitacoes.length,
@@ -668,6 +921,30 @@ export function calcularIndicadoresRegulacao(
     porPrioridade,
     porRecurso,
     porTipo,
+    esperaPorEtapa: {
+      aguardandoAvaliacao: gerarResumoEtapa(
+        'Aguardando Avaliação do Regulador',
+        temposAguardandoAval,
+        'Tempo transcorrido desde a criação da solicitação até o presente (status "solicitada").',
+      ),
+      emAnaliseTecnica: gerarResumoEtapa(
+        'Em Análise Técnica / Triagem',
+        temposEmAnalise,
+        'Tempo desde a abertura até a análise médica regulatória em andamento (status "em_avaliacao").',
+      ),
+      aguardandoEfetivacaoLeito: gerarResumoEtapa(
+        'Aguardando Vaga / Efetivação do Leito',
+        temposAguardandoEfet,
+        'Tempo de espera com solicitação já aceita pelo regulador, aguardando desocupação e transferência física.',
+      ),
+      cicloCompletoEfetivadas: gerarResumoEtapa(
+        'Ciclo Completo de Transferências Concluídas',
+        temposCicloCompleto,
+        'Duração total entre a criação da solicitação e a confirmação final de ocupação no mapa de leitos.',
+      ),
+    },
+    periodoApuracao: periodoFiltro,
+    fusoHorario: FUSO_HORARIO_REGULACAO,
   }
 }
 

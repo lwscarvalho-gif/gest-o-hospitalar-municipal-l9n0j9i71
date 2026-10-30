@@ -1,3 +1,9 @@
+import {
+  calcularTempoEsperaIndividual,
+  converterParaTimestamp,
+  ordenarFilaAdministrativa,
+} from '../services/regulacaoRelogio'
+
 /**
  * Harness de Testes Funcionais Isolados (Offline / Local)
  * Sistema de Gestão Hospitalar Municipal
@@ -464,6 +470,198 @@ export function executarHarnessLocal(): {
       cenario: '(e) Inventário com conflito de concorrência NÃO ajusta estoque',
       passou: false,
       detalhes: 'Falha na execução do teste funcional',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIOS REGULAÇÃO (f, g, h, i, j): CÁLCULO DE TEMPO DE ESPERA & RELÓGIO
+  // =========================================================================
+
+  // CENÁRIO (f): Datas ausentes/nulas não quebram e retornam 0 min com status indeterminado
+  try {
+    const resVazia = calcularTempoEsperaIndividual({
+      situacao: 'solicitada',
+      dataHoraSolicitacao: null,
+      created: undefined,
+    })
+
+    const resInvalida = calcularTempoEsperaIndividual({
+      situacao: 'solicitada',
+      dataHoraSolicitacao: 'data-corrompida-invalida',
+    })
+
+    const passouF =
+      resVazia.minutosEsperaLiquida === 0 &&
+      resVazia.statusRelogio === 'indeterminado' &&
+      resInvalida.minutosEsperaLiquida === 0 &&
+      resInvalida.statusRelogio === 'indeterminado'
+
+    resultados.push({
+      id: 'cenario_f_relogio_datas_ausentes',
+      cenario: '(f) Cálculo de espera com datas ausentes ou corrompidas não quebra e retorna 0 min',
+      passou: passouF,
+      detalhes: `Com data null ou string inválida o cálculo tratou a borda com fallback seguro: minutos = 0, statusRelogio = 'indeterminado'.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_f_relogio_datas_ausentes',
+      cenario: '(f) Cálculo de espera com datas ausentes ou corrompidas não quebra e retorna 0 min',
+      passou: false,
+      detalhes: 'Falha no teste de datas ausentes',
+      erro: err.message,
+    })
+  }
+
+  // CENÁRIO (g): Datas invertidas (fim antes do início) não geram valor negativo (Math.max 0)
+  try {
+    // Solicitada em 10/10/2026 15:00 e com "dataHoraEfetivacao" gravada erroneamente no passado (10/10/2026 14:00)
+    const resInvertida = calcularTempoEsperaIndividual({
+      situacao: 'efetivada',
+      dataHoraSolicitacao: '10/10/2026 15:00:00',
+      dataHoraEfetivacao: '10/10/2026 14:00:00', // 1 hora antes!
+    })
+
+    const passouG =
+      resInvertida.minutosEsperaTotal === 0 &&
+      resInvertida.minutosEsperaLiquida === 0 &&
+      resInvertida.tempoFormatado === '0 min'
+
+    resultados.push({
+      id: 'cenario_g_relogio_datas_invertidas',
+      cenario: '(g) Datas invertidas não geram tempo negativo nem corrompem a interface',
+      passou: passouG,
+      detalhes: `Início às 15:00 e fim às 14:00 resultou em 0 minutos (nunca negativo) preservando a integridade da tela.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_g_relogio_datas_invertidas',
+      cenario: '(g) Datas invertidas não geram tempo negativo nem corrompem a interface',
+      passou: false,
+      detalhes: 'Falha no teste de datas invertidas',
+      erro: err.message,
+    })
+  }
+
+  // CENÁRIO (h): Virada de dia (23h50 -> 00h10 do dia seguinte) calcula exatamente 20 minutos
+  try {
+    // 23:50 do dia 15/10/2026 até 00:10 do dia 16/10/2026
+    const tInicio = '15/10/2026 23:50:00'
+    const tFim = '16/10/2026 00:10:00'
+    const agoraRef = converterParaTimestamp(tFim)
+
+    const resVirada = calcularTempoEsperaIndividual({
+      situacao: 'solicitada',
+      dataHoraSolicitacao: tInicio,
+      agoraReferencia: agoraRef,
+    })
+
+    const passouH =
+      resVirada.minutosEsperaLiquida === 20 &&
+      resVirada.tempoFormatado === '20 min' &&
+      resVirada.statusRelogio === 'ativo'
+
+    resultados.push({
+      id: 'cenario_h_relogio_virada_dia',
+      cenario: '(h) Virada de dia (23h50 às 00h10) calcula exatamente 20 minutos contínuos',
+      passou: passouH,
+      detalhes: `Passagem das 23h50 do dia anterior para 00h10 do dia posterior computada com precisão absoluta de timestamp epoch: ${resVirada.minutosEsperaLiquida} min (${resVirada.tempoFormatado}).`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_h_relogio_virada_dia',
+      cenario: '(h) Virada de dia (23h50 às 00h10) calcula exatamente 20 minutos contínuos',
+      passou: false,
+      detalhes: 'Falha no teste de virada de dia',
+      erro: err.message,
+    })
+  }
+
+  // CENÁRIO (i): Pausa técnica amortiza o tempo e retomada recompõe o saldo líquido
+  try {
+    // Solicitada às 10:00. Às 10:30 pausa por aguardar laudo externo. Às 11:00 retomada. Agora = 11:30.
+    // Tempo total decorrido: 90 minutos (10:00 às 11:30). Pausa: 30 minutos (10:30 às 11:00).
+    // Espera líquida esperada: 60 minutos (1h 0m).
+    const t10h00 = '10/10/2026 10:00:00'
+    const t10h30 = '10/10/2026 10:30:00'
+    const t11h00 = '10/10/2026 11:00:00'
+    const t11h30Ms = converterParaTimestamp('10/10/2026 11:30:00')
+
+    const transicoesComPausa = [
+      {
+        data_hora: t10h30,
+        de: 'em_avaliacao' as any,
+        para: 'em_avaliacao' as any,
+        responsavel_nome: 'Dr. Regulador',
+        motivo: 'Pausa técnica: aguardando laudo externo de tomografia',
+      },
+      {
+        data_hora: t11h00,
+        de: 'em_avaliacao' as any,
+        para: 'em_avaliacao' as any,
+        responsavel_nome: 'Dr. Regulador',
+        motivo: 'Retomada de análise após laudo recebido',
+      },
+    ]
+
+    const resPausa = calcularTempoEsperaIndividual({
+      situacao: 'em_avaliacao',
+      dataHoraSolicitacao: t10h00,
+      historicoTransicoes: transicoesComPausa,
+      agoraReferencia: t11h30Ms,
+    })
+
+    const passouI =
+      resPausa.minutosEsperaTotal === 90 &&
+      resPausa.minutosEsperaLiquida === 60 &&
+      resPausa.tempoFormatado === '1h 0m'
+
+    resultados.push({
+      id: 'cenario_i_relogio_pausa_retomada',
+      cenario: '(i) Pausas e retomadas amortizam o relógio de espera líquida com precisão',
+      passou: passouI,
+      detalhes: `Período total de 90 min com pausa registrada de 30 min resultou em 60 min de espera líquida (${resPausa.tempoFormatado}).`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_i_relogio_pausa_retomada',
+      cenario: '(i) Pausas e retomadas amortizam o relógio de espera líquida com precisão',
+      passou: false,
+      detalhes: 'Falha no teste de pausa e retomada',
+      erro: err.message,
+    })
+  }
+
+  // CENÁRIO (j): Cancelamento e encerramento congelam o relógio na data de evento
+  try {
+    const tInicio = '10/10/2026 08:00:00'
+    const tCanc = '10/10/2026 09:15:00' // 75 min depois
+    const tAgoraMuitoDepois = converterParaTimestamp('12/10/2026 18:00:00') // 2 dias depois!
+
+    const resCancelado = calcularTempoEsperaIndividual({
+      situacao: 'cancelada',
+      dataHoraSolicitacao: tInicio,
+      dataHoraCancelamento: tCanc,
+      agoraReferencia: tAgoraMuitoDepois,
+    })
+
+    const passouJ =
+      resCancelado.statusRelogio === 'cancelado' &&
+      resCancelado.minutosEsperaLiquida === 75 &&
+      resCancelado.tempoFormatado === '1h 15m'
+
+    resultados.push({
+      id: 'cenario_j_relogio_cancelamento_congelado',
+      cenario: '(j) Cancelamento congela o relógio na data exata sem continuar correndo',
+      passou: passouJ,
+      detalhes: `Solicitação cancelada após 75 min congelou o cálculo em 1h 15m mesmo com consulta realizada 2 dias após.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_j_relogio_cancelamento_congelado',
+      cenario: '(j) Cancelamento congela o relógio na data exata sem continuar correndo',
+      passou: false,
+      detalhes: 'Falha no teste de cancelamento de relógio',
       erro: err.message,
     })
   }

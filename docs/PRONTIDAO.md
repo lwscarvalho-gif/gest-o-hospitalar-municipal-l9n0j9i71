@@ -80,6 +80,37 @@ console.log(resultado)
 
 ---
 
+## 3.1. Gestão Administrativa da Central de Regulação (v0.0.22) & Testes Locais do Relógio
+
+Na versão 0.0.22 foi concluída a **Gestão Administrativa da Central de Regulação** sem interferir na decisão humana ou alterar fluxos clínicos/leitos:
+1. **Catálogo Parametrizável de Recursos/Especialidades e Destinos Internos:**
+   - Permite ativação/inativação (*soft disable*) de itens sem exclusão física (`deleteRule: null`), preservando 100% do histórico e integridade referencial.
+   - Recursos inativos deixam de aparecer em novas solicitações, mas permanecem visíveis nos registros anteriores.
+2. **Filtros Administrativos da Fila:**
+   - Filtros combinados por Recurso Solicitado, Unidade/Setor, Situação da Solicitação e Período de apuração.
+3. **Cálculo de Tempo Individual de Espera:**
+   - Exibido em cada card e linha da fila, com detalhamento via tooltip/modal explicativo da metodologia de apuração.
+4. **Indicadores Agregados de Espera por Etapa:**
+   - Apuração do tempo médio e máximo de espera nas etapas: *Aguardando Avaliação*, *Em Análise Regulatória*, *Aguardando Vaga/Efetivação de Leito* e *Ciclo Total Concluído*.
+   - Mantido estritamente dentro da aba de indicadores do módulo de regulação existente (sem criar novo menu ou Sala de Situação, que permanece excluída).
+5. **Definição Explícita do Relógio e Fuso:**
+   - **Fuso horário fixo:** `America/Sao_Paulo` (UTC-3).
+   - **Origem do relógio:** Data/hora exata do registro da solicitação.
+   - **Pausas/Interrupções:** Pausas técnicas amortizam a contagem de espera líquida; cancelamentos congelam o relógio na data do evento.
+6. **Ordem Administrativa Transparente:**
+   - 1º critério: Prioridade humana informada pelo profissional (Vermelho > Amarelo > Verde > Azul).
+   - 2º critério: Ordem cronológica por data de solicitação (FIFO).
+   - Ausência estrita de qualquer escore, ranking ou priorização clínica automática.
+
+### Resultados da Execução dos Testes Locais do Relógio (src/tests/harnessTestes.ts):
+- **Cenário (f) - Datas ausentes/nulas:** Tratamento com fallback seguro para 0 min e status 'indeterminado', sem quebrar a interface ou gerar NaN.
+- **Cenário (g) - Datas invertidas:** Protegido com corte inferior `Math.max(0, ...)`; tempo de espera nunca exibe valores negativos.
+- **Cenário (h) - Virada de dia (23h50 → 00h10):** Computado em epoch timestamp absoluto em milissegundos, totalizando exatamente 20 minutos de espera contínua.
+- **Cenário (i) - Pausas e retomadas:** Amortização precisa do tempo pausado, com cálculo exato do saldo de espera líquida.
+- **Cenário (j) - Cancelamento:** Congelamento imediato do relógio no timestamp da interrupção, não computando tempo decorrido posterior.
+
+---
+
 ## 4. Lacunas de Homologação e Conformidade Regulatória (Não Implementadas e Não Alegadas)
 
 O sistema atual atende como prova de conceito operacional robusta, mas possui lacunas formais mandatórias que impedem sua implantação em ambiente hospitalar de produção real:

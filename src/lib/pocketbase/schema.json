@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T07:00:14.570Z",
+  "generatedAt": "2026-10-30T07:13:53.408Z",
   "collections": [
     {
       "name": "users",
@@ -5338,6 +5338,176 @@
         "CREATE INDEX idx_mov_tipo ON farmacia_movimentos_estoque (tipo_movimento)",
         "CREATE INDEX idx_mov_data ON farmacia_movimentos_estoque (data_hora)",
         "CREATE INDEX idx_mov_inv ON farmacia_movimentos_estoque (inventario_origem)"
+      ]
+    },
+    {
+      "name": "regulacao_catalogo_recursos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "codigo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "categoria",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["leito", "especialidade", "procedimento", "suporte"]
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tempo_alvo_minutos",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ordem",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_reg_cat_rec_codigo ON regulacao_catalogo_recursos (codigo)",
+        "CREATE INDEX idx_reg_cat_rec_ativo ON regulacao_catalogo_recursos (ativo)",
+        "CREATE INDEX idx_reg_cat_rec_categoria ON regulacao_catalogo_recursos (categoria)"
+      ]
+    },
+    {
+      "name": "regulacao_destinos_internos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "codigo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "enfermaria",
+            "uti",
+            "centro_cirurgico",
+            "ambulatorio",
+            "isolamento",
+            "outro"
+          ]
+        },
+        {
+          "name": "setor_vinculado",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "setores"
+        },
+        {
+          "name": "bloco_ala",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "capacidade_operacional",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ordem",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_reg_dest_codigo ON regulacao_destinos_internos (codigo)",
+        "CREATE INDEX idx_reg_dest_ativo ON regulacao_destinos_internos (ativo)",
+        "CREATE INDEX idx_reg_dest_setor ON regulacao_destinos_internos (setor_vinculado)"
       ]
     }
   ]

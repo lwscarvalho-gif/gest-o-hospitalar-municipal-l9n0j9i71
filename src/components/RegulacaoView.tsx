@@ -13,6 +13,9 @@ import {
   Leito,
   FichaProntoAtendimento,
   Internacao,
+  ItemCatalogoRecurso,
+  ItemDestinoInterno,
+  CalculoTempoEspera,
 } from '@/types/hospital'
 import {
   listarSolicitacoesRegulacao,
@@ -24,7 +27,15 @@ import {
   cancelarSolicitacaoRegulacao,
   calcularIndicadoresRegulacao,
   IndicadoresAgregadosRegulacao,
+  listarCatalogoRecursos,
+  listarDestinosInternos,
 } from '@/services/regulacao'
+import {
+  calcularTempoEsperaIndividual,
+  ordenarFilaAdministrativa,
+  FUSO_HORARIO_REGULACAO,
+} from '@/services/regulacaoRelogio'
+import { ModalCatalogoRegulacao } from './ModalCatalogoRegulacao'
 import { listarPacientes, listarSetores, listarLeitos } from '@/services/cadastros'
 import { listarAtendimentosPA } from '@/services/prontoAtendimento'
 import { listarInternacoes } from '@/services/internacoes'
@@ -79,10 +90,13 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
   const isRecepcao = user?.role === 'recepcao'
   const podeSolicitar = temPermissao(['admin', 'gestor', 'profissional'])
   const podeAvaliar = temPermissao(['admin', 'gestor', 'profissional'])
+  const podeGerirCatalogo = temPermissao(['admin', 'gestor'])
 
   // Estados principais
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoRegulacao[]>([])
   const [filaAdmin, setFilaAdmin] = useState<SolicitacaoRegulacaoResumoAdmin[]>([])
+  const [catalogoRecursos, setCatalogoRecursos] = useState<ItemCatalogoRecurso[]>([])
+  const [destinosInternos, setDestinosInternos] = useState<ItemDestinoInterno[]>([])
   const [pacientes, setPacientes] = useState<Paciente[]>([])
   const [setores, setSetores] = useState<Setor[]>([])
   const [leitos, setLeitos] = useState<Leito[]>([])
@@ -91,10 +105,11 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
   const [loading, setLoading] = useState(false)
   const [abaAtiva, setAbaAtiva] = useState<'fila' | 'indicadores'>('fila')
 
-  // Filtros
+  // Filtros administrativos ampliados
   const [filtroSituacao, setFiltroSituacao] = useState<string>('todas')
   const [filtroPeriodo, setFiltroPeriodo] = useState<string>('todos')
   const [filtroRecurso, setFiltroRecurso] = useState<string>('todos')
+  const [filtroUnidade, setFiltroUnidade] = useState<string>('todas')
   const [filtroPrioridade, setFiltroPrioridade] = useState<string>('todas')
   const [termoBusca, setTermoBusca] = useState('')
 
@@ -105,6 +120,8 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
   const [modalCancelamento, setModalCancelamento] = useState(false)
   const [modalDetalhes, setModalDetalhes] = useState(false)
   const [modalAvisoLegal, setModalAvisoLegal] = useState(false)
+  const [modalCatalogo, setModalCatalogo] = useState(false)
+  const [modalRegraRelogio, setModalRegraRelogio] = useState(false)
 
   // Registro selecionado
   const [solicitacaoSelecionada, setSolicitacaoSelecionada] = useState<SolicitacaoRegulacao | null>(
@@ -155,13 +172,23 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
   const carregarDados = async () => {
     setLoading(true)
     try {
+      // Carrega catálogo e destinos independentemente do perfil (leitura livre com RLS)
+      const [recs, dests, listaSts] = await Promise.all([
+        listarCatalogoRecursos(false),
+        listarDestinosInternos(false),
+        listarSetores(),
+      ])
+      setCatalogoRecursos(recs)
+      setDestinosInternos(dests)
+      setSetores(listaSts)
+
       if (isRecepcao) {
         // PERFIL RECEPÇÃO: Apenas view administrativa agregada (sem dados clínicos)
         const listaAdmin = await listarRegulacaoFilaAdministrativa()
         setFilaAdmin(listaAdmin)
         setSolicitacoes([])
       } else {
-        const [listaSolics, listaPacs, listaSts, listaLts, listaPA, listaInts] = await Promise.all([
+        const [listaSolics, listaPacs, listaLts, listaPA, listaInts] = await Promise.all([
           listarSolicitacoesRegulacao({
             situacao: filtroSituacao as any,
             periodo: filtroPeriodo as any,
@@ -170,14 +197,12 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
             termoBusca,
           }),
           listarPacientes(),
-          listarSetores(),
           listarLeitos(),
           listarAtendimentosPA({ status: 'todos' }),
           listarInternacoes(),
         ])
         setSolicitacoes(listaSolics)
         setPacientes(listaPacs)
-        setSetores(listaSts)
         setLeitos(listaLts)
         setAtendimentosPA(listaPA)
         setInternacoesAtivas(listaInts)
@@ -199,6 +224,23 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroSituacao, filtroPeriodo, filtroRecurso, filtroPrioridade, isRecepcao])
 
+  // Lista de recursos ativos para novas solicitações (soft disable esconde os inativos aqui)
+  const recursosDisponiveisParaCriar = useMemo(() => {
+    const ativos = catalogoRecursos.filter((r) => r.ativo)
+    if (ativos.length > 0) return ativos
+    // fallback padrão seguro
+    return [
+      { id: '1', codigo: 'leito_enfermaria_clinica', nome: 'Leito Enfermaria Clínica', categoria: 'leito' as any, ativo: true, created: '', updated: '' },
+      { id: '2', codigo: 'leito_uti_adulto', nome: 'Leito UTI Adulto', categoria: 'leito' as any, ativo: true, created: '', updated: '' },
+      { id: '3', codigo: 'leito_isolamento', nome: 'Leito de Isolamento', categoria: 'leito' as any, ativo: true, created: '', updated: '' },
+    ]
+  }, [catalogoRecursos])
+
+  // Destinos internos ativos para novas solicitações
+  const destinosDisponiveisParaCriar = useMemo(() => {
+    return destinosInternos.filter((d) => d.ativo)
+  }, [destinosInternos])
+
   // Indicadores agregados
   const indicadores: IndicadoresAgregadosRegulacao = useMemo(() => {
     if (isRecepcao) {
@@ -207,17 +249,68 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
     return calcularIndicadoresRegulacao(solicitacoes)
   }, [solicitacoes, filaAdmin, isRecepcao])
 
-  // Filtragem de fila administrativa para busca de texto
-  const filaAdminFiltrada = useMemo(() => {
-    if (!termoBusca.trim()) return filaAdmin
-    const q = termoBusca.toLowerCase()
-    return filaAdmin.filter(
-      (f) =>
-        f.paciente_nome.toLowerCase().includes(q) ||
-        f.numero_solicitacao.toLowerCase().includes(q) ||
-        f.setor_origem_nome.toLowerCase().includes(q),
-    )
-  }, [filaAdmin, termoBusca])
+  // Filtragem e ordenação transparente da fila administrativa
+  const filaAdminFiltradaEOrdenada = useMemo(() => {
+    let filtradas = filaAdmin
+
+    // Filtro por termo de busca
+    if (termoBusca.trim()) {
+      const q = termoBusca.toLowerCase()
+      filtradas = filtradas.filter(
+        (f) =>
+          f.paciente_nome.toLowerCase().includes(q) ||
+          f.numero_solicitacao.toLowerCase().includes(q) ||
+          f.setor_origem_nome.toLowerCase().includes(q) ||
+          (f.setor_destino_nome && f.setor_destino_nome.toLowerCase().includes(q)),
+      )
+    }
+
+    // Filtro por recurso
+    if (filtroRecurso !== 'todos') {
+      filtradas = filtradas.filter((f) => f.recurso_solicitado === filtroRecurso)
+    }
+
+    // Filtro por unidade / setor
+    if (filtroUnidade !== 'todas') {
+      filtradas = filtradas.filter(
+        (f) => f.setor_origem_nome === filtroUnidade || f.setor_destino_nome === filtroUnidade,
+      )
+    }
+
+    // Filtro por prioridade
+    if (filtroPrioridade !== 'todas') {
+      filtradas = filtradas.filter((f) => f.prioridade === filtroPrioridade)
+    }
+
+    // Filtro por situação
+    if (filtroSituacao !== 'todas') {
+      if (filtroSituacao === 'ativas') {
+        filtradas = filtradas.filter(
+          (f) => f.situacao === 'solicitada' || f.situacao === 'em_avaliacao' || f.situacao === 'aceita',
+        )
+      } else {
+        filtradas = filtradas.filter((f) => f.situacao === filtroSituacao)
+      }
+    }
+
+    // Ordenação administrativa estrita e transparente:
+    // 1º: Prioridade humana registrada pelo profissional (vermelho > amarelo > verde > azul)
+    // 2º: Data de solicitação cronológica mais antiga
+    return ordenarFilaAdministrativa(filtradas)
+  }, [filaAdmin, termoBusca, filtroRecurso, filtroUnidade, filtroPrioridade, filtroSituacao])
+
+  // Filtragem adicional de unidade e ordenação transparente para a visão clínica
+  const solicitacoesFiltradasEOrdenadas = useMemo(() => {
+    let filtradas = solicitacoes
+
+    if (filtroUnidade !== 'todas') {
+      filtradas = filtradas.filter(
+        (s) => s.setor_origem_nome === filtroUnidade || s.setor_destino_nome === filtroUnidade,
+      )
+    }
+
+    return ordenarFilaAdministrativa(filtradas)
+  }, [solicitacoes, filtroUnidade])
 
   // Leitos vagos para destino
   const leitosVagosDestino = useMemo(() => {
@@ -526,8 +619,11 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
     setModalDetalhes(true)
   }
 
-  // Helpers de Rótulos e Cores
+  // Helpers de Rótulos e Cores (com catálogo dinâmico)
   const formatRecurso = (r: RecursoSolicitadoRegulacao | string): string => {
+    const itemCat = catalogoRecursos.find((c) => c.codigo === r)
+    if (itemCat) return itemCat.nome
+
     const mapa: Record<string, string> = {
       leito_enfermaria_clinica: 'Enfermaria Clínica',
       leito_uti_adulto: 'UTI Adulto',
@@ -538,7 +634,7 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
       suporte_ventilatorio: 'Suporte Ventilatório',
       outro: 'Outro Recurso',
     }
-    return mapa[r] || r
+    return mapa[r] || r.replace(/_/g, ' ')
   }
 
   const formatPrioridade = (p: PrioridadeRegulacao | string): string => {
@@ -649,6 +745,31 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Informações do Relógio e Fuso */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setModalRegraRelogio(true)}
+              className="text-xs border-slate-200 text-slate-700 hover:bg-slate-50"
+              title="Origem do relógio, fuso horário e regras de espera"
+            >
+              <Clock className="w-3.5 h-3.5 mr-1 text-indigo-600" />
+              Regras do Tempo (Fuso SP)
+            </Button>
+
+            {/* Catálogo Parametrizável de Recursos e Destinos (Admin/Gestor) */}
+            {podeGerirCatalogo && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setModalCatalogo(true)}
+                className="text-xs border-indigo-200 text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100 font-medium"
+              >
+                <Layers className="w-3.5 h-3.5 mr-1 text-indigo-600" />
+                Catálogo Recursos/Destinos
+              </Button>
+            )}
+
             <Button
               variant="outline"
               size="sm"
@@ -732,56 +853,77 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
       {/* CONTEÚDO DA ABA 1: FILA DE REGULAÇÃO */}
       {abaAtiva === 'fila' && (
         <div className="space-y-4">
-          {/* BARRA DE FILTROS E BUSCA */}
+          {/* BARRA DE FILTROS E BUSCA INTEGRADA: RECURSO / UNIDADE / SITUAÇÃO / PERÍODO */}
           <Card className="border-slate-200 shadow-sm bg-white">
             <CardContent className="pt-4 pb-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-                <div className="md:col-span-2 relative">
-                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                {/* Busca de texto */}
+                <div className="lg:col-span-2 relative">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
                   <Input
                     placeholder="Buscar paciente, protocolo ou setor..."
                     value={termoBusca}
                     onChange={(e) => setTermoBusca(e.target.value)}
-                    className="pl-9 h-9 text-xs"
+                    className="pl-8 h-8 text-xs"
                   />
                 </div>
 
+                {/* Filtro por Recurso Solicitado */}
+                <div>
+                  <select
+                    value={filtroRecurso}
+                    onChange={(e) => setFiltroRecurso(e.target.value)}
+                    className="w-full h-8 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="todos">Recurso: Todos</option>
+                    {catalogoRecursos.map((r) => (
+                      <option key={r.id} value={r.codigo}>
+                        {r.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filtro por Unidade / Setor */}
+                <div>
+                  <select
+                    value={filtroUnidade}
+                    onChange={(e) => setFiltroUnidade(e.target.value)}
+                    className="w-full h-8 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="todas">Unidade: Todas</option>
+                    {setores.map((s) => (
+                      <option key={s.id} value={s.nome}>
+                        {s.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filtro por Situação */}
                 <div>
                   <select
                     value={filtroSituacao}
                     onChange={(e) => setFiltroSituacao(e.target.value)}
-                    className="w-full h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full h-8 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   >
                     <option value="todas">Situação: Todas</option>
-                    <option value="ativas">Apenas Fila Ativa</option>
+                    <option value="ativas">Fila Ativa (Pendentes)</option>
                     <option value="solicitada">Solicitada</option>
                     <option value="em_avaliacao">Em Avaliação</option>
-                    <option value="aceita">Aceita (Aguardando)</option>
+                    <option value="aceita">Aceita (Aguardando Vaga)</option>
                     <option value="efetivada">Efetivada</option>
                     <option value="negada">Negada</option>
                     <option value="cancelada">Cancelada</option>
                   </select>
                 </div>
 
-                <div>
-                  <select
-                    value={filtroPrioridade}
-                    onChange={(e) => setFiltroPrioridade(e.target.value)}
-                    className="w-full h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  >
-                    <option value="todas">Prioridade: Todas</option>
-                    <option value="emergencia_vermelha">Vermelho (Emergência)</option>
-                    <option value="urgencia_amarela">Amarelo (Urgência)</option>
-                    <option value="prioritario_verde">Verde (Prioritário)</option>
-                    <option value="eletivo_azul">Azul (Eletivo)</option>
-                  </select>
-                </div>
-
+                {/* Filtro por Período */}
                 <div>
                   <select
                     value={filtroPeriodo}
                     onChange={(e) => setFiltroPeriodo(e.target.value)}
-                    className="w-full h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full h-8 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   >
                     <option value="todos">Período: Histórico Todo</option>
                     <option value="hoje">Hoje (últimas 24h)</option>
@@ -789,6 +931,17 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
                     <option value="30dias">Últimos 30 dias</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Informação do critério de ordenação transparente */}
+              <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between text-[11px] text-slate-500 gap-2">
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                  <strong>Ordem administrativa transparente:</strong> 1º Prioridade humana (Vermelho &gt; Amarelo &gt; Verde &gt; Azul) • 2º Ordem cronológica por data de solicitação.
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  Fuso horário operacional: {FUSO_HORARIO_REGULACAO}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -811,7 +964,7 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
                 </span>
               </div>
 
-              {filaAdminFiltrada.length === 0 ? (
+              {filaAdminFiltradaEOrdenada.length === 0 ? (
                 <div className="p-12 text-center text-slate-400 text-sm">
                   Nenhuma solicitação encontrada para os filtros atuais.
                 </div>
@@ -824,34 +977,54 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
                         <th className="py-3 px-4">Paciente</th>
                         <th className="py-3 px-4">Origem → Destino</th>
                         <th className="py-3 px-4">Recurso</th>
-                        <th className="py-3 px-4">Prioridade</th>
+                        <th className="py-3 px-4">Prioridade Registrada</th>
                         <th className="py-3 px-4">Situação</th>
+                        <th className="py-3 px-4">Tempo de Espera</th>
                         <th className="py-3 px-4">Data Solicitação</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filaAdminFiltrada.map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="py-3 px-4 font-mono font-bold text-indigo-700">
-                            {item.numero_solicitacao}
-                          </td>
-                          <td className="py-3 px-4 font-medium text-slate-900">
-                            {item.paciente_nome}
-                          </td>
-                          <td className="py-3 px-4 text-slate-600">
-                            {item.setor_origem_nome} →{' '}
-                            {item.setor_destino_nome || item.unidade_externa_destino || 'A definir'}
-                          </td>
-                          <td className="py-3 px-4 text-slate-700">
-                            {formatRecurso(item.recurso_solicitado)}
-                          </td>
-                          <td className="py-3 px-4">{badgePrioridade(item.prioridade)}</td>
-                          <td className="py-3 px-4">{badgeSituacao(item.situacao)}</td>
-                          <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">
-                            {item.data_hora_solicitacao}
-                          </td>
-                        </tr>
-                      ))}
+                      {filaAdminFiltradaEOrdenada.map((item) => {
+                        const tempoCalculado = calcularTempoEsperaIndividual({
+                          situacao: item.situacao,
+                          dataHoraSolicitacao: item.data_hora_solicitacao,
+                          created: item.created,
+                          dataHoraAvaliacao: item.data_hora_avaliacao,
+                          dataHoraEfetivacao: item.data_hora_efetivacao,
+                        })
+
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3 px-4 font-mono font-bold text-indigo-700">
+                              {item.numero_solicitacao}
+                            </td>
+                            <td className="py-3 px-4 font-medium text-slate-900">
+                              {item.paciente_nome}
+                            </td>
+                            <td className="py-3 px-4 text-slate-600">
+                              {item.setor_origem_nome} →{' '}
+                              {item.setor_destino_nome || item.unidade_externa_destino || 'A definir'}
+                            </td>
+                            <td className="py-3 px-4 text-slate-700">
+                              {formatRecurso(item.recurso_solicitado)}
+                            </td>
+                            <td className="py-3 px-4">{badgePrioridade(item.prioridade)}</td>
+                            <td className="py-3 px-4">{badgeSituacao(item.situacao)}</td>
+                            <td className="py-3 px-4">
+                              <div
+                                className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded cursor-help"
+                                title={tempoCalculado.detalhesCalculo}
+                              >
+                                <Clock className="w-3 h-3 text-slate-500" />
+                                {tempoCalculado.tempoFormatado}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">
+                              {item.data_hora_solicitacao}
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -860,49 +1033,82 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
           ) : (
             /* VISÃO COMPLETA CLÍNICA (ADMIN, GESTOR, PROFISSIONAL) */
             <div className="space-y-3">
-              {solicitacoes.length === 0 ? (
+              {solicitacoesFiltradasEOrdenadas.length === 0 ? (
                 <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 space-y-2">
                   <Share2 className="w-10 h-10 mx-auto text-slate-300" />
                   <p className="text-sm font-medium text-slate-600">
-                    Nenhuma solicitação de regulação ativa encontrada.
+                    Nenhuma solicitação de regulação encontrada com os filtros atuais.
                   </p>
                   <p className="text-xs text-slate-400">
-                    Utilize o botão "Nova Solicitação" para registrar uma transferência ou
-                    encaminhamento.
+                    Ajuste os filtros de recurso, unidade ou período, ou registre uma nova solicitação.
                   </p>
                 </div>
               ) : (
-                solicitacoes.map((solic) => (
-                  <Card
-                    key={solic.id}
-                    className="border-slate-200 shadow-sm hover:border-indigo-200 transition-colors bg-white overflow-hidden"
-                  >
-                    <div className="p-4 sm:p-5">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                            {solic.numero_solicitacao}
-                          </span>
-                          <span className="text-xs text-slate-400">•</span>
-                          <span className="text-xs text-slate-500 capitalize">
-                            {solic.tipo.replace(/_/g, ' ')}
-                          </span>
-                          <span className="text-xs text-slate-400">•</span>
-                          <span className="text-xs font-medium text-slate-700">
-                            Origem:{' '}
-                            <strong className="text-slate-900">{solic.setor_origem_nome}</strong>
-                            {solic.leito_origem_codigo && ` (${solic.leito_origem_codigo})`}
-                          </span>
+                solicitacoesFiltradasEOrdenadas.map((solic) => {
+                  const tempoCalculado = calcularTempoEsperaIndividual({
+                    situacao: solic.situacao,
+                    dataHoraSolicitacao: solic.data_hora_solicitacao,
+                    created: solic.created,
+                    dataHoraAvaliacao: solic.data_hora_avaliacao,
+                    dataHoraEfetivacao: solic.data_hora_efetivacao,
+                    dataHoraCancelamento: (solic as any).data_hora_cancelamento,
+                    historicoTransicoes: solic.historico_transicoes,
+                  })
+
+                  return (
+                    <Card
+                      key={solic.id}
+                      className="border-slate-200 shadow-sm hover:border-indigo-200 transition-colors bg-white overflow-hidden"
+                    >
+                      <div className="p-4 sm:p-5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                          <div className="flex flex-wrap items-center gap-2.5">
+                            <span className="text-xs font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                              {solic.numero_solicitacao}
+                            </span>
+                            <span className="text-xs text-slate-400">•</span>
+                            <span className="text-xs text-slate-500 capitalize">
+                              {solic.tipo.replace(/_/g, ' ')}
+                            </span>
+                            <span className="text-xs text-slate-400">•</span>
+                            <span className="text-xs font-medium text-slate-700">
+                              Origem:{' '}
+                              <strong className="text-slate-900">{solic.setor_origem_nome}</strong>
+                              {solic.leito_origem_codigo && ` (${solic.leito_origem_codigo})`}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            {/* Tempo de espera individual transparente */}
+                            <div
+                              className={`inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold px-2 py-0.5 rounded cursor-help ${
+                                tempoCalculado.alertaAtraso
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
+                              }`}
+                              title={tempoCalculado.detalhesCalculo}
+                            >
+                              <Clock className="w-3 h-3 text-slate-500" />
+                              <span>Espera: {tempoCalculado.tempoFormatado}</span>
+                              {tempoCalculado.statusRelogio === 'pausado' && (
+                                <span className="text-[10px] bg-amber-200 text-amber-900 px-1 rounded">
+                                  Pausado
+                                </span>
+                              )}
+                              {tempoCalculado.statusRelogio === 'concluido' && (
+                                <span className="text-[10px] bg-emerald-200 text-emerald-900 px-1 rounded">
+                                  Fechado
+                                </span>
+                              )}
+                            </div>
+
+                            {badgePrioridade(solic.prioridade)}
+                            {badgeSituacao(solic.situacao)}
+                          </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          {badgePrioridade(solic.prioridade)}
-                          {badgeSituacao(solic.situacao)}
-                        </div>
-                      </div>
-
-                      {/* CORPO DO CARD */}
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3 pt-1">
+                        {/* CORPO DO CARD */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3 pt-1">
                         {/* Paciente e Diagnóstico */}
                         <div className="md:col-span-2 space-y-1">
                           <div className="flex items-center gap-2">
@@ -1065,7 +1271,128 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
             </CardHeader>
 
             <CardContent className="pt-5 space-y-6">
-              {/* Grid 4 Cards Resumo */}
+              {/* Indicadores Agregados de Tempo de Espera por Etapa */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-indigo-600" />
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Indicadores Agregados de Espera por Etapa Operacional
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    Período apurado: {indicadores.periodoApuracao} • Fuso: {indicadores.fusoHorario}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {/* Etapa 1: Aguardando Avaliação */}
+                  <div className="p-3 bg-white border border-slate-200 rounded-lg shadow-2xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-amber-800">
+                        1. Aguardando Avaliação
+                      </span>
+                      <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700">
+                        {indicadores.esperaPorEtapa.aguardandoAvaliacao.quantidadeCasos} casos
+                      </Badge>
+                    </div>
+                    <div className="pt-1">
+                      <span className="text-[10px] text-slate-400 block uppercase font-medium">
+                        Tempo Médio de Espera
+                      </span>
+                      <span className="text-xl font-extrabold text-slate-900 font-mono">
+                        {indicadores.esperaPorEtapa.aguardandoAvaliacao.tempoMedioFormatado}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+                      Máx: <strong>{indicadores.esperaPorEtapa.aguardandoAvaliacao.tempoMaximoFormatado}</strong>
+                      <p className="text-[9px] text-slate-400 mt-0.5 line-clamp-2" title={indicadores.esperaPorEtapa.aguardandoAvaliacao.criterioCalculo}>
+                        Critério: {indicadores.esperaPorEtapa.aguardandoAvaliacao.criterioCalculo}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Etapa 2: Em Análise Técnica */}
+                  <div className="p-3 bg-white border border-slate-200 rounded-lg shadow-2xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-blue-800">
+                        2. Em Análise Regulatória
+                      </span>
+                      <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700">
+                        {indicadores.esperaPorEtapa.emAnaliseTecnica.quantidadeCasos} casos
+                      </Badge>
+                    </div>
+                    <div className="pt-1">
+                      <span className="text-[10px] text-slate-400 block uppercase font-medium">
+                        Tempo Médio de Espera
+                      </span>
+                      <span className="text-xl font-extrabold text-slate-900 font-mono">
+                        {indicadores.esperaPorEtapa.emAnaliseTecnica.tempoMedioFormatado}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+                      Máx: <strong>{indicadores.esperaPorEtapa.emAnaliseTecnica.tempoMaximoFormatado}</strong>
+                      <p className="text-[9px] text-slate-400 mt-0.5 line-clamp-2" title={indicadores.esperaPorEtapa.emAnaliseTecnica.criterioCalculo}>
+                        Critério: {indicadores.esperaPorEtapa.emAnaliseTecnica.criterioCalculo}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Etapa 3: Aguardando Efetivação / Vaga */}
+                  <div className="p-3 bg-white border border-slate-200 rounded-lg shadow-2xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-indigo-800">
+                        3. Aguardando Vaga / Leito
+                      </span>
+                      <Badge variant="outline" className="text-[10px] bg-indigo-50 text-indigo-700">
+                        {indicadores.esperaPorEtapa.aguardandoEfetivacaoLeito.quantidadeCasos} casos
+                      </Badge>
+                    </div>
+                    <div className="pt-1">
+                      <span className="text-[10px] text-slate-400 block uppercase font-medium">
+                        Tempo Médio de Espera
+                      </span>
+                      <span className="text-xl font-extrabold text-slate-900 font-mono">
+                        {indicadores.esperaPorEtapa.aguardandoEfetivacaoLeito.tempoMedioFormatado}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+                      Máx: <strong>{indicadores.esperaPorEtapa.aguardandoEfetivacaoLeito.tempoMaximoFormatado}</strong>
+                      <p className="text-[9px] text-slate-400 mt-0.5 line-clamp-2" title={indicadores.esperaPorEtapa.aguardandoEfetivacaoLeito.criterioCalculo}>
+                        Critério: {indicadores.esperaPorEtapa.aguardandoEfetivacaoLeito.criterioCalculo}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Etapa 4: Ciclo Completo Concluído */}
+                  <div className="p-3 bg-white border border-slate-200 rounded-lg shadow-2xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-emerald-800">
+                        4. Ciclo Total (Efetivadas)
+                      </span>
+                      <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700">
+                        {indicadores.esperaPorEtapa.cicloCompletoEfetivadas.quantidadeCasos} casos
+                      </Badge>
+                    </div>
+                    <div className="pt-1">
+                      <span className="text-[10px] text-slate-400 block uppercase font-medium">
+                        Duração Média Total
+                      </span>
+                      <span className="text-xl font-extrabold text-slate-900 font-mono">
+                        {indicadores.esperaPorEtapa.cicloCompletoEfetivadas.tempoMedioFormatado}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+                      Máx: <strong>{indicadores.esperaPorEtapa.cicloCompletoEfetivadas.tempoMaximoFormatado}</strong>
+                      <p className="text-[9px] text-slate-400 mt-0.5 line-clamp-2" title={indicadores.esperaPorEtapa.cicloCompletoEfetivadas.criterioCalculo}>
+                        Critério: {indicadores.esperaPorEtapa.cicloCompletoEfetivadas.criterioCalculo}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid 4 Cards Resumo Volumétrico */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100 text-center">
                   <span className="text-[11px] font-semibold text-indigo-800 uppercase block">
@@ -1342,26 +1669,24 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
               </div>
             </div>
 
-            {/* Recurso Solicitado e Prioridade */}
+            {/* Recurso Solicitado do Catálogo Parametrizado (com Soft Disable) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Recurso Solicitado *
+                  Recurso Solicitado (Catálogo Ativo) *
                 </label>
                 <select
                   value={formRecurso}
                   onChange={(e) => setFormRecurso(e.target.value as any)}
-                  className="w-full h-9 rounded-md border border-slate-200 px-3 text-xs bg-white"
+                  className="w-full h-9 rounded-md border border-slate-200 px-3 text-xs bg-white font-medium"
                   required
                 >
-                  <option value="leito_enfermaria_clinica">Leito de Enfermaria Clínica</option>
-                  <option value="leito_uti_adulto">Leito de UTI Adulto</option>
-                  <option value="leito_isolamento">Leito de Isolamento</option>
-                  <option value="leito_cirurgico">Leito Cirúrgico</option>
-                  <option value="avaliacao_especializada">Avaliação Médica Especializada</option>
-                  <option value="procedimento_urgencia">Procedimento de Urgência</option>
-                  <option value="suporte_ventilatorio">Suporte Ventilatório</option>
-                  <option value="outro">Outro Recurso</option>
+                  {recursosDisponiveisParaCriar.map((rec) => (
+                    <option key={rec.id} value={rec.codigo}>
+                      {rec.nome} ({rec.categoria})
+                    </option>
+                  ))}
+                  <option value="outro">Outro Recurso / Sob Demanda</option>
                 </select>
               </div>
 
@@ -1959,6 +2284,77 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL 7: EXPLICAÇÃO DETALHADA DAS REGRAS DO RELÓGIO & TEMPO DE ESPERA */}
+      <Dialog open={modalRegraRelogio} onOpenChange={setModalRegraRelogio}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Clock className="w-5 h-5 text-indigo-600" />
+              Regras do Relógio e Cálculo do Tempo de Espera
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Transparência operacional da Central de Regulação Municipal
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 text-xs text-slate-700 pt-1">
+            <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-lg space-y-1">
+              <strong className="text-indigo-950 block">1. Fuso Horário Operacional Estrito:</strong>
+              <p className="text-indigo-900 leading-relaxed text-[11px]">
+                Todas as marcações temporais e cronômetros operam no fuso <strong>{FUSO_HORARIO_REGULACAO}</strong> (UTC-3), garantindo uniformidade mesmo entre turnos e viradas de dia.
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
+              <strong className="text-slate-900 block">2. Origem do Relógio (Ponto Inicial):</strong>
+              <p className="text-slate-600 leading-relaxed text-[11px]">
+                O tempo de espera inicia-se no exato timestamp em que a solicitação é protocolada no sistema (campo <em>data_hora_solicitacao</em> / <em>created</em>).
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
+              <strong className="text-slate-900 block">3. Pausas, Cancelamentos e Encerramentos:</strong>
+              <ul className="list-disc pl-4 space-y-1 text-slate-600 text-[11px]">
+                <li><strong>Solicitações Efetivadas:</strong> O relógio é cravado na confirmação real da transferência (ocupação física do leito).</li>
+                <li><strong>Solicitações Canceladas:</strong> O relógio é interrompido no momento do cancelamento.</li>
+                <li><strong>Solicitações Negadas:</strong> O tempo total transcorrido até o parecer médico do regulador.</li>
+                <li><strong>Pausas Técnicas:</strong> Interrupções motivadas por aguardo de exames externos amortizam a contagem de espera líquida.</li>
+              </ul>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
+              <strong className="text-slate-900 block">4. Tratamento Robusto de Bordas:</strong>
+              <p className="text-slate-600 leading-relaxed text-[11px]">
+                Protegido contra datas ausentes (fallback de 0 min com status indeterminado), virada de dia contínua (ex: 23h50 → 00h10 = 20 min exatos) e bloqueio absoluto de valores negativos mesmo com datas invertidas.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setModalRegraRelogio(false)}
+              className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white"
+            >
+              Compreendido
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL 8: CATÁLOGO DE RECURSOS E DESTINOS PARAMETRIZÁVEIS */}
+      <ModalCatalogoRegulacao
+        aberto={modalCatalogo}
+        onClose={() => setModalCatalogo(false)}
+        recursos={catalogoRecursos}
+        destinos={destinosInternos}
+        setores={setores}
+        usuarioNome={user?.name || 'Administrador'}
+        podeEditar={podeGerirCatalogo}
+        onAtualizado={carregarDados}
+      />
     </div>
   )
 }
