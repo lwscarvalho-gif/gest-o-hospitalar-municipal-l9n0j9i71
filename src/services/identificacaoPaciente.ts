@@ -15,7 +15,7 @@
  * - Homônimos por nome geram apenas alerta humano; união ou mesclagem automática é terminantemente proibida.
  */
 
-import { pb } from '@/lib/pocketbase/client'
+import pb from '@/lib/pocketbase/client'
 import { Paciente } from '@/types/hospital'
 
 // =============================================================================

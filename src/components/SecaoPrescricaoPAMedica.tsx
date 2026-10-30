@@ -22,7 +22,7 @@ import {
 import { Pill, Plus, Trash2, CheckCircle, Clock, AlertCircle, Syringe, User } from 'lucide-react'
 import { CabecalhoPacienteAtivo } from '@/components/CabecalhoPacienteAtivo'
 import { Paciente } from '@/types/hospital'
-import { pb } from '@/lib/pocketbase/client'
+import pb from '@/lib/pocketbase/client'
 
 const VIAS_DISPONIVEIS: { valor: ViaAdministracaoMedicamento; rotulo: string }[] = [
   { valor: 'oral', rotulo: 'Oral (VO)' },

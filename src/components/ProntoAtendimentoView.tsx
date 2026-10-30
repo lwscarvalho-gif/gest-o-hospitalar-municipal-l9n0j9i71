@@ -189,18 +189,6 @@ export const ProntoAtendimentoView: React.FC<{
     return leitos.filter((l) => l.status === 'vago')
   }, [leitos])
 
-  // Pacientes filtrados na busca do acolhimento
-  const pacientesFiltrados = useMemo(() => {
-    if (!buscaPacienteEntrada.trim()) return pacientes.slice(0, 10)
-    const termo = buscaPacienteEntrada.toLowerCase()
-    return pacientes.filter(
-      (p) =>
-        p.nome.toLowerCase().includes(termo) ||
-        p.cartao_sus.includes(termo) ||
-        (p.cpf && p.cpf.includes(termo)),
-    )
-  }, [pacientes])
-
   // Fila de Atendimento Ordenada por Gravidade (Risco Manchester) e depois Horário de Chegada
   const filaAtiva = useMemo(() => {
     const ativas = atendimentos.filter((a) => a.status !== 'finalizado')
