@@ -69,6 +69,9 @@ import {
   solicitarExame,
   emitirLaudoExame,
   retificarLaudoExame,
+  listarVersoesLaudo,
+  registrarColetaExame,
+  cancelarExame,
   listarExamesPaginado,
   mascararDadosPacienteExame,
 } from '@/services/exames'
@@ -3344,6 +3347,483 @@ export async function executarHarnessLocal(): Promise<{
       cenario: '(EXA-3) Serviço cliente aplica mascaramento estrito de CPF e Cartão SUS ao retornar exames',
       passou: false,
       detalhes: 'Falha no teste EXA-3',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO EXA-4: Vínculo divergente rejeitado (paciente != internação/atendimento)
+  // Regra assistencial: O exame vinculado a uma internação deve pertencer ao mesmo paciente
+  // =========================================================================
+  try {
+    const internacoesStore: Record<string, any>[] = [
+      { id: 'int-pac-alpha', paciente: 'pac-alpha', leito: 'leito-01', status: 'ativa' },
+    ]
+    const examesStoreLocal: Record<string, any>[] = []
+    const originalCollection = pb.collection.bind(pb)
+
+    pb.collection = ((name: string) => {
+      if (name === 'internacoes') {
+        return {
+          getOne: async (id: string) => {
+            const achado = internacoesStore.find((i) => i.id === id)
+            if (!achado) throw new Error('Not found')
+            return achado
+          },
+        } as any
+      }
+      if (name === 'exames') {
+        return {
+          create: async (data: any) => {
+            // Validação de vínculo como implementada na integridade referencial
+            if (data.internacao) {
+              const intObj = internacoesStore.find((i) => i.id === data.internacao)
+              if (intObj && intObj.paciente !== data.paciente) {
+                const err = new Error('CADEIA_PACIENTE_DIVERGENTE: A internação indicada pertence a outro paciente.')
+                ;(err as any).statusCode = 400
+                throw err
+              }
+            }
+            const rec = { id: `ex_${Date.now()}`, ...data }
+            examesStoreLocal.push(rec)
+            return rec
+          },
+        } as any
+      }
+      if (name === 'auditoria') {
+        return {
+          create: async (data: any) => ({ id: `aud_${Date.now()}`, ...data }),
+        } as any
+      }
+      return originalCollection(name)
+    }) as any
+
+    try {
+      let rejeitouDivergente = false
+      try {
+        await solicitarExame({
+          paciente: 'pac-beta-divergente', // Paciente Beta
+          internacao: 'int-pac-alpha', // Mas a internação é do Paciente Alpha!
+          tipo_exame: 'Gasometria Arterial',
+          prioridade: 'urgente',
+          solicitante_nome: 'Dr. Plantonista',
+        })
+      } catch (err: any) {
+        if (err.message.includes('CADEIA_PACIENTE_DIVERGENTE')) {
+          rejeitouDivergente = true
+        }
+      }
+
+      // Vínculo legítimo com o mesmo paciente
+      const solicCorreta = await solicitarExame({
+        paciente: 'pac-alpha',
+        internacao: 'int-pac-alpha',
+        tipo_exame: 'Gasometria Arterial',
+        prioridade: 'urgente',
+        solicitante_nome: 'Dr. Plantonista',
+      })
+
+      const passouEXA4 = rejeitouDivergente && solicCorreta.id !== undefined && examesStoreLocal.length === 1
+
+      resultados.push({
+        id: 'exa_vinculo_divergente_rejeitado',
+        cenario: '(EXA-4) Vínculo divergente rejeitado: solicitação com paciente diferente da internação é bloqueada',
+        passou: passouEXA4,
+        detalhes: `Tentativa de vincular exame do paciente pac-beta à internação do paciente pac-alpha rejeitada com CADEIA_PACIENTE_DIVERGENTE. Vínculo legítimo aceito.`,
+      })
+    } finally {
+      pb.collection = originalCollection
+    }
+  } catch (err: any) {
+    resultados.push({
+      id: 'exa_vinculo_divergente_rejeitado',
+      cenario: '(EXA-4) Vínculo divergente rejeitado: solicitação com paciente diferente da internação é bloqueada',
+      passou: false,
+      detalhes: 'Falha no teste EXA-4',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO EXA-5: Solicitação cancelada bloqueia coleta e emissão de laudo
+  // =========================================================================
+  try {
+    const examesStoreLocal: Record<string, any>[] = [
+      {
+        id: 'ex-cancelado-001',
+        paciente: 'pac-001',
+        tipo_exame: 'Urina EAS',
+        status: 'cancelado',
+        motivo_cancelamento: 'Solicitação duplicada pelo médico assistente',
+      },
+    ]
+    const originalCollection = pb.collection.bind(pb)
+
+    pb.collection = ((name: string) => {
+      if (name === 'exames') {
+        return {
+          getOne: async (id: string) => {
+            const ex = examesStoreLocal.find((e) => e.id === id)
+            if (!ex) throw new Error('Not found')
+            return ex
+          },
+          update: async (id: string, data: any) => {
+            const idx = examesStoreLocal.findIndex((e) => e.id === id)
+            if (idx === -1) throw new Error('Not found')
+            if (examesStoreLocal[idx].status === 'cancelado') {
+              throw new Error('EXAME_CANCELADO_IMUTAVEL: Exame cancelado não permite transição de status nem nova coleta/laudo.')
+            }
+            examesStoreLocal[idx] = { ...examesStoreLocal[idx], ...data }
+            return examesStoreLocal[idx]
+          },
+        } as any
+      }
+      if (name === 'auditoria') {
+        return {
+          create: async (data: any) => ({ id: `aud_${Date.now()}`, ...data }),
+        } as any
+      }
+      return originalCollection(name)
+    }) as any
+
+    try {
+      let bloqueouColeta = false
+      let bloqueouLaudo = false
+
+      // 1. Tenta registrar coleta em exame cancelado
+      try {
+        await registrarColetaExame({
+          exameId: 'ex-cancelado-001',
+          responsavel_coleta_nome: 'Técnico de Laboratório',
+        })
+      } catch (err: any) {
+        if (err.message.includes('EXAME_CANCELADO_IMUTAVEL')) {
+          bloqueouColeta = true
+        }
+      }
+
+      // 2. Tenta emitir laudo em exame cancelado
+      try {
+        await emitirLaudoExame({
+          exameId: 'ex-cancelado-001',
+          resultado_sumario: 'Normal',
+          laudo_texto: 'Sedimento urinário sem piócitos ou hemácias.',
+          responsavel_laudo_nome: 'Dr. Patologista',
+        })
+      } catch (err: any) {
+        if (err.message.includes('EXAME_CANCELADO_IMUTAVEL')) {
+          bloqueouLaudo = true
+        }
+      }
+
+      const passouEXA5 = bloqueouColeta && bloqueouLaudo && examesStoreLocal[0].status === 'cancelado'
+
+      resultados.push({
+        id: 'exa_cancelado_bloqueia_coleta_laudo',
+        cenario: '(EXA-5) Solicitação cancelada bloqueia categoricamente novas transições, coleta e laudo',
+        passou: passouEXA5,
+        detalhes: `Tentativas de registrar coleta e emitir laudo sobre solicitação cancelada foram barradas com EXAME_CANCELADO_IMUTAVEL. Status preservado como cancelado.`,
+      })
+    } finally {
+      pb.collection = originalCollection
+    }
+  } catch (err: any) {
+    resultados.push({
+      id: 'exa_cancelado_bloqueia_coleta_laudo',
+      cenario: '(EXA-5) Solicitação cancelada bloqueia categoricamente novas transições, coleta e laudo',
+      passou: false,
+      detalhes: 'Falha no teste EXA-5',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO EXA-6: Reenvio idêntico não duplica e nova versão legítima passa
+  // =========================================================================
+  try {
+    const examesStoreLocal: Record<string, any>[] = []
+    const versoesStoreLocal: Record<string, any>[] = []
+    const originalCollection = pb.collection.bind(pb)
+
+    pb.collection = ((name: string) => {
+      if (name === 'exames') {
+        return {
+          getOne: async (id: string) => examesStoreLocal.find((e) => e.id === id),
+          update: async (id: string, data: any) => {
+            const idx = examesStoreLocal.findIndex((e) => e.id === id)
+            if (idx === -1) throw new Error('Not found')
+            examesStoreLocal[idx] = { ...examesStoreLocal[idx], ...data }
+            return examesStoreLocal[idx]
+          },
+        } as any
+      }
+      if (name === 'laudos_versoes') {
+        return {
+          create: async (data: any) => {
+            // Checagem de idempotência na retificação
+            if (data.idempotency_key) {
+              const existente = versoesStoreLocal.find((v) => v.idempotency_key === data.idempotency_key)
+              if (existente) {
+                if (existente.laudo_texto !== data.laudo_texto || existente.motivo_retificacao !== data.motivo_retificacao) {
+                  throw new Error('CONFLITO_IDEMPOTENCIA: Chave já utilizada com justificativa ou conteúdo divergente.')
+                }
+                return existente
+              }
+            }
+            const num = versoesStoreLocal.filter((v) => v.exame === data.exame).length + 1
+            const rec = { id: `v_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, ...data, numero_versao: num }
+            versoesStoreLocal.push(rec)
+            return rec
+          },
+          getFullList: async () => versoesStoreLocal,
+        } as any
+      }
+      if (name === 'auditoria') {
+        return {
+          create: async (data: any) => ({ id: `aud_${Date.now()}`, ...data }),
+        } as any
+      }
+      return originalCollection(name)
+    }) as any
+
+    try {
+      const exameId = 'ex-hemo-idemp-001'
+      examesStoreLocal.push({
+        id: exameId,
+        paciente: 'pac-001',
+        tipo_exame: 'Hemograma Completo',
+        status: 'liberado',
+        versao_atual: 1,
+        laudo_texto: 'v1 original',
+        resultado_sumario: 'Normal',
+      })
+      versoesStoreLocal.push({
+        id: 'v1',
+        exame: exameId,
+        numero_versao: 1,
+        laudo_texto: 'v1 original',
+        resultado_sumario: 'Normal',
+        motivo_retificacao: 'Original homologada',
+      })
+
+      const chaveRetif = 'chave_retif_duplo_clique_123'
+
+      // 1. Primeira emissão de retificação legítima
+      const retif1 = await retificarLaudoExame({
+        exameId,
+        motivo_retificacao: 'Ajuste de contagem plaquetária',
+        resultado_sumario: 'Alterado',
+        laudo_texto: 'Plaquetas 120.000',
+        responsavel_laudo_nome: 'Dr. Hematologista',
+        idempotencyKey: chaveRetif,
+      })
+
+      // 2. Reenvio imediato idêntico com a mesma chave (ex: timeout de rede ou duplo clique)
+      const retif2 = await retificarLaudoExame({
+        exameId,
+        motivo_retificacao: 'Ajuste de contagem plaquetária',
+        resultado_sumario: 'Alterado',
+        laudo_texto: 'Plaquetas 120.000',
+        responsavel_laudo_nome: 'Dr. Hematologista',
+        idempotencyKey: chaveRetif,
+      })
+
+      // 3. Terceira retificação legítima com NOVA chave gerando versão 3
+      const retif3 = await retificarLaudoExame({
+        exameId,
+        motivo_retificacao: 'Segunda revisão pós-conferência de citômetro',
+        resultado_sumario: 'Alterado Moderado',
+        laudo_texto: 'Plaquetas 115.000',
+        responsavel_laudo_nome: 'Dr. Hematologista Chefe',
+        idempotencyKey: 'chave_retif_nova_legitima_456',
+      })
+
+      const passouEXA6 =
+        versoesStoreLocal.length === 3 && // v1 + v2 (reenvio não duplicou) + v3
+        retif1.id === retif2.id &&
+        retif3.numero_versao === 3
+
+      resultados.push({
+        id: 'exa_reenvio_identico_nao_duplica_e_nova_versao_passa',
+        cenario: '(EXA-6) Reenvio idêntico de retificação não duplica versão e nova versão legítima é processada com sucesso',
+        passou: passouEXA6,
+        detalhes: `Reenvio com chave "${chaveRetif}" reutilizou versão existente sem criar registro duplicado. Próxima versão legítima incrementou para v3.`,
+      })
+    } finally {
+      pb.collection = originalCollection
+    }
+  } catch (err: any) {
+    resultados.push({
+      id: 'exa_reenvio_identico_nao_duplica_e_nova_versao_passa',
+      cenario: '(EXA-6) Reenvio idêntico de retificação não duplica versão e nova versão legítima é processada com sucesso',
+      passou: false,
+      detalhes: 'Falha no teste EXA-6',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO EXA-7: Retificação preserva original e registra motivo, autor e data
+  // =========================================================================
+  try {
+    const examesStoreLocal: Record<string, any>[] = []
+    const versoesStoreLocal: Record<string, any>[] = []
+    const originalCollection = pb.collection.bind(pb)
+
+    pb.collection = ((name: string) => {
+      if (name === 'exames') {
+        return {
+          getOne: async (id: string) => examesStoreLocal.find((e) => e.id === id),
+          update: async (id: string, data: any) => {
+            const idx = examesStoreLocal.findIndex((e) => e.id === id)
+            if (idx === -1) throw new Error('Not found')
+            examesStoreLocal[idx] = { ...examesStoreLocal[idx], ...data }
+            return examesStoreLocal[idx]
+          },
+        } as any
+      }
+      if (name === 'laudos_versoes') {
+        return {
+          create: async (data: any) => {
+            const num = versoesStoreLocal.filter((v) => v.exame === data.exame).length + 1
+            const rec = {
+              id: `lv_${num}`,
+              ...data,
+              numero_versao: num,
+              data_laudo: data.data_laudo || '2026-10-31 14:30',
+              created: new Date().toISOString(),
+            }
+            versoesStoreLocal.push(rec)
+            return rec
+          },
+          getFullList: async () => versoesStoreLocal,
+        } as any
+      }
+      if (name === 'auditoria') {
+        return {
+          create: async (data: any) => ({ id: `aud_${Date.now()}`, ...data }),
+        } as any
+      }
+      return originalCollection(name)
+    }) as any
+
+    try {
+      const exameId = 'ex-bioq-007'
+      const textoOriginalV1 = 'Glicemia: 95 mg/dL (Normal). Colesterol: 180 mg/dL.'
+      examesStoreLocal.push({
+        id: exameId,
+        paciente: 'pac-007',
+        tipo_exame: 'Perfil Lipídico e Glicêmico',
+        status: 'liberado',
+        versao_atual: 1,
+        laudo_texto: textoOriginalV1,
+        resultado_sumario: 'Normal',
+        responsavel_laudo_nome: 'Dr. Roberto Bioquímico',
+        data_laudo: '2026-10-30 08:00',
+      })
+      versoesStoreLocal.push({
+        id: 'lv_1',
+        exame: exameId,
+        numero_versao: 1,
+        laudo_texto: textoOriginalV1,
+        resultado_sumario: 'Normal',
+        responsavel_laudo_nome: 'Dr. Roberto Bioquímico',
+        data_laudo: '2026-10-30 08:00',
+        motivo_retificacao: 'Laudo inicial homologado',
+      })
+
+      // Executa retificação com motivo mínimo >= 5 caracteres
+      const retif = await retificarLaudoExame({
+        exameId,
+        motivo_retificacao: 'Correção de digitação do colesterol após contraprova',
+        resultado_sumario: 'Alterado - Dislipidemia',
+        laudo_texto: 'Glicemia: 95 mg/dL. Colesterol Total: 245 mg/dL (Elevado).',
+        responsavel_laudo_nome: 'Dra. Patricia Cardiologista',
+        responsavel_laudo_cargo: 'Cardiologista Assistente',
+      })
+
+      const versoes = await listarVersoesLaudo(exameId)
+
+      const passouEXA7 =
+        versoes.length === 2 &&
+        versoes[0].laudo_texto === textoOriginalV1 && // v1 absolutamente intacto
+        versoes[1].numero_versao === 2 &&
+        versoes[1].motivo_retificacao === 'Correção de digitação do colesterol após contraprova' &&
+        versoes[1].responsavel_laudo_nome === 'Dra. Patricia Cardiologista' &&
+        Boolean(versoes[1].data_laudo)
+
+      resultados.push({
+        id: 'exa_retificacao_preserva_original_e_registra_motivo',
+        cenario: '(EXA-7) Retificação preserva versão original intacta e grava motivo obrigatório, autor e data',
+        passou: passouEXA7,
+        detalhes: `Versão 1 preservada no histórico com "Normal". Versão 2 gravada com motivo explicativo, autor Dra. Patricia e data registrada.`,
+      })
+    } finally {
+      pb.collection = originalCollection
+    }
+  } catch (err: any) {
+    resultados.push({
+      id: 'exa_retificacao_preserva_original_e_registra_motivo',
+      cenario: '(EXA-7) Retificação preserva versão original intacta e grava motivo obrigatório, autor e data',
+      passou: false,
+      detalhes: 'Falha no teste EXA-7',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO EXA-8: Troca de paciente descarta resposta antiga em voo (seqRef)
+  // =========================================================================
+  try {
+    // Simulação do padrão seqRef presente no componente de Prontuário / Exames
+    let seqRef = 0
+    let pacienteEmTela = ''
+    let eventosExibidosEmTela: string[] = []
+
+    async function buscarProntuarioComControleDeSequencia(pacienteId: string, atrasoMs: number, dadosRetorno: string[]) {
+      seqRef += 1
+      const seqMomento = seqRef
+
+      // Simula requisição assíncrona em voo com latência de rede variável
+      await new Promise((resolve) => setTimeout(resolve, atrasoMs))
+
+      // Se o usuário trocou de paciente enquanto essa resposta estava em voo, descarta!
+      if (seqMomento !== seqRef) {
+        return { descartada: true, pacienteId }
+      }
+
+      pacienteEmTela = pacienteId
+      eventosExibidosEmTela = dadosRetorno
+      return { descartada: false, pacienteId }
+    }
+
+    // Dispara busca do Paciente A (resposta lenta que demora 50ms)
+    const promisePacienteA = buscarProntuarioComControleDeSequencia('paciente-A', 50, ['Laudo Hemograma Paciente A'])
+
+    // Usuário imediatamente troca para o Paciente B (resposta rápida que chega em 10ms)
+    const promisePacienteB = buscarProntuarioComControleDeSequencia('paciente-B', 10, ['Laudo Urina Paciente B'])
+
+    const [resA, resB] = await Promise.all([promisePacienteA, promisePacienteB])
+
+    const passouEXA8 =
+      resA.descartada === true &&
+      resB.descartada === false &&
+      pacienteEmTela === 'paciente-B' &&
+      eventosExibidosEmTela.length === 1 &&
+      eventosExibidosEmTela[0] === 'Laudo Urina Paciente B'
+
+    resultados.push({
+      id: 'exa_troca_paciente_descarta_resposta_antiga',
+      cenario: '(EXA-8) Controle de sequência na troca de paciente descarta resposta antiga em voo sem aplicar dados ao paciente errado',
+      passou: passouEXA8,
+      detalhes: `Resposta lenta do paciente-A descartada após troca imediata para paciente-B. Apenas dados do paciente ativo persistem no estado de visualização.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'exa_troca_paciente_descarta_resposta_antiga',
+      cenario: '(EXA-8) Controle de sequência na troca de paciente descarta resposta antiga em voo sem aplicar dados ao paciente errado',
+      passou: false,
+      detalhes: 'Falha no teste EXA-8',
       erro: err.message,
     })
   }

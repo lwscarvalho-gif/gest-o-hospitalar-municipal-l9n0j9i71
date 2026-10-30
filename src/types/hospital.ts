@@ -299,7 +299,7 @@ export interface DesfechoAltaObstetrica {
 // -------------------------------------------------------------
 // IMPRESSOS ASSISTENCIAIS (Receita, Atestado, Resumo de Alta)
 // -------------------------------------------------------------
-export type TipoImpressoAssistencial = 'receita' | 'atestado' | 'resumo_alta'
+export type TipoImpressoAssistencial = 'receita' | 'atestado' | 'resumo_alta' | 'laudo_exame'
 export type OrigemImpressoAssistencial =
   | 'pronto_atendimento'
   | 'internacao'
@@ -362,6 +362,34 @@ export interface ConteudoResumoAltaAssistencial {
   condicao_alta: 'curado' | 'melhorado' | 'inalterado' | 'a_pedido' | 'transferido' | 'obito'
 }
 
+export interface ItemHistoricoLaudoImpresso {
+  numero_versao: number
+  data_laudo: string
+  responsavel_laudo_nome: string
+  responsavel_laudo_cargo?: string
+  motivo_retificacao?: string
+  resultado_sumario?: string
+  laudo_texto?: string
+}
+
+export interface ConteudoLaudoExameAssistencial {
+  tipo_exame: string
+  categoria?: string
+  prioridade?: string
+  solicitante_nome?: string
+  data_solicitacao?: string
+  data_coleta?: string
+  data_laudo?: string
+  responsavel_laudo_nome: string
+  responsavel_laudo_cargo?: string
+  resultado_sumario: string
+  laudo_texto: string
+  versao_vigente: number
+  tem_retificacao?: boolean
+  historico_versoes?: ItemHistoricoLaudoImpresso[]
+  observacoes?: string
+}
+
 export interface ImpressoAssistencial {
   id: string
   tipo: TipoImpressoAssistencial
@@ -385,6 +413,7 @@ export interface ImpressoAssistencial {
     | ConteudoReceitaAssistencial
     | ConteudoAtestadoAssistencial
     | ConteudoResumoAltaAssistencial
+    | ConteudoLaudoExameAssistencial
     | Record<string, any>
   observacoes_gerais?: string
   expand?: {

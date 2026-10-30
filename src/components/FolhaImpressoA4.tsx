@@ -1,10 +1,11 @@
 import React from 'react'
 import {
   ImpressoAssistencial,
+  Paciente,
   ConteudoReceitaAssistencial,
   ConteudoAtestadoAssistencial,
   ConteudoResumoAltaAssistencial,
-  Paciente,
+  ConteudoLaudoExameAssistencial,
 } from '@/types/hospital'
 import { formatarDataHoraFuso } from '@/services/dataFusoUnidade'
 
@@ -20,12 +21,16 @@ export const FolhaImpressoA4: React.FC<FolhaImpressoA4Props> = ({ impresso, paci
     tipo === 'atestado' ? (impresso.conteudo as ConteudoAtestadoAssistencial) : null
   const conteudoAlt =
     tipo === 'resumo_alta' ? (impresso.conteudo as ConteudoResumoAltaAssistencial) : null
+  const conteudoLau =
+    tipo === 'laudo_exame' ? (impresso.conteudo as ConteudoLaudoExameAssistencial) : null
 
-  const tituloDocumento = {
+  const titulosPorTipo: Record<string, string> = {
     receita: 'RECEITUÁRIO MÉDICO ASSISTENCIAL',
     atestado: 'ATESTADO MÉDICO ASSISTENCIAL',
     resumo_alta: 'RESUMO / SUMÁRIO DE ALTA HOSPITALAR',
-  }[tipo]
+    laudo_exame: 'LAUDO DE EXAME DIAGNÓSTICO',
+  }
+  const tituloDocumento = titulosPorTipo[tipo] || 'DOCUMENTO ASSISTENCIAL HOSPITALAR'
 
   return (
     <div className="impresso-a4-documento bg-white text-slate-900 font-sans p-4 sm:p-10 md:p-12 w-full max-w-[210mm] min-h-[297mm] mx-auto border border-slate-300 shadow-sm flex flex-col justify-between overflow-x-auto print:border-0 print:p-0 print:shadow-none print:max-w-none print:min-h-0 print:overflow-visible">
@@ -248,6 +253,111 @@ export const FolhaImpressoA4: React.FC<FolhaImpressoA4Props> = ({ impresso, paci
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* 3D. LAUDO DE EXAME DIAGNÓSTICO COM HISTÓRICO DE VERSÕES */}
+        {tipo === 'laudo_exame' && conteudoLau && (
+          <div className="space-y-4 text-xs">
+            {/* Dados do Exame e Versão Vigente */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-slate-50 border border-slate-200 rounded text-slate-800 print:bg-white">
+              <div>
+                <span className="text-slate-500 text-[10px] uppercase font-bold block">
+                  Exame / Procedimento
+                </span>
+                <strong className="text-slate-900">{conteudoLau.tipo_exame}</strong>
+              </div>
+              <div>
+                <span className="text-slate-500 text-[10px] uppercase font-bold block">
+                  Data da Coleta
+                </span>
+                <strong>{conteudoLau.data_coleta || 'Não se aplica'}</strong>
+              </div>
+              <div>
+                <span className="text-slate-500 text-[10px] uppercase font-bold block">
+                  Data da Liberação
+                </span>
+                <strong>{conteudoLau.data_laudo || impresso.data_hora_emissao}</strong>
+              </div>
+              <div>
+                <span className="text-slate-500 text-[10px] uppercase font-bold block">
+                  Status da Versão
+                </span>
+                <span className="font-bold text-emerald-800 border border-emerald-400 bg-emerald-50 px-2 py-0.5 rounded text-[10px] uppercase inline-block print:border-slate-400">
+                  VERSÃO {conteudoLau.versao_vigente || 1} (VIGENTE)
+                </span>
+              </div>
+            </div>
+
+            {/* Resultado Sumário / Parecer */}
+            <div className="p-3 border-2 border-slate-400 rounded bg-slate-50/50 print:bg-white space-y-1">
+              <span className="text-[10px] text-slate-600 uppercase font-bold block">
+                Parecer Conclusivo / Sumário do Resultado:
+              </span>
+              <strong className="text-sm text-slate-950 block">
+                {conteudoLau.resultado_sumario}
+              </strong>
+            </div>
+
+            {/* Texto Completo do Laudo */}
+            <div className="p-4 border border-slate-300 rounded space-y-2">
+              <span className="text-[10px] text-slate-500 uppercase font-bold block border-b border-slate-200 pb-1">
+                Descrição Técnica do Laudo (Versão Vigente):
+              </span>
+              <p className="text-slate-900 whitespace-pre-wrap font-mono text-xs leading-relaxed">
+                {conteudoLau.laudo_texto}
+              </p>
+            </div>
+
+            {/* Bloco de Histórico de Versões / Retificações Anteriores */}
+            {conteudoLau.historico_versoes && conteudoLau.historico_versoes.length > 0 && (
+              <div className="p-3 border border-amber-300 rounded bg-amber-50/40 print:bg-white print:border-slate-400 space-y-2 mt-4">
+                <div className="flex items-center justify-between border-b border-amber-200 pb-1">
+                  <span className="text-[10px] font-bold text-amber-950 uppercase tracking-wide">
+                    Histórico Oficial de Versões & Retificações Registradas
+                  </span>
+                  <span className="text-[9px] text-amber-900 font-mono">
+                    Total: {conteudoLau.historico_versoes.length} versão(ões)
+                  </span>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  {conteudoLau.historico_versoes.map((h, i) => {
+                    const isVig = h.numero_versao === (conteudoLau.versao_vigente || 1)
+                    return (
+                      <div
+                        key={i}
+                        className={`p-2 rounded text-[11px] border ${
+                          isVig
+                            ? 'bg-emerald-50/80 border-emerald-400 text-emerald-950 font-medium'
+                            : 'bg-white border-slate-300 text-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span>
+                            <strong>Versão {h.numero_versao}</strong>{' '}
+                            {isVig ? '(VIGENTE - ATUAL)' : '(ANTERIOR - ARQUIVADA)'}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            Liberada em {h.data_laudo}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-600">
+                          Responsável Técnico: {h.responsavel_laudo_nome}{' '}
+                          {h.responsavel_laudo_cargo && `(${h.responsavel_laudo_cargo})`}
+                        </div>
+                        {h.motivo_retificacao && (
+                          <div className="mt-1 p-1 bg-amber-100/70 rounded text-[10px] text-amber-950 border border-amber-200">
+                            <strong>Motivo/Justificativa da Retificação:</strong>{' '}
+                            {h.motivo_retificacao}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

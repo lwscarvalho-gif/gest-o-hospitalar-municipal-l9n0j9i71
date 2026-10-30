@@ -47,6 +47,7 @@ export async function carregarProntuarioUnificado(
     recuperacoesSrpa,
     impressosAssistenciais,
     notificacoesVigilancia,
+    laudosVersoes,
     obstetricaAdmissoes,
     obstetricaTrabalhoParto,
     obstetricaPartos,
@@ -151,6 +152,15 @@ export async function carregarProntuarioUnificado(
         expand: 'profissional_notificante',
       })
       .catch(() => [] as NotificacaoVigilancia[]),
+
+    // Versões Históricas Imutáveis de Laudos de Exames
+    pb
+      .collection('laudos_versoes')
+      .getFullList<any>({
+        filter: `paciente = "${pacienteId}"`,
+        sort: '-numero_versao,-created',
+      })
+      .catch(() => [] as any[]),
 
     // Centro Obstétrico: Admissões, Trabalho de Parto, Partos, RNs e Desfechos/Altas
     pb
@@ -511,33 +521,52 @@ export async function carregarProntuarioUnificado(
     })
   })
 
-  // H. Ciclo de Exames & Laudos (Solicitação, Coleta, Análise e Laudo Liberado)
+  // H. Ciclo de Exames & Laudos (Solicitação, Coleta, Análise e Laudo Liberado com Histórico de Versões)
   exames.forEach((ex) => {
-    // 1. Evento do Laudo / Resultado Concluído
+    // 1. Evento do Laudo / Resultado Concluído (destacando versão vigente e linkando histórico)
     if (ex.status === 'liberado' && (ex.laudo_texto || ex.resultado_sumario)) {
+      const versaoAtualNum = ex.versao_atual || 1
+      const versoesDesteExame = (laudosVersoes || []).filter((lv: any) => lv.exame === ex.id)
+      const temRetificacao = ex.tem_retificacao || versoesDesteExame.length > 1
+
+      let textoDescricao = `[VERSÃO VIGENTE: v${versaoAtualNum}]\nResultado: ${ex.resultado_sumario || 'Concluído'}\n\n${ex.laudo_texto || ''}`
+      if (temRetificacao && versoesDesteExame.length > 0) {
+        textoDescricao += `\n\n--- Histórico de Retificações do Laudo (${versoesDesteExame.length} versões registradas) ---`
+        versoesDesteExame.forEach((v: any) => {
+          const isVigente = v.numero_versao === versaoAtualNum
+          textoDescricao += `\n• Versão ${v.numero_versao}${isVigente ? ' (VIGENTE ATUAL)' : ' (ANTERIOR ARQUIVADA)'} em ${v.data_laudo} por ${v.responsavel_laudo_nome}${v.responsavel_laudo_cargo ? ` (${v.responsavel_laudo_cargo})` : ''}`
+          if (v.motivo_retificacao) {
+            textoDescricao += ` | Motivo da correção: "${v.motivo_retificacao}"`
+          }
+        })
+      }
+
       eventos.push({
         id: `ex-laudo-${ex.id}`,
         tipo: 'exame_laudado',
         dataHora: ex.data_laudo || ex.updated || ex.created,
-        titulo: `Laudo de Exame Liberado: ${ex.tipo_exame}`,
+        titulo: `Laudo de Exame Liberado: ${ex.tipo_exame} — Versão Vigente v${versaoAtualNum}${temRetificacao ? ' (Retificado)' : ''}`,
         subtitulo: ex.responsavel_laudo_nome
-          ? `Laudado por: ${ex.responsavel_laudo_nome}`
+          ? `Laudado por: ${ex.responsavel_laudo_nome}${temRetificacao ? ` • ${versoesDesteExame.length} versão(ões) no histórico imutável` : ''}`
           : undefined,
-        descricao: ex.resultado_sumario
-          ? `Resultado: ${ex.resultado_sumario}\n\n${ex.laudo_texto || ''}`
-          : ex.laudo_texto || 'Laudo emitido e disponibilizado ao prontuário',
+        descricao: textoDescricao,
         detalhes: {
           tipo_exame: ex.tipo_exame,
           categoria: ex.categoria,
           resultado_sumario: ex.resultado_sumario,
           laudo_texto: ex.laudo_texto,
+          versao_atual: versaoAtualNum,
+          tem_retificacao: temRetificacao,
+          historico_versoes: versoesDesteExame,
           responsavel_laudo: ex.responsavel_laudo_nome,
           data_solicitacao: ex.data_solicitacao,
           solicitante: ex.solicitante_nome,
         },
         profissionalNome: ex.responsavel_laudo_nome || ex.solicitante_nome,
-        badgeTexto: `Resultado: ${ex.resultado_sumario || 'Liberado'}`,
-        badgeCor: 'bg-teal-700 text-white',
+        badgeTexto: temRetificacao
+          ? `v${versaoAtualNum} Vigente (Retificado)`
+          : `v1 Vigente: ${ex.resultado_sumario || 'Liberado'}`,
+        badgeCor: temRetificacao ? 'bg-amber-700 text-white' : 'bg-teal-700 text-white',
         icone: 'FlaskConical',
         registroOriginal: ex,
       })

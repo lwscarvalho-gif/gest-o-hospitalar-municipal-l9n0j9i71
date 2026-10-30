@@ -1,12 +1,22 @@
-import React, { useState, useEffect, useMemo } from 'react'
-import { ExameItem, StatusExame, PrioridadeExame, Setor, Paciente } from '@/types/hospital'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
+import {
+  ExameItem,
+  StatusExame,
+  PrioridadeExame,
+  Setor,
+  Paciente,
+  LaudoVersao,
+} from '@/types/hospital'
 import {
   listarExames,
   registrarColetaExame,
   iniciarAnaliseExame,
   emitirLaudoExame,
+  retificarLaudoExame,
+  listarVersoesLaudo,
   cancelarExame,
 } from '@/services/exames'
+import { mascararCPF, mascararCNS } from '@/services/identificacaoPaciente'
 import { listarSetores, listarPacientes } from '@/services/cadastros'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -44,6 +54,9 @@ import {
   RefreshCw,
   Eye,
   Microscope,
+  History,
+  ShieldCheck,
+  AlertOctagon,
 } from 'lucide-react'
 import { ModalSolicitarExame } from '@/components/ModalSolicitarExame'
 import { useToast } from '@/hooks/use-toast'
@@ -75,6 +88,7 @@ export const ExamesLaudosView: React.FC = () => {
   const [modalLaudo, setModalLaudo] = useState<ExameItem | null>(null)
   const [modalVisualizar, setModalVisualizar] = useState<ExameItem | null>(null)
   const [modalCancelar, setModalCancelar] = useState<ExameItem | null>(null)
+  const [modalRetificar, setModalRetificar] = useState<ExameItem | null>(null)
 
   // Formulários de Ação
   const [respColetaNome, setRespColetaNome] = useState('')
@@ -85,14 +99,30 @@ export const ExamesLaudosView: React.FC = () => {
   const [resultadoSumario, setResultadoSumario] = useState('Normal / Sem alterações')
   const [laudoTexto, setLaudoTexto] = useState('')
 
+  // Formulário de Retificação
+  const [motivoRetificacao, setMotivoRetificacao] = useState('')
+  const [resultadoSumarioRetif, setResultadoSumarioRetif] = useState('')
+  const [laudoTextoRetif, setLaudoTextoRetif] = useState('')
+  const [idempotencyKeyRetif, setIdempotencyKeyRetif] = useState('')
+
+  // Histórico de Versões do Laudo (visualização)
+  const [versoesVisualizar, setVersoesVisualizar] = useState<LaudoVersao[]>([])
+  const [carregandoVersoes, setCarregandoVersoes] = useState(false)
+
   const [motivoCancelamento, setMotivoCancelamento] = useState('')
   const [processandoAcao, setProcessandoAcao] = useState(false)
+
+  // Ref de sequência para descartar respostas obsoletas em voo
+  const seqCargaRef = useRef(0)
 
   useEffect(() => {
     carregar()
   }, [])
 
   const carregar = async () => {
+    seqCargaRef.current += 1
+    const seqMomento = seqCargaRef.current
+
     setLoading(true)
     try {
       const [exList, setList, pacList] = await Promise.all([
@@ -100,10 +130,14 @@ export const ExamesLaudosView: React.FC = () => {
         listarSetores(),
         listarPacientes(),
       ])
+      if (seqMomento !== seqCargaRef.current) {
+        return // Resposta obsoleta descartada
+      }
       setExames(exList)
       setSetores(setList)
       setPacientes(pacList)
     } catch (err) {
+      if (seqMomento !== seqCargaRef.current) return
       console.error(err)
       toast({
         title: 'Erro ao carregar exames',
@@ -111,7 +145,9 @@ export const ExamesLaudosView: React.FC = () => {
         variant: 'destructive',
       })
     } finally {
-      setLoading(false)
+      if (seqMomento === seqCargaRef.current) {
+        setLoading(false)
+      }
     }
   }
 
@@ -146,6 +182,22 @@ export const ExamesLaudosView: React.FC = () => {
 
   // Ações do Fluxo
   const abrirModalColeta = (ex: ExameItem) => {
+    if (ex.status === 'cancelado') {
+      toast({
+        title: 'Exame Cancelado',
+        description: 'Não é possível registrar coleta para solicitação cancelada.',
+        variant: 'destructive',
+      })
+      return
+    }
+    if (ex.status === 'liberado') {
+      toast({
+        title: 'Exame já Liberado',
+        description: 'A coleta já foi finalizada e o laudo já foi liberado.',
+        variant: 'destructive',
+      })
+      return
+    }
     setModalColeta(ex)
     setRespColetaNome(user?.name ? `${user.name} (${user.role})` : '')
     setObsColeta('')
@@ -179,6 +231,14 @@ export const ExamesLaudosView: React.FC = () => {
   }
 
   const abrirModalAnalise = (ex: ExameItem) => {
+    if (ex.status === 'cancelado' || ex.status === 'liberado') {
+      toast({
+        title: 'Operação Bloqueada',
+        description: `Exame com status "${ex.status.toUpperCase()}" não permite início de análise.`,
+        variant: 'destructive',
+      })
+      return
+    }
     setModalAnalise(ex)
     setRespAnaliseNome(
       user?.name ? `${user.name} (Laboratório Municipal)` : 'Setor de Bioquímica / Radiologia',
@@ -212,9 +272,127 @@ export const ExamesLaudosView: React.FC = () => {
   }
 
   const abrirModalLaudo = (ex: ExameItem) => {
+    if (ex.status === 'cancelado') {
+      toast({
+        title: 'Exame Cancelado',
+        description: 'Não é possível redigir laudo para exame cancelado.',
+        variant: 'destructive',
+      })
+      return
+    }
+    if (ex.status === 'liberado') {
+      toast({
+        title: 'Laudo já Liberado',
+        description:
+          'Este laudo já foi finalizado. Utilize a opção "Retificar Laudo" para registrar uma nova versão formal.',
+      })
+      abrirModalRetificar(ex)
+      return
+    }
     setModalLaudo(ex)
     setResultadoSumario(ex.resultado_sumario || 'Normal / Sem alterações')
     setLaudoTexto(ex.laudo_texto || '')
+  }
+
+  const abrirModalRetificar = (ex: ExameItem) => {
+    if (!podeLaudar) {
+      toast({
+        title: 'Permissão Negada',
+        description: 'Apenas profissionais de saúde médicos/autorizados podem retificar laudos.',
+        variant: 'destructive',
+      })
+      return
+    }
+    if (ex.status === 'cancelado') {
+      toast({
+        title: 'Operação Bloqueada',
+        description: 'Exame cancelado não pode ser retificado.',
+        variant: 'destructive',
+      })
+      return
+    }
+    setModalRetificar(ex)
+    setMotivoRetificacao('')
+    setResultadoSumarioRetif(ex.resultado_sumario || 'Alterado')
+    setLaudoTextoRetif(ex.laudo_texto || '')
+    setIdempotencyKeyRetif(
+      `retif_exa_${ex.id}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    )
+  }
+
+  const handleConfirmarRetificacao = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!modalRetificar) return
+
+    if (!motivoRetificacao.trim() || motivoRetificacao.trim().length < 5) {
+      toast({
+        title: 'Justificativa Obrigatória',
+        description:
+          'A retificação formal exige uma justificativa clínica com no mínimo 5 caracteres.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!laudoTextoRetif.trim()) {
+      toast({
+        title: 'Texto do Laudo Obrigatório',
+        description: 'Informe o novo texto retificado do laudo.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setProcessandoAcao(true)
+    const chaveOperacao =
+      idempotencyKeyRetif ||
+      `retif_exa_${modalRetificar.id}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+
+    try {
+      await retificarLaudoExame({
+        exameId: modalRetificar.id,
+        motivo_retificacao: motivoRetificacao.trim(),
+        resultado_sumario: resultadoSumarioRetif.trim(),
+        laudo_texto: laudoTextoRetif.trim(),
+        responsavel_laudo: user?.id,
+        responsavel_laudo_nome: user?.name || 'Profissional Responsável',
+        responsavel_laudo_cargo: user?.cargo || user?.role || 'Médico',
+        idempotencyKey: chaveOperacao,
+      })
+
+      toast({
+        title: 'Laudo Retificado com Sucesso',
+        description: `Nova versão gerada formalmente. A versão anterior foi arquivada no histórico imutável.`,
+      })
+      setModalRetificar(null)
+      carregar()
+    } catch (err: any) {
+      console.error(err)
+      // Mensagem de conflito/idempotência SEM perder o texto digitado
+      toast({
+        title: 'Erro ou Conflito ao Retificar Laudo',
+        description: `${err.message || 'Falha ao processar retificação'}. Seu texto e justificativa foram preservados para reenvio.`,
+        variant: 'destructive',
+      })
+    } finally {
+      setProcessandoAcao(false)
+    }
+  }
+
+  const handleAbrirVisualizar = async (ex: ExameItem) => {
+    setModalVisualizar(ex)
+    setVersoesVisualizar([])
+    if (ex.status === 'liberado' || ex.tem_retificacao) {
+      setCarregandoVersoes(true)
+      try {
+        const versoes = await listarVersoesLaudo(ex.id)
+        setVersoesVisualizar(versoes)
+      } catch (err) {
+        console.error('Erro ao carregar versões do laudo:', err)
+      } finally {
+        setCarregandoVersoes(false)
+      }
+    }
   }
 
   const handleConfirmarLaudo = async (e: React.FormEvent) => {
@@ -620,11 +798,12 @@ export const ExamesLaudosView: React.FC = () => {
                           {item.data_solicitacao}
                         </td>
 
-                        {/* Paciente */}
+                        {/* Paciente com dados mascarados */}
                         <td className="p-3">
                           <div className="font-bold text-slate-900">{pac?.nome || 'Paciente'}</div>
-                          <div className="text-[10px] text-slate-400 font-mono">
-                            SUS: {pac?.cartao_sus || 'N/A'}
+                          <div className="text-[10px] text-slate-500 font-mono">
+                            SUS: {pac?.cartao_sus ? mascararCNS(pac.cartao_sus) : 'N/A'}
+                            {pac?.cpf && ` • CPF: ${mascararCPF(pac.cpf)}`}
                           </div>
                           {pac?.alergias && (
                             <span className="text-[10px] text-red-600 font-medium block truncate max-w-[180px]">
@@ -684,9 +863,16 @@ export const ExamesLaudosView: React.FC = () => {
                         <td className="p-3">
                           {item.status === 'liberado' ? (
                             <div className="space-y-0.5">
-                              <span className="font-bold text-emerald-800 text-[11px] block">
-                                {item.resultado_sumario || 'Concluído'}
-                              </span>
+                              <div className="flex items-center gap-1">
+                                <span className="font-bold text-emerald-800 text-[11px] block">
+                                  {item.resultado_sumario || 'Concluído'}
+                                </span>
+                                {item.tem_retificacao && (
+                                  <Badge className="bg-amber-100 text-amber-900 border-amber-300 text-[9px] font-bold px-1 py-0">
+                                    v{item.versao_atual || 2} Retificado
+                                  </Badge>
+                                )}
+                              </div>
                               <span className="text-[10px] text-slate-500 block">
                                 Laudado: {item.responsavel_laudo_nome || 'Médico'}
                               </span>
@@ -709,20 +895,21 @@ export const ExamesLaudosView: React.FC = () => {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setModalVisualizar(item)}
+                            onClick={() => handleAbrirVisualizar(item)}
                             className="h-7 text-xs text-slate-700 hover:text-blue-700"
-                            title="Ver detalhes do pedido e laudo"
+                            title="Ver detalhes do pedido, laudo e histórico"
                           >
                             <Eye className="w-3.5 h-3.5 mr-1" />
                             Ver
                           </Button>
 
-                          {/* 1 -> 2: Coletar Material */}
+                          {/* 1 -> 2: Coletar Material (bloqueado para liberado ou cancelado) */}
                           {item.status === 'solicitado' && podeColetar && (
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => abrirModalColeta(item)}
+                              disabled={processandoAcao}
                               className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
                             >
                               Registrar Coleta
@@ -735,6 +922,7 @@ export const ExamesLaudosView: React.FC = () => {
                               variant="outline"
                               size="sm"
                               onClick={() => abrirModalAnalise(item)}
+                              disabled={processandoAcao}
                               className="h-7 text-xs border-purple-300 text-purple-700 hover:bg-purple-50"
                             >
                               Iniciar Análise
@@ -746,9 +934,25 @@ export const ExamesLaudosView: React.FC = () => {
                             <Button
                               size="sm"
                               onClick={() => abrirModalLaudo(item)}
+                              disabled={processandoAcao}
                               className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white"
                             >
                               Redigir Laudo
+                            </Button>
+                          )}
+
+                          {/* Retificar Laudo já Liberado (preserva original e cria v2 com motivo) */}
+                          {item.status === 'liberado' && podeLaudar && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => abrirModalRetificar(item)}
+                              disabled={processandoAcao}
+                              className="h-7 text-xs border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 font-semibold"
+                              title="Retificar laudo liberado gerando nova versão formal"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5 mr-1 text-amber-700" />
+                              Retificar
                             </Button>
                           )}
 
@@ -758,6 +962,7 @@ export const ExamesLaudosView: React.FC = () => {
                               variant="ghost"
                               size="sm"
                               onClick={() => abrirModalCancelar(item)}
+                              disabled={processandoAcao}
                               className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
                               title="Cancelar exame"
                             >
@@ -1089,20 +1294,116 @@ export const ExamesLaudosView: React.FC = () => {
                 </div>
               )}
 
-              {/* Laudo e Resultado (Se liberado) */}
+              {/* Laudo e Resultado (Se liberado) - Versão Vigente e Histórico Completo */}
               {modalVisualizar.status === 'liberado' && (
-                <div className="p-3 bg-emerald-50/70 border-2 border-emerald-500 rounded-lg space-y-2">
-                  <div className="flex items-center justify-between border-b border-emerald-200 pb-1">
-                    <span className="font-bold text-emerald-950 uppercase tracking-wide">
-                      Resultado / Laudo Conclusivo
-                    </span>
-                    <Badge className="bg-emerald-600 text-white font-bold">
-                      {modalVisualizar.resultado_sumario || 'Liberado'}
-                    </Badge>
+                <div className="space-y-3">
+                  <div className="p-3 bg-emerald-50/70 border-2 border-emerald-500 rounded-lg space-y-2">
+                    <div className="flex items-center justify-between border-b border-emerald-200 pb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-emerald-950 uppercase tracking-wide">
+                          Resultado / Laudo Conclusivo
+                        </span>
+                        <Badge className="bg-emerald-700 text-white font-bold text-[10px]">
+                          VERSÃO VIGENTE{' '}
+                          {modalVisualizar.versao_atual
+                            ? `(v${modalVisualizar.versao_atual})`
+                            : '(v1)'}
+                        </Badge>
+                      </div>
+                      <Badge className="bg-emerald-600 text-white font-bold">
+                        {modalVisualizar.resultado_sumario || 'Liberado'}
+                      </Badge>
+                    </div>
+                    <p className="whitespace-pre-wrap font-mono text-slate-800 bg-white p-3 rounded border border-emerald-200 leading-relaxed">
+                      {modalVisualizar.laudo_texto || 'Sem texto descritivo.'}
+                    </p>
+                    <div className="text-[11px] text-emerald-900 flex justify-between pt-1">
+                      <span>
+                        Responsável:{' '}
+                        <strong>{modalVisualizar.responsavel_laudo_nome || 'Profissional'}</strong>
+                      </span>
+                      <span>Liberado em: {modalVisualizar.data_laudo || 'Data registrada'}</span>
+                    </div>
                   </div>
-                  <p className="whitespace-pre-wrap font-mono text-slate-800 bg-white p-3 rounded border border-emerald-200 leading-relaxed">
-                    {modalVisualizar.laudo_texto || 'Sem texto descritivo.'}
-                  </p>
+
+                  {/* Bloco de Histórico de Versões do Laudo */}
+                  <div className="border border-slate-200 rounded-lg p-3 bg-slate-50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                        <History className="w-4 h-4 text-purple-600" />
+                        Histórico de Versões do Laudo (Imutabilidade Registrada)
+                      </span>
+                      {versoesVisualizar.length > 1 && (
+                        <Badge className="bg-purple-100 text-purple-900 border-purple-300 text-[10px]">
+                          {versoesVisualizar.length} Versões Registradas
+                        </Badge>
+                      )}
+                    </div>
+
+                    {carregandoVersoes ? (
+                      <div className="py-2 text-center text-slate-500 text-xs flex items-center justify-center gap-1.5">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600" />
+                        Carregando versões anteriores...
+                      </div>
+                    ) : versoesVisualizar.length === 0 ? (
+                      <p className="text-[11px] text-slate-500 italic">
+                        Laudo em sua 1ª versão original, sem retificações posteriores.
+                      </p>
+                    ) : (
+                      <div className="space-y-2 pt-1">
+                        {versoesVisualizar.map((ver) => {
+                          const isVigente =
+                            ver.numero_versao ===
+                            (modalVisualizar.versao_atual ||
+                              versoesVisualizar[versoesVisualizar.length - 1]?.numero_versao)
+                          return (
+                            <div
+                              key={ver.id}
+                              className={`p-2.5 rounded border text-xs space-y-1 ${
+                                isVigente
+                                  ? 'bg-emerald-50 border-emerald-300 ring-1 ring-emerald-400'
+                                  : 'bg-white border-slate-200'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-900">
+                                  Versão {ver.numero_versao} {isVigente && '(VIGENTE ATUAL)'}
+                                </span>
+                                <Badge
+                                  className={
+                                    isVigente
+                                      ? 'bg-emerald-600 text-white text-[9px]'
+                                      : 'bg-slate-200 text-slate-700 text-[9px]'
+                                  }
+                                >
+                                  {isVigente ? 'Vigente' : 'Versão Arquivada'}
+                                </Badge>
+                              </div>
+
+                              <div className="text-[11px] text-slate-600">
+                                Emitido em: <strong>{ver.data_laudo}</strong> por{' '}
+                                <strong>{ver.responsavel_laudo_nome}</strong>
+                                {ver.responsavel_laudo_cargo && ` (${ver.responsavel_laudo_cargo})`}
+                              </div>
+
+                              {ver.motivo_retificacao && (
+                                <div className="p-1.5 bg-amber-50 rounded border border-amber-200 text-[11px] text-amber-950">
+                                  <strong>Motivo da retificação:</strong> {ver.motivo_retificacao}
+                                </div>
+                              )}
+
+                              <div className="text-[11px] font-mono text-slate-700 bg-slate-50 p-1.5 rounded border border-slate-100 mt-1">
+                                <strong>Sumário:</strong> {ver.resultado_sumario}
+                                <div className="mt-0.5 text-slate-600 truncate max-w-lg">
+                                  {ver.laudo_texto}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1127,6 +1428,137 @@ export const ExamesLaudosView: React.FC = () => {
                 </Button>
               </DialogFooter>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL 6: RETIFICAÇÃO FORMAL DE LAUDO (COM JUSTIFICATIVA OBRIGATÓRIA MIN 5) */}
+      <Dialog
+        open={Boolean(modalRetificar)}
+        onOpenChange={() => !processandoAcao && setModalRetificar(null)}
+      >
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2 text-amber-950">
+              <ShieldCheck className="w-5 h-5 text-amber-600" />
+              Retificação Formal de Laudo Finalizado
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Gera uma nova versão formal no banco. A versão original é 100% preservada na coleção
+              imutável com justificativa clínica, autor e data.
+            </DialogDescription>
+          </DialogHeader>
+
+          {modalRetificar && (
+            <form onSubmit={handleConfirmarRetificacao} className="space-y-4 pt-1">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded text-xs space-y-1 text-amber-950">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-amber-900">
+                    Paciente: {modalRetificar.expand?.paciente?.nome}
+                  </span>
+                  <Badge className="bg-amber-600 text-white text-[10px]">
+                    Versão Atual: v{modalRetificar.versao_atual || 1}
+                  </Badge>
+                </div>
+                <div>
+                  <strong>Exame:</strong> {modalRetificar.tipo_exame}
+                </div>
+                <div className="text-[11px] text-amber-800">
+                  Laudo vigente liberado por: {modalRetificar.responsavel_laudo_nome || 'Médico'} em{' '}
+                  {modalRetificar.data_laudo || 'Data'}
+                </div>
+              </div>
+
+              {/* Justificativa Obrigatória (mínimo 5 caracteres) */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-rose-950 flex items-center gap-1">
+                    <AlertOctagon className="w-3.5 h-3.5 text-rose-600" />
+                    Motivo / Justificativa Clínica da Retificação *
+                  </Label>
+                  <span className="text-[10px] text-slate-500">Mínimo 5 caracteres</span>
+                </div>
+                <Textarea
+                  value={motivoRetificacao}
+                  onChange={(e) => setMotivoRetificacao(e.target.value)}
+                  placeholder="Informe detalhadamente a razão técnica/clínica da correção (ex: Correção de digitação de valores de plaquetas conforme nova lâmina manual)..."
+                  className="text-xs border-amber-300 focus-visible:ring-amber-500"
+                  rows={3}
+                  required
+                  disabled={processandoAcao}
+                />
+              </div>
+
+              {/* Novo Sumário / Parecer */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Novo Sumário / Conclusão *</Label>
+                <Input
+                  value={resultadoSumarioRetif}
+                  onChange={(e) => setResultadoSumarioRetif(e.target.value)}
+                  placeholder="Ex: Alterado - Plaquetopenia Leve"
+                  className="text-xs font-semibold"
+                  required
+                  disabled={processandoAcao}
+                />
+              </div>
+
+              {/* Novo Texto do Laudo */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">
+                  Texto Completo do Laudo Retificado *
+                </Label>
+                <Textarea
+                  value={laudoTextoRetif}
+                  onChange={(e) => setLaudoTextoRetif(e.target.value)}
+                  placeholder="Descreva o novo laudo retificado na íntegra..."
+                  className="text-xs font-mono"
+                  rows={7}
+                  required
+                  disabled={processandoAcao}
+                />
+              </div>
+
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded text-[11px] text-slate-700 space-y-1">
+                <div>
+                  <strong>Profissional Responsável pela Retificação:</strong> {user?.name} (
+                  {user?.cargo || user?.role})
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  Proteção de idempotência ativa com chave única. O original não será sobrescrito
+                  nem apagado.
+                </div>
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setModalRetificar(null)}
+                  disabled={processandoAcao}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={processandoAcao}
+                  className="bg-amber-600 hover:bg-amber-500 text-white flex items-center gap-1.5"
+                >
+                  {processandoAcao ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Gravando Nova Versão...
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4" />
+                      Emitir Retificação Formal
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
           )}
         </DialogContent>
       </Dialog>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { Paciente, EventoProntuarioUnificado, TipoEventoProntuario } from '@/types/hospital'
 import { listarPacientes } from '@/services/cadastros'
 import { carregarProntuarioUnificado } from '@/services/prontuarioSAME'
+import { mascararCPF, mascararCNS } from '@/services/identificacaoPaciente'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -42,6 +43,7 @@ import {
   Microscope,
   Scissors,
   CheckSquare,
+  History,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -67,9 +69,8 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
   const [filtroDataInicio, setFiltroDataInicio] = useState('')
   const [filtroDataFim, setFiltroDataFim] = useState('')
   const [buscaTextoEvento, setBuscaTextoEvento] = useState('')
-  const [impressoVisualizacao, setImpressoVisualizacao] = useState<ImpressoAssistencial | null>(
-    null,
-  )
+  const [impressoVisualizacao, setImpressoVisualizacao] =
+    useState<Partial<ImpressoAssistencial> | null>(null)
 
   // 1. Carregar lista de pacientes para busca
   useEffect(() => {
@@ -299,7 +300,8 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
               >
                 {pacientes.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.nome} • SUS: {p.cartao_sus} {p.cpf ? `• CPF: ${p.cpf}` : ''}
+                    {p.nome} • SUS: {mascararCNS(p.cartao_sus)}{' '}
+                    {p.cpf ? `• CPF: ${mascararCPF(p.cpf)}` : ''}
                   </option>
                 ))}
               </select>
@@ -366,11 +368,11 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-lg font-bold text-slate-900">{pacienteAtivo.nome}</span>
                     <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs">
-                      CNS: {pacienteAtivo.cartao_sus}
+                      CNS: {mascararCNS(pacienteAtivo.cartao_sus)}
                     </Badge>
                     {pacienteAtivo.cpf && (
                       <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-                        CPF: {pacienteAtivo.cpf}
+                        CPF: {mascararCPF(pacienteAtivo.cpf)}
                       </span>
                     )}
                     {pacienteAtivo.tipo_sanguineo && (
@@ -585,10 +587,119 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
 
                     {/* Descrição principal */}
                     {ev.descricao && (
-                      <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed bg-white p-2.5 rounded-lg border border-slate-200/70">
+                      <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed bg-white p-2.5 rounded-lg border border-slate-200/70 font-mono text-[11px]">
                         {ev.descricao}
                       </p>
                     )}
+
+                    {/* Bloco dedicado para Exame Laudado com Histórico de Versões */}
+                    {ev.tipo === 'exame_laudado' &&
+                      ev.detalhes?.historico_versoes &&
+                      ev.detalhes.historico_versoes.length > 0 && (
+                        <div className="mt-2 p-2.5 bg-amber-50/70 rounded-lg border border-amber-200 space-y-1.5 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-amber-950 flex items-center gap-1">
+                              <History className="w-3.5 h-3.5 text-amber-700" />
+                              Versões do Laudo Registradas ({ev.detalhes.historico_versoes.length})
+                            </span>
+                            <Badge className="bg-amber-600 text-white text-[9px] font-bold">
+                              Vigente: v{ev.detalhes.versao_atual || 1}
+                            </Badge>
+                          </div>
+                          <div className="space-y-1 pt-1">
+                            {ev.detalhes.historico_versoes.map((ver: any) => {
+                              const isVig = ver.numero_versao === (ev.detalhes.versao_atual || 1)
+                              return (
+                                <div
+                                  key={ver.id || ver.numero_versao}
+                                  className={`p-2 rounded text-[11px] border ${
+                                    isVig
+                                      ? 'bg-emerald-50 border-emerald-300 font-semibold text-emerald-950'
+                                      : 'bg-white border-slate-200 text-slate-700'
+                                  }`}
+                                >
+                                  <div className="flex justify-between items-center">
+                                    <span>
+                                      Versão {ver.numero_versao}{' '}
+                                      {isVig ? '• VIGENTE ATUAL' : '• ARQUIVADA'}
+                                    </span>
+                                    <span className="text-[10px] text-slate-500 font-mono">
+                                      {ver.data_laudo}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-600 mt-0.5">
+                                    Responsável: {ver.responsavel_laudo_nome}{' '}
+                                    {ver.responsavel_laudo_cargo &&
+                                      `(${ver.responsavel_laudo_cargo})`}
+                                  </div>
+                                  {ver.motivo_retificacao && (
+                                    <div className="text-[10px] text-amber-900 bg-amber-100/70 p-1 rounded mt-1">
+                                      <strong>Justificativa da Retificação:</strong>{' '}
+                                      {ver.motivo_retificacao}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                          <div className="pt-1.5 flex justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const pacienteObj =
+                                  pacienteAtivo ||
+                                  pacientes.find((p) => p.id === pacienteSelecionadoId) ||
+                                  null
+                                const impressoExame: Partial<ImpressoAssistencial> = {
+                                  id: `laudo-${ev.detalhes?.tipo_exame || 'exame'}-${ev.registroOriginal?.id || Date.now()}`,
+                                  tipo: 'laudo_exame',
+                                  paciente: pacienteObj?.id || '',
+                                  profissional_nome:
+                                    ev.detalhes?.responsavel_laudo || 'Médico Responsável',
+                                  profissional_profissao: 'Médico(a) / Patologista',
+                                  profissional_registro: 'CRM Homologado',
+                                  unidade_nome: 'Hospital Municipal de Mirante da Serra',
+                                  municipio_uf: 'Mirante da Serra - RO',
+                                  origem: 'internacao',
+                                  data_hora_emissao: ev.dataHora,
+                                  conteudo: {
+                                    tipo_exame: ev.detalhes?.tipo_exame || 'Exame Laboratorial',
+                                    categoria: ev.detalhes?.categoria || 'Laboratorial',
+                                    prioridade: 'urgente',
+                                    solicitante_nome:
+                                      ev.detalhes?.solicitante || 'Médico Solicitante',
+                                    data_solicitacao: ev.detalhes?.data_solicitacao,
+                                    data_laudo: ev.dataHora,
+                                    responsavel_laudo_nome:
+                                      ev.detalhes?.responsavel_laudo || 'Médico Responsável',
+                                    resultado_sumario: ev.detalhes?.resultado_sumario || 'Liberado',
+                                    laudo_texto: ev.detalhes?.laudo_texto || '',
+                                    versao_vigente: ev.detalhes?.versao_atual || 1,
+                                    tem_retificacao: ev.detalhes?.tem_retificacao,
+                                    historico_versoes: (ev.detalhes?.historico_versoes || []).map(
+                                      (h: any) => ({
+                                        numero_versao: h.numero_versao,
+                                        data_laudo: h.data_laudo,
+                                        responsavel_laudo_nome: h.responsavel_laudo_nome,
+                                        responsavel_laudo_cargo: h.responsavel_laudo_cargo,
+                                        motivo_retificacao: h.motivo_retificacao,
+                                        resultado_sumario: h.resultado_sumario,
+                                        laudo_texto: h.laudo_texto,
+                                      }),
+                                    ),
+                                  },
+                                }
+                                setImpressoVisualizacao(impressoExame)
+                              }}
+                              className="h-7 text-xs border-amber-300 text-amber-950 bg-white hover:bg-amber-100 flex items-center gap-1.5"
+                            >
+                              <Printer className="w-3.5 h-3.5 text-amber-800" />
+                              Imprimir Laudo A4 Oficial (com Histórico de Retificações)
+                            </Button>
+                          </div>
+                        </div>
+                      )}
 
                     {/* Detalhes extras específicos */}
                     {ev.detalhes && (
