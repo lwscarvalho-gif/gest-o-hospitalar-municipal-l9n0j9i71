@@ -251,6 +251,7 @@ export const FarmaciaView: React.FC = () => {
       return
     }
 
+    if (salvandoDispensacao) return
     setSalvandoDispensacao(true)
     try {
       const prescObj = prescricoesAtivas.find((p) => p.id === prescricaoSelecionadaId)
@@ -263,7 +264,7 @@ export const FarmaciaView: React.FC = () => {
           modoDispensacao === 'prescricao' && prescObj
             ? `Prescrição #${prescObj.id.slice(0, 7)} (${prescObj.medico_nome || 'Médico'})`
             : dispPrescricao.trim(),
-        profissionalDispensador: user?.name || 'Recepção / Farmácia',
+        profissionalDispensador: user?.name || 'Farmácia Municipal',
         tipoMovimento: dispTipoMovimento,
         setorDestino: dispSetorDestino.trim(),
         observacoes: dispObservacoes.trim(),

@@ -167,6 +167,7 @@ export const InternacaoView: React.FC<{
     const leitoObj = leitos.find((l) => l.id === formAdmLeito)
     if (!leitoObj) return
 
+    if (processando) return
     setProcessando(true)
     try {
       await admitirPaciente({
@@ -233,6 +234,7 @@ export const InternacaoView: React.FC<{
       historicoArray = []
     }
 
+    if (processando) return
     setProcessando(true)
     try {
       await transferirLeito({
@@ -276,6 +278,7 @@ export const InternacaoView: React.FC<{
     if (!altaAlvo) return
     const leitoObj = leitos.find((l) => l.id === altaAlvo.leito_atual)
 
+    if (processando) return
     setProcessando(true)
     try {
       await darAltaPaciente({

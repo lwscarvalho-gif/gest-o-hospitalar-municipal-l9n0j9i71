@@ -399,6 +399,7 @@ export const ProntoAtendimentoView: React.FC<{
     const leitoObj = leitos.find((l) => l.id === leitoInternacaoId)
     const profObj = profissionais.find((p) => p.id === profissionalAgendaId)
 
+    if (processando) return
     setProcessando(true)
     try {
       const profId =

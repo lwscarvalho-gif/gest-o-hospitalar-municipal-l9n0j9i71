@@ -132,6 +132,8 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
     return eventos.filter((ev) => {
       // Filtro tipo
       if (filtroTipo !== 'todos') {
+        if (filtroTipo === 'obstetrica' && !ev.tipo.startsWith('obstetrica_')) return false
+        if (filtroTipo === 'regulacao' && !ev.tipo.startsWith('regulacao_')) return false
         if (filtroTipo === 'pa' && !ev.tipo.startsWith('pa_')) return false
         if (filtroTipo === 'internacao' && !ev.tipo.startsWith('internacao_')) return false
         if (filtroTipo === 'assistencial' && ev.tipo !== 'evolucao_clinica') return false
@@ -431,6 +433,8 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
             onChange={(e) => setFiltroTipo(e.target.value)}
           >
             <option value="todos">Todos os Eventos ({eventos.length})</option>
+            <option value="obstetrica">Centro Obstétrico & Partos / RN</option>
+            <option value="regulacao">Central de Regulação (Transferências)</option>
             <option value="vigilancia">Vigilância em Saúde (Notificações)</option>
             <option value="cirurgia">Centro Cirúrgico (Ato, SRPA, Checklist)</option>
             <option value="pa">Pronto Atendimento (PA)</option>

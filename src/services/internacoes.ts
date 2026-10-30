@@ -53,8 +53,12 @@ export async function admitirPaciente(dados: {
     expand: 'paciente,leito_atual,setor_atual,medico_responsavel',
   })
 
-  // Atualizar o status do leito para "ocupado"
-  await atualizarLeito(dados.leito_atual, { status: 'ocupado' })
+  // Nota: o status do leito é garantido e atualizado de forma atômica pelo hook do backend (internacoes.pb.js)
+  try {
+    await atualizarLeito(dados.leito_atual, { status: 'ocupado' })
+  } catch {
+    // Leito já atualizado pelo backend hook
+  }
 
   await registrarAuditoria({
     acao: 'ADMISSAO_PACIENTE',
@@ -101,11 +105,13 @@ export async function transferirLeito(params: {
     },
   )
 
-  // 2. Liberar leito antigo para "higienizacao"
-  await atualizarLeito(params.leitoAntigoId, { status: 'higienizacao' })
-
-  // 3. Ocupar o novo leito
-  await atualizarLeito(params.leitoNovoId, { status: 'ocupado' })
+  // 2. Leitos atualizados de forma atômica no backend hook; sincronização de segurança:
+  try {
+    await atualizarLeito(params.leitoAntigoId, { status: 'higienizacao' })
+    await atualizarLeito(params.leitoNovoId, { status: 'ocupado' })
+  } catch {
+    // Sincronizado pelo hook de transição
+  }
 
   await registrarAuditoria({
     acao: 'TRANSFERENCIA_LEITO',
@@ -138,8 +144,12 @@ export async function darAltaPaciente(params: {
     },
   )
 
-  // Colocar leito em higienização pós-alta
-  await atualizarLeito(params.leitoId, { status: 'higienizacao' })
+  // Leito liberado para higienização no backend hook; sincronização de segurança:
+  try {
+    await atualizarLeito(params.leitoId, { status: 'higienizacao' })
+  } catch {
+    // Sincronizado pelo hook de transição
+  }
 
   await registrarAuditoria({
     acao: 'ALTA_HOSPITALAR',

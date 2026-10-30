@@ -164,10 +164,13 @@ export async function registrarDispensacao(
     },
   )
 
-  // 3. Atualizar estoque do item farmacêutico (baixa automática)
-  const itemAtualizado = await pb.collection('farmacia_itens').update<ItemFarmacia>(itemId, {
-    estoque_atual: novoEstoque,
-  })
+  // 3. Obter item com estoque já atualizado pelo backend (hook atômico)
+  let itemAtualizado: ItemFarmacia
+  try {
+    itemAtualizado = await pb.collection('farmacia_itens').getOne<ItemFarmacia>(itemId)
+  } catch {
+    itemAtualizado = item
+  }
 
   // 4. Trilha de auditoria da movimentação
   const detalhesVínculo = prescricaoRelacionadaId
