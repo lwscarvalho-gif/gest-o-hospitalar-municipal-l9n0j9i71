@@ -65,6 +65,13 @@ import {
   RegistrarAdministracaoParams,
   RetificarAdministracaoParams,
 } from '@/services/prescricoes'
+import {
+  solicitarExame,
+  emitirLaudoExame,
+  retificarLaudoExame,
+  listarExamesPaginado,
+  mascararDadosPacienteExame,
+} from '@/services/exames'
 import pb from '@/lib/pocketbase/client'
 
 /**
@@ -3062,6 +3069,281 @@ export async function executarHarnessLocal(): Promise<{
       cenario: '(ADM-4) Descarte de resposta antiga por sequência na troca de paciente (checagem não aplicada ao paciente errado)',
       passou: false,
       detalhes: 'Falha no teste de descarte de resposta antiga na troca de paciente',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO EXA-1: Idempotência de Solicitação de Exame contra duplo envio
+  // =========================================================================
+  try {
+    const examesStoreLocal: Record<string, any>[] = []
+    const originalCollection = pb.collection.bind(pb)
+
+    pb.collection = ((name: string) => {
+      if (name === 'exames') {
+        return {
+          create: async (data: any) => {
+            if (data.idempotency_key) {
+              const existente = examesStoreLocal.find((e) => e.idempotency_key === data.idempotency_key)
+              if (existente) {
+                if (existente.paciente !== data.paciente || existente.tipo_exame !== data.tipo_exame) {
+                  throw new Error('IDEMPOTENCY_PAYLOAD_CONFLICT: A chave já foi usada para outro exame.')
+                }
+                throw new Error(`IDEMPOTENT_HIT:${existente.id}`)
+              }
+            }
+            const rec = {
+              id: `ex_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              ...data,
+              created: new Date().toISOString(),
+              updated: new Date().toISOString(),
+            }
+            examesStoreLocal.push(rec)
+            return rec
+          },
+          getOne: async (id: string) => {
+            const achado = examesStoreLocal.find((e) => e.id === id)
+            if (!achado) throw new Error('Not found')
+            return achado
+          },
+          update: async (id: string, data: any) => {
+            const idx = examesStoreLocal.findIndex((e) => e.id === id)
+            if (idx === -1) throw new Error('Not found')
+            examesStoreLocal[idx] = { ...examesStoreLocal[idx], ...data, updated: new Date().toISOString() }
+            return examesStoreLocal[idx]
+          },
+        } as any
+      }
+      if (name === 'auditoria') {
+        return {
+          create: async (data: any) => ({ id: `aud_${Date.now()}`, ...data }),
+        } as any
+      }
+      return originalCollection(name)
+    }) as any
+
+    try {
+      const chaveEstavel = 'idemp_solic_exame_hemo_001'
+
+      // 1. Primeira emissão legítima
+      const solic1 = await solicitarExame({
+        paciente: 'pac-teste-exa-1',
+        tipo_exame: 'Hemograma Completo',
+        prioridade: 'urgente',
+        solicitante_nome: 'Dr. Carlos Eduardo Ramos',
+        idempotencyKey: chaveEstavel,
+      })
+
+      // 2. Reenvio imediato idêntico (duplo clique de rede)
+      const solic2 = await solicitarExame({
+        paciente: 'pac-teste-exa-1',
+        tipo_exame: 'Hemograma Completo',
+        prioridade: 'urgente',
+        solicitante_nome: 'Dr. Carlos Eduardo Ramos',
+        idempotencyKey: chaveEstavel,
+      })
+
+      // 3. Tentativa de reuso com payload divergente (conflito de chave)
+      let capturouConflito = false
+      try {
+        await solicitarExame({
+          paciente: 'pac-outro-divergente',
+          tipo_exame: 'Raio-X de Tórax',
+          prioridade: 'urgente',
+          solicitante_nome: 'Dr. Carlos Eduardo Ramos',
+          idempotencyKey: chaveEstavel,
+        })
+      } catch (err: any) {
+        if (err.message.includes('CONFLITO_IDEMPOTENCIA') || err.message.includes('IDEMPOTENCY_PAYLOAD_CONFLICT')) {
+          capturouConflito = true
+        }
+      }
+
+      const passouEXA1 =
+        examesStoreLocal.length === 1 &&
+        solic1.id === solic2.id &&
+        capturouConflito === true
+
+      resultados.push({
+        id: 'exa_idempotencia_solicitacao_duplo_envio',
+        cenario: '(EXA-1) Idempotência de Solicitação de Exame contra duplo envio e rejeição de payload divergente',
+        passou: passouEXA1,
+        detalhes: `Solicitação com chave "${chaveEstavel}" gravada uma única vez no store. Reenvio devolveu com sucesso o mesmo ID (${solic1.id}) sem duplicar registro. Tentativa com paciente diferente gerou erro de conflito.`,
+      })
+    } finally {
+      pb.collection = originalCollection
+    }
+  } catch (err: any) {
+    resultados.push({
+      id: 'exa_idempotencia_solicitacao_duplo_envio',
+      cenario: '(EXA-1) Idempotência de Solicitação de Exame contra duplo envio e rejeição de payload divergente',
+      passou: false,
+      detalhes: 'Falha no teste EXA-1',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO EXA-2: Retificação de laudo preserva original intacto em nova versão
+  // =========================================================================
+  try {
+    const examesStoreLocal: Record<string, any>[] = []
+    const versoesStoreLocal: Record<string, any>[] = []
+    const originalCollection = pb.collection.bind(pb)
+
+    pb.collection = ((name: string) => {
+      if (name === 'exames') {
+        return {
+          getOne: async (id: string) => examesStoreLocal.find((e) => e.id === id),
+          update: async (id: string, data: any) => {
+            const idx = examesStoreLocal.findIndex((e) => e.id === id)
+            if (idx === -1) throw new Error('Not found')
+            examesStoreLocal[idx] = { ...examesStoreLocal[idx], ...data }
+            return examesStoreLocal[idx]
+          },
+        } as any
+      }
+      if (name === 'laudos_versoes') {
+        return {
+          create: async (data: any) => {
+            const versaoNum = versoesStoreLocal.filter((v) => v.exame === data.exame).length + 1
+            const rec = {
+              id: `v_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              ...data,
+              numero_versao: versaoNum,
+              created: new Date().toISOString(),
+              updated: new Date().toISOString(),
+            }
+            versoesStoreLocal.push(rec)
+
+            // Atualiza exame principal
+            const ex = examesStoreLocal.find((e) => e.id === data.exame)
+            if (ex) {
+              ex.status = 'liberado'
+              ex.resultado_sumario = data.resultado_sumario
+              ex.laudo_texto = data.laudo_texto
+              ex.versao_atual = versaoNum
+              ex.tem_retificacao = versaoNum > 1
+            }
+            return rec
+          },
+          getFullList: async (opts: any) => versoesStoreLocal,
+          getOne: async (id: string) => versoesStoreLocal.find((v) => v.id === id),
+        } as any
+      }
+      if (name === 'auditoria') {
+        return {
+          create: async (data: any) => ({ id: `aud_${Date.now()}`, ...data }),
+        } as any
+      }
+      return originalCollection(name)
+    }) as any
+
+    try {
+      // Cria exame liberado inicial v1
+      const exameId = 'ex-hemo-retif-001'
+      examesStoreLocal.push({
+        id: exameId,
+        paciente: 'pac-teste-02',
+        tipo_exame: 'Hemograma Completo',
+        status: 'liberado',
+        resultado_sumario: 'Normal',
+        laudo_texto: 'Hematócrito 42%, Leucócitos 7.000/mm³.',
+        versao_atual: 1,
+        tem_retificacao: false,
+      })
+
+      // Versão 1 no histórico
+      versoesStoreLocal.push({
+        id: 'v1_original',
+        exame: exameId,
+        numero_versao: 1,
+        resultado_sumario: 'Normal',
+        laudo_texto: 'Hematócrito 42%, Leucócitos 7.000/mm³.',
+        responsavel_laudo_nome: 'Dr. Fernando Dias',
+        data_laudo: '2026-10-25 10:00',
+        motivo_retificacao: 'Versão inicial homologada',
+      })
+
+      const snapshotV1 = JSON.stringify(versoesStoreLocal[0])
+
+      // Executa retificação via retificarLaudoExame
+      const retif = await retificarLaudoExame({
+        exameId,
+        motivo_retificacao: 'Correção de digitação nas plaquetas conforme conferência de lâmina manual.',
+        resultado_sumario: 'Alterado - Plaquetopenia Leve',
+        laudo_texto: 'Hematócrito 42%, Leucócitos 7.000/mm³, Plaquetas 130.000/mm³ (VR: 150k a 450k).',
+        responsavel_laudo_nome: 'Dra. Beatriz Santos',
+        responsavel_laudo_cargo: 'Médica Hematologista',
+      })
+
+      const passouEXA2 =
+        versoesStoreLocal.length === 2 &&
+        JSON.stringify(versoesStoreLocal[0]) === snapshotV1 && // Versão 1 preservada 100%
+        retif.numero_versao === 2 &&
+        retif.motivo_retificacao?.includes('conferência de lâmina manual') &&
+        examesStoreLocal[0].versao_atual === 2 &&
+        examesStoreLocal[0].tem_retificacao === true &&
+        examesStoreLocal[0].resultado_sumario === 'Alterado - Plaquetopenia Leve'
+
+      resultados.push({
+        id: 'exa_retificacao_preserva_historico_imutavel',
+        cenario: '(EXA-2) Retificação de laudo finalizado preserva conteúdo original da v1 e cria v2 com motivo e autor',
+        passou: passouEXA2,
+        detalhes: `Versão 1 mantida intacta ("Normal"). Versão 2 gerada com justificativa clínica e autor "Dra. Beatriz Santos". Exame atualizado para versão vigente 2 com flag tem_retificacao=true.`,
+      })
+    } finally {
+      pb.collection = originalCollection
+    }
+  } catch (err: any) {
+    resultados.push({
+      id: 'exa_retificacao_preserva_historico_imutavel',
+      cenario: '(EXA-2) Retificação de laudo finalizado preserva conteúdo original da v1 e cria v2 com motivo e autor',
+      passou: false,
+      detalhes: 'Falha no teste EXA-2',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO EXA-3: Mascaramento de dados e proteção de identificadores no cliente
+  // =========================================================================
+  try {
+    const exameComDadosSensiveis: any = {
+      id: 'ex-priv-001',
+      tipo_exame: 'Glicemia de Jejum',
+      status: 'liberado',
+      expand: {
+        paciente: {
+          id: 'pac-001',
+          nome: 'Maria da Silva Sauro',
+          cpf: '12345678909',
+          cartao_sus: '898001122334455',
+        },
+      },
+    }
+
+    const exameMascarado = mascararDadosPacienteExame(exameComDadosSensiveis)
+    const pac = exameMascarado.expand?.paciente
+
+    const passouEXA3 =
+      pac?.cpf === '123.***.***-09' &&
+      pac?.cartao_sus === '898 0011 **** 4455' &&
+      !pac?.cpf.includes('456789')
+
+    resultados.push({
+      id: 'exa_mascaramento_identificadores_paciente',
+      cenario: '(EXA-3) Serviço cliente aplica mascaramento estrito de CPF e Cartão SUS ao retornar exames',
+      passou: passouEXA3,
+      detalhes: `CPF original "12345678909" mascarado para "${pac?.cpf}". Cartão SUS mascarado para "${pac?.cartao_sus}". Dados sensíveis protegidos contra vazamento em tela e tráfego.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'exa_mascaramento_identificadores_paciente',
+      cenario: '(EXA-3) Serviço cliente aplica mascaramento estrito de CPF e Cartão SUS ao retornar exames',
+      passou: false,
+      detalhes: 'Falha no teste EXA-3',
       erro: err.message,
     })
   }

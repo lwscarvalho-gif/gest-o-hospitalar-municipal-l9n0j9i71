@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T11:12:17.863Z",
+  "generatedAt": "2026-10-30T11:30:26.893Z",
   "collections": [
     {
       "name": "users",
@@ -1935,13 +1935,32 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "versao_atual",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tem_retificacao",
+          "type": "bool",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
         "CREATE INDEX idx_exames_paciente ON exames (paciente)",
         "CREATE INDEX idx_exames_status ON exames (status)",
         "CREATE INDEX idx_exames_data ON exames (data_solicitacao)",
-        "CREATE INDEX idx_exames_prioridade ON exames (prioridade)"
+        "CREATE INDEX idx_exames_prioridade ON exames (prioridade)",
+        "CREATE INDEX `idx_exames_idempotency` ON `exames` (idempotency_key)"
       ]
     },
     {
@@ -5545,6 +5564,112 @@
         "CREATE UNIQUE INDEX idx_reg_dest_codigo ON regulacao_destinos_internos (codigo)",
         "CREATE INDEX idx_reg_dest_ativo ON regulacao_destinos_internos (ativo)",
         "CREATE INDEX idx_reg_dest_setor ON regulacao_destinos_internos (setor_vinculado)"
+      ]
+    },
+    {
+      "name": "laudos_versoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "view": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "exame",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "exames"
+        },
+        {
+          "name": "numero_versao",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "resultado_sumario",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "laudo_texto",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "motivo_retificacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "versao_anterior_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "responsavel_laudo",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "responsavel_laudo_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "responsavel_laudo_cargo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_laudo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "usuario_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_laudos_vers_exame ON laudos_versoes (exame)",
+        "CREATE INDEX idx_laudos_vers_numero ON laudos_versoes (exame, numero_versao)",
+        "CREATE INDEX idx_laudos_vers_idemp ON laudos_versoes (idempotency_key)"
       ]
     }
   ]

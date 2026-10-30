@@ -405,6 +405,28 @@ export type CategoriaExame = 'laboratorial' | 'imagem' | 'grafico' | 'outro'
 export type PrioridadeExame = 'urgente' | 'eletiva'
 export type StatusExame = 'solicitado' | 'coletado' | 'em_analise' | 'liberado' | 'cancelado'
 
+export interface LaudoVersao {
+  id: string
+  exame: string
+  numero_versao: number
+  resultado_sumario: string
+  laudo_texto: string
+  motivo_retificacao?: string
+  versao_anterior_id?: string
+  responsavel_laudo?: string
+  responsavel_laudo_nome: string
+  responsavel_laudo_cargo?: string
+  data_laudo: string
+  usuario_id?: string
+  idempotency_key?: string
+  expand?: {
+    exame?: ExameItem
+    responsavel_laudo?: Profissional
+  }
+  created: string
+  updated: string
+}
+
 export interface ExameItem {
   id: string
   paciente: string
@@ -430,6 +452,9 @@ export interface ExameItem {
   resultado_sumario?: string
   laudo_texto?: string
   motivo_cancelamento?: string
+  idempotency_key?: string
+  versao_atual?: number
+  tem_retificacao?: boolean
   expand?: {
     paciente?: Paciente
     internacao?: Internacao
