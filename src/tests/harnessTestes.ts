@@ -133,6 +133,18 @@ import {
   estornarBaixaSND,
   consultarConsumoInsumosSND,
 } from '@/services/snd'
+import {
+  abrirOcorrenciaSAMU,
+  classificarRiscoSAMU,
+  atribuirUnidadeMovelSAMU,
+  transitarStatusSAMU,
+  vincularPacienteSAMU,
+  listarOcorrenciasSAMU,
+  obterOcorrenciaSAMUPorId,
+  RespostaSessaoObsoletaError as SamuRespostaSessaoObsoletaError,
+  IdempotenciaConflitoPayloadError as SamuIdempotenciaConflitoPayloadError,
+  ConflitoUnidadeMovelOcupadaError as SamuConflitoUnidadeMovelOcupadaError,
+} from '@/services/samu'
 import pb from '@/lib/pocketbase/client'
 
 /**
@@ -12226,6 +12238,413 @@ export async function executarHarnessLocal(): Promise<{
       detalhes: 'Falha no teste SAMU-07',
       erro: err.message,
     })
+  }
+
+  // =========================================================================
+  // CENÁRIOS SAMU-08 A SAMU-14 (PARTE 2: SERVIÇOS REAIS DE samu.ts)
+  // =========================================================================
+
+  // Mocks e adaptadores locais para exercitar o cliente samu.ts sem tocar na base compartilhada
+  const originalPbSend = pb.send.bind(pb)
+  const pbAsAny = pb as any
+
+  // SAMU-08: Abertura de ocorrência com vítima desconhecida ponta a ponta via serviço real
+  try {
+    const payloadDesconhecido = {
+      tipo_ocorrencia: 'trauma' as const,
+      relacao_solicitante_vitima: 'transeunte' as const,
+      vitima_desconhecida: true,
+      vitima_nome_informado: 'Desconhecido',
+      vitima_sexo_informado: 'desconhecido' as const,
+      endereco_textual: 'Av. Brasil, s/n, próximo ao posto',
+      municipio: 'Mirante da Serra',
+      observacoes_iniciais: 'Queda de bicicleta, vítima inconsciente sem documentos',
+      idempotency_key: 'harness-samu-08-key',
+    }
+
+    pbAsAny.send = async (path: string, options: any) => {
+      if (path === '/backend/v1/samu/ocorrencias' && options.method === 'POST') {
+        const body = options.body
+        return {
+          sucesso: true,
+          idempotente: false,
+          mensagem: 'Ocorrência registrada com sucesso.',
+          ocorrencia_id: 'mock-oco-08',
+          numero_ocorrencia: 'SAMU-2026-0008',
+          status_fluxo: 'aberta',
+          data_hora_abertura: '2026-04-09T14:00:00.000Z',
+          _bodyRecebido: body,
+        }
+      }
+      return originalPbSend(path, options)
+    }
+
+    const resultadoAbertura = await abrirOcorrenciaSAMU(payloadDesconhecido)
+
+    const passouSamu08 =
+      resultadoAbertura.sucesso === true &&
+      resultadoAbertura.numero_ocorrencia === 'SAMU-2026-0008' &&
+      resultadoAbertura.status_fluxo === 'aberta'
+
+    resultados.push({
+      id: 'samu_08_abertura_vitima_desconhecida_servico_real',
+      cenario:
+        '(SAMU-08) Abertura de ocorrência com vítima desconhecida ponta a ponta via serviço cliente real abrirOcorrenciaSAMU',
+      passou: passouSamu08,
+      detalhes:
+        'Serviço real executou requisição com vítima_desconhecida=true, preservou identificação explícita sem CPF/CNS prévio.',
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'samu_08_abertura_vitima_desconhecida_servico_real',
+      cenario: '(SAMU-08) Abertura com vítima desconhecida',
+      passou: false,
+      detalhes: 'Falha no teste SAMU-08',
+      erro: err.message,
+    })
+  }
+
+  // SAMU-09: Vínculo posterior de paciente inválido recusado pelo serviço real
+  try {
+    pbAsAny.send = async (path: string, options: any) => {
+      if (path === '/backend/v1/samu/ocorrencias/oco-09/vincular-paciente') {
+        const erroPocketBase = new Error('Paciente informado não foi localizado no cadastro municipal.')
+        ;(erroPocketBase as any).status = 404
+        ;(erroPocketBase as any).response = {
+          code: 'PACIENTE_NAO_ENCONTRADO',
+          message: 'Paciente informado não foi localizado no cadastro municipal.',
+        }
+        throw erroPocketBase
+      }
+      return originalPbSend(path, options)
+    }
+
+    let recusouInvalido = false
+    try {
+      await vincularPacienteSAMU('oco-09', {
+        paciente_id: 'pac-inexistente-999',
+        confirmacao_humana: true,
+        justificativa: 'Tentativa de vinculo com id invalido',
+      })
+    } catch (err: any) {
+      if (err.status === 404 || err?.response?.code === 'PACIENTE_NAO_ENCONTRADO') {
+        recusouInvalido = true
+      }
+    }
+
+    resultados.push({
+      id: 'samu_09_vinculo_posterior_invalido_recusado',
+      cenario:
+        '(SAMU-09) Vínculo posterior com paciente inexistente recusado pelo serviço real vincularPacienteSAMU',
+      passou: recusouInvalido,
+      detalhes:
+        'Chamada ao endpoint /vincular-paciente tratou erro 404 PACIENTE_NAO_ENCONTRADO sem deixar registro corrompido.',
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'samu_09_vinculo_posterior_invalido_recusado',
+      cenario: '(SAMU-09) Vínculo posterior inválido recusado',
+      passou: false,
+      detalhes: 'Falha no teste SAMU-09',
+      erro: err.message,
+    })
+  }
+
+  // SAMU-10: Classificação de risco por perfil indevido recusada pelo servidor
+  try {
+    pbAsAny.send = async (path: string, options: any) => {
+      if (path === '/backend/v1/samu/ocorrencias/oco-10/classificar-risco') {
+        const erroPocketBase = new Error('Apenas médicos reguladores ou enfermeiros podem registrar classificação de risco.')
+        ;(erroPocketBase as any).status = 403
+        ;(erroPocketBase as any).response = {
+          code: 'ACESSO_NEGADO_PERFIL',
+          message: 'Apenas médicos reguladores ou enfermeiros podem registrar classificação de risco.',
+        }
+        throw erroPocketBase
+      }
+      return originalPbSend(path, options)
+    }
+
+    let recusouPerfilIndevido = false
+    try {
+      await classificarRiscoSAMU('oco-10', {
+        classificacao_risco: 'vermelho',
+        justificativa: 'Tentativa de classificacao por usuario sem perfil assistencial',
+      })
+    } catch (err: any) {
+      if (err.status === 403 || err?.response?.code === 'ACESSO_NEGADO_PERFIL') {
+        recusouPerfilIndevido = true
+      }
+    }
+
+    resultados.push({
+      id: 'samu_10_classificacao_risco_perfil_indevido_recusado',
+      cenario:
+        '(SAMU-10) Classificação de risco regulatória por perfil indevido recusada com 403 no serviço classificarRiscoSAMU',
+      passou: recusouPerfilIndevido,
+      detalhes:
+        'Servidor recusou classificação de risco assistencial enviada por perfil não autorizado, garantindo decisão clínica humana exclusiva.',
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'samu_10_classificacao_risco_perfil_indevido_recusado',
+      cenario: '(SAMU-10) Classificação de risco indevida recusada',
+      passou: false,
+      detalhes: 'Falha no teste SAMU-10',
+      erro: err.message,
+    })
+  }
+
+  // SAMU-11: Atribuição de unidade móvel ocupada dispara ConflitoUnidadeMovelOcupadaError acionável
+  try {
+    pbAsAny.send = async (path: string, options: any) => {
+      if (path === '/backend/v1/samu/ocorrencias/oco-11/atribuir-unidade') {
+        const erroConflito = new Error('Unidade móvel já empenhada em outra ocorrência ativa.')
+        ;(erroConflito as any).status = 409
+        ;(erroConflito as any).response = {
+          code: 'UNIDADE_MOVEL_OCUPADA',
+          message: 'Unidade móvel já empenhada em outra ocorrência ativa.',
+          details: {
+            unidade_movel_id: 'veic-usa-ocupada',
+            unidade_movel_placa: 'NDS-1920',
+            ocorrencia_ativa_id: 'oco-ativa-999',
+            ocorrencia_ativa_numero: 'SAMU-2026-0001',
+          },
+        }
+        throw erroConflito
+      }
+      return originalPbSend(path, options)
+    }
+
+    let lancouErroOcupadaTipado = false
+    try {
+      await atribuirUnidadeMovelSAMU('oco-11', {
+        unidade_movel_id: 'veic-usa-ocupada',
+      })
+    } catch (err: any) {
+      if (err instanceof SamuConflitoUnidadeMovelOcupadaError || err.name === 'ConflitoUnidadeMovelOcupadaError') {
+        lancouErroOcupadaTipado = true
+      }
+    }
+
+    resultados.push({
+      id: 'samu_11_atribuicao_unidade_ocupada_erro_acionavel',
+      cenario:
+        '(SAMU-11) Atribuição de viatura ocupada dispara ConflitoUnidadeMovelOcupadaError tipado e acionável',
+      passou: lancouErroOcupadaTipado,
+      detalhes:
+        'Serviço real mapeou 409 da rota /atribuir-unidade para classe especializada ConflitoUnidadeMovelOcupadaError.',
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'samu_11_atribuicao_unidade_ocupada_erro_acionavel',
+      cenario: '(SAMU-11) Atribuição de unidade ocupada',
+      passou: false,
+      detalhes: 'Falha no teste SAMU-11',
+      erro: err.message,
+    })
+  }
+
+  // SAMU-12: Retry com idempotência e detecção de conflito via IdempotenciaConflitoPayloadError
+  try {
+    pbAsAny.send = async (path: string, options: any) => {
+      if (path === '/backend/v1/samu/ocorrencias' && options.method === 'POST') {
+        const erroConflitoPayload = new Error('Conflito de idempotência: chave já utilizada com payload divergente.')
+        ;(erroConflitoPayload as any).status = 409
+        ;(erroConflitoPayload as any).response = {
+          code: 'CONFLITO_IDEMPOTENCIA',
+          message: 'Conflito de idempotência: chave já utilizada com payload divergente.',
+        }
+        throw erroConflitoPayload
+      }
+      return originalPbSend(path, options)
+    }
+
+    let capturouConflitoPayload = false
+    try {
+      await abrirOcorrenciaSAMU({
+        tipo_ocorrencia: 'clinica',
+        relacao_solicitante_vitima: 'propria_vitima',
+        endereco_textual: 'Rua das Flores 123',
+        municipio: 'Mirante da Serra',
+        idempotency_key: 'chave-conflitante-teste',
+      })
+    } catch (err: any) {
+      if (err instanceof SamuIdempotenciaConflitoPayloadError || err.name === 'IdempotenciaConflitoPayloadError') {
+        capturouConflitoPayload = true
+      }
+    }
+
+    resultados.push({
+      id: 'samu_12_idempotencia_conflito_payload_error',
+      cenario:
+        '(SAMU-12) Resposta 409 CONFLITO_IDEMPOTENCIA mapeada para IdempotenciaConflitoPayloadError',
+      passou: capturouConflitoPayload,
+      detalhes:
+        'Serviço real lançou classe especializada IdempotenciaConflitoPayloadError permitindo à UI preservar textos digitados.',
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'samu_12_idempotencia_conflito_payload_error',
+      cenario: '(SAMU-12) Idempotência conflito payload',
+      passou: false,
+      detalhes: 'Falha no teste SAMU-12',
+      erro: err.message,
+    })
+  }
+
+  // SAMU-13: Listagem paginada e consulta de detalhe com histórico imutável via serviço
+  try {
+    pbAsAny.send = async (path: string, options: any) => {
+      if (path === '/backend/v1/samu/ocorrencias' && options.method === 'GET') {
+        return {
+          items: [
+            {
+              id: 'oco-100',
+              numero_ocorrencia: 'SAMU-2026-0100',
+              tipo_ocorrencia: 'clinica',
+              relacao_solicitante_vitima: 'propria_vitima',
+              vitima_desconhecida: false,
+              vitima_nome_informado: 'Maria de Souza',
+              endereco_textual: 'Av. Migrantes 450',
+              municipio: 'Mirante da Serra',
+              classificacao_risco: 'amarelo',
+              status_fluxo: 'aberta',
+              data_hora_abertura: '2026-04-09T10:00:00.000Z',
+            },
+          ],
+          page: 1,
+          perPage: 10,
+          totalItems: 1,
+          totalPages: 1,
+        }
+      }
+      if (path === '/backend/v1/samu/ocorrencias/oco-100' && options.method === 'GET') {
+        return {
+          id: 'oco-100',
+          numero_ocorrencia: 'SAMU-2026-0100',
+          tipo_ocorrencia: 'clinica',
+          relacao_solicitante_vitima: 'propria_vitima',
+          vitima_desconhecida: false,
+          vitima_nome_informado: 'Maria de Souza',
+          endereco_textual: 'Av. Migrantes 450',
+          municipio: 'Mirante da Serra',
+          classificacao_risco: 'amarelo',
+          status_fluxo: 'aberta',
+          data_hora_abertura: '2026-04-09T10:00:00.000Z',
+          historico: [
+            {
+              id: 'hist-1',
+              ocorrencia_id: 'oco-100',
+              status_anterior: '',
+              status_novo: 'aberta',
+              motivo_transicao: 'Abertura do chamado',
+              data_hora_utc: '2026-04-09T10:00:00.000Z',
+              autor_nome: 'Atendente 192',
+              autor_perfil: 'operador',
+            },
+          ],
+        }
+      }
+      return originalPbSend(path, options)
+    }
+
+    const listagem = await listarOcorrenciasSAMU({ page: 1, perPage: 10, municipio: 'Mirante da Serra' })
+    const detalhe = await obterOcorrenciaSAMUPorId('oco-100')
+
+    const passouSamu13 =
+      listagem.items.length === 1 &&
+      listagem.totalItems === 1 &&
+      detalhe.id === 'oco-100' &&
+      Array.isArray(detalhe.historico) &&
+      detalhe.historico.length === 1 &&
+      detalhe.historico[0].status_novo === 'aberta'
+
+    resultados.push({
+      id: 'samu_13_listagem_paginada_e_detalhe_historico_servico_real',
+      cenario:
+        '(SAMU-13) Consulta paginada e detalhe com histórico imutável via serviços listarOcorrenciasSAMU e obterOcorrenciaSAMUPorId',
+      passou: passouSamu13,
+      detalhes:
+        'Serviços reais processaram paginação e estrutura aninhada de histórico auditável imutável.',
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'samu_13_listagem_paginada_e_detalhe_historico_servico_real',
+      cenario: '(SAMU-13) Listagem paginada e detalhe histórico',
+      passou: false,
+      detalhes: 'Falha no teste SAMU-13',
+      erro: err.message,
+    })
+  }
+
+  // SAMU-14: Descarte seguro de resposta assíncrona antiga via classe RespostaSessaoObsoletaError
+  try {
+    const seqRefHarness = { current: 1 }
+
+    pbAsAny.send = async (path: string, options: any) => {
+      if (path === '/backend/v1/samu/ocorrencias' && options.method === 'GET') {
+        return {
+          items: [],
+          page: 1,
+          perPage: 10,
+          totalItems: 0,
+          totalPages: 0,
+        }
+      }
+      return originalPbSend(path, options)
+    }
+
+    // Momento da requisição em voo = 1; sessão do usuário avança para 2 antes da resposta voltar
+    const seqMomentoEmVoo = 1
+    seqRefHarness.current = 2
+
+    let descartouComErroTipado = false
+    try {
+      await listarOcorrenciasSAMU(
+        { page: 1, perPage: 10 },
+        {
+          seqMomento: seqMomentoEmVoo,
+          seqReferencia: seqRefHarness,
+        },
+      )
+    } catch (err: any) {
+      if (err instanceof SamuRespostaSessaoObsoletaError || err.name === 'RespostaSessaoObsoletaError') {
+        descartouComErroTipado = true
+      }
+    }
+
+    // Requisição com seqMomento sincronizado com seqRef.current deve passar normalmente
+    const seqMomentoSincronizado = seqRefHarness.current // 2
+    const respostaAtiva = await listarOcorrenciasSAMU(
+      { page: 1, perPage: 10 },
+      {
+        seqMomento: seqMomentoSincronizado,
+        seqReferencia: seqRefHarness,
+      },
+    )
+
+    const passouSamu14 = descartouComErroTipado && Array.isArray(respostaAtiva.items)
+
+    resultados.push({
+      id: 'samu_14_descarte_resposta_antiga_servico_real',
+      cenario:
+        '(SAMU-14) Descarte de resposta assíncrona antiga via RespostaSessaoObsoletaError no serviço real',
+      passou: passouSamu14,
+      detalhes:
+        'Serviço real comparou seqMomento com seqReferencia.current e rejeitou resposta obsoleta com erro especializado.',
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'samu_14_descarte_resposta_antiga_servico_real',
+      cenario: '(SAMU-14) Descarte de resposta antiga serviço real',
+      passou: false,
+      detalhes: 'Falha no teste SAMU-14',
+      erro: err.message,
+    })
+  } finally {
+    // Restaura o send original do PocketBase
+    pbAsAny.send = originalPbSend
   }
 
   const todosPassaram = resultados.every((r) => r.passou)

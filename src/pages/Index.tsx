@@ -28,6 +28,7 @@ import { TransporteView } from '@/components/TransporteView'
 import { TfdView } from '@/components/TfdView'
 import { RisView } from '@/components/RisView'
 import { SndView } from '@/components/SndView'
+import { SamuView } from '@/components/SamuView'
 import { verificarInvariantesFuncionais } from '@/tests'
 import { Loader2 } from 'lucide-react'
 
@@ -104,6 +105,9 @@ const Index: React.FC = () => {
             onNavegarInternacao={() => setActiveTab('internacao')}
             onNavegarAgendamento={() => setActiveTab('agendamentos')}
           />
+        )}
+        {activeTab === 'samu' && temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && (
+          <SamuView />
         )}
         {activeTab === 'transporte' &&
           temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && <TransporteView />}

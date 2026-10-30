@@ -30,12 +30,14 @@ import {
   Bus,
   Camera,
   Utensils,
+  PhoneCall,
 } from 'lucide-react'
 
 export type ActiveTab =
   | 'painel_gestao'
   | 'dashboard'
   | 'pronto_atendimento'
+  | 'samu'
   | 'transporte'
   | 'tfd'
   | 'mensageria'
@@ -84,6 +86,12 @@ const NAV_ITEMS: NavItem[] = [
     id: 'pronto_atendimento',
     label: 'Pronto Atendimento (PA)',
     icon: Flame,
+    allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
+  },
+  {
+    id: 'samu',
+    label: 'SAMU 192 (Básico)',
+    icon: PhoneCall,
     allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
   },
   {
