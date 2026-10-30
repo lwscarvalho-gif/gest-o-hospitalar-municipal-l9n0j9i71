@@ -6,7 +6,7 @@ import packageInfo from '../../package.json'
  * (ex.: 0.0.74 -> 0.0.75).
  * Exportamos a versão e formatadores seguros para uso em cabeçalhos, rodapés e badges.
  */
-export const APP_VERSION: string = packageInfo.version || '0.0.75'
+export const APP_VERSION: string = packageInfo.version || '0.0.74'
 
 export const APP_VERSION_LABEL: string = `v${APP_VERSION}`
 
