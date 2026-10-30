@@ -31,6 +31,7 @@ import { SndView } from '@/components/SndView'
 import { SamuView } from '@/components/SamuView'
 import { verificarInvariantesFuncionais } from '@/tests'
 import { Loader2 } from 'lucide-react'
+import { APP_VERSION_LABEL } from '@/constants/versao'
 
 // Mapeamento de tela inicial padrão conforme o perfil do operador
 const getDefaultTabForRole = (role?: string): ActiveTab => {
@@ -220,8 +221,8 @@ const Index: React.FC = () => {
       <footer className="border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
           <span>
-            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar v0.0.28
-            (Gestão Hospitalar, Conferência de Consistência Faturamento SUS SIH/AIH & SIA/BPA, Fuso
+            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar {APP_VERSION_LABEL}
+            {' '}(Gestão Hospitalar, Conferência de Consistência Faturamento SUS SIH/AIH & SIA/BPA, Fuso
             IANA Operacional)
           </span>
           <span className="text-slate-400">

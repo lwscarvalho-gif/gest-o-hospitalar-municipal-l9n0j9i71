@@ -237,7 +237,7 @@ export const SndView: React.FC<SndViewProps> = ({ onNavegarSAME, pacienteIdInici
               variant="outline"
               className="text-[11px] bg-slate-100 text-slate-700 border-slate-300"
             >
-              v0.0.66 • Requisito 7.4.3.5
+              Requisito 7.4.3.5
             </Badge>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
