@@ -27,7 +27,7 @@ onRecordCreate((e) => {
     throw new BadRequestError('A quantidade da dispensação deve ser estritamente positiva.')
   }
 
-  // 1. Verificação de IDEMPOTÊNCIA PERSISTENTE:
+  // 1. Verificação de IDEMPOTÊNCIA PERSISTENTE E ISOLAMENTO DE USUÁRIO / PAYLOAD:
   if (idempotencyKey && String(idempotencyKey).trim().length > 0) {
     const key = String(idempotencyKey).trim()
     const existentes = e.app.findRecordsByFilter(
@@ -41,6 +41,46 @@ onRecordCreate((e) => {
 
     if (existentes && existentes.length > 0) {
       const original = existentes[0]
+
+      // (b) Isolamento de segurança: chave gerada por outro usuário NÃO pode devolver dados da operação original
+      // Se autenticado, checa se pertence ao mesmo usuário/dispensador
+      const auth = e.auth
+      const originalDispensador = original.get('profissional_dispensador')
+      const originalUserId = original.get('usuario_id') || ''
+      if (auth) {
+        if (originalUserId && originalUserId !== auth.id) {
+          throw new ForbiddenError(
+            'Acesso negado: a chave de idempotência informada pertence a outro usuário.',
+          )
+        }
+        if (
+          !originalUserId &&
+          originalDispensador &&
+          auth.get('name') &&
+          originalDispensador !== auth.get('name')
+        ) {
+          throw new ForbiddenError(
+            'Acesso negado: a chave de idempotência informada foi originada por outro profissional.',
+          )
+        }
+      }
+
+      // (a) Validação de integridade do payload: mesma chave com payload divergente (item, paciente ou quantidade) gera CONFLITO (409)
+      const originalItem = original.get('item')
+      const originalPac = original.get('paciente')
+      const originalQtd = Number(original.get('quantidade'))
+      const solicitantePac = e.record.get('paciente')
+
+      if (
+        (originalItem && originalItem !== itemId) ||
+        (originalPac && solicitantePac && originalPac !== solicitantePac) ||
+        (!isNaN(originalQtd) && originalQtd !== quantidade)
+      ) {
+        throw new BadRequestError(
+          'IDEMPOTENCY_PAYLOAD_CONFLICT: A mesma chave de idempotência já foi utilizada com dados de dispensação diferentes.',
+        )
+      }
+
       // Lança erro controlado informando o ID original para o cliente recuperar de forma consistente
       throw new BadRequestError(`IDEMPOTENT_HIT:${original.id}`)
     }

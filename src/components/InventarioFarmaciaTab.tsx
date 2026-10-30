@@ -85,11 +85,6 @@ export const InventarioFarmaciaTab: React.FC<Props> = ({
   const [fechandoInv, setFechandoInv] = useState(false)
   const [concorrenciaAlerta, setConcorrenciaAlerta] = useState<any[] | null>(null)
 
-  // Modal de Testes Sintéticos Isolados
-  const [modalTestes, setModalTestes] = useState(false)
-  const [testando, setTestando] = useState(false)
-  const [resultadoTestes, setResultadoTestes] = useState<any | null>(null)
-
   // Modal de Perdas (Validade / Avaria)
   const [modalPerda, setModalPerda] = useState(false)
   const [perdaItemId, setPerdaItemId] = useState('')
@@ -399,32 +394,6 @@ export const InventarioFarmaciaTab: React.FC<Props> = ({
 
           {podeCriarFechar && (
             <>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  setModalTestes(true)
-                  setTestando(true)
-                  try {
-                    const { executarTestesSinteticosFarmacia } =
-                      await import('@/services/testesSinteticos')
-                    const res = await executarTestesSinteticosFarmacia()
-                    setResultadoTestes(res)
-                  } catch (e: any) {
-                    setResultadoTestes({
-                      todos_passaram: false,
-                      resultados: [{ cenario: 'erro', sucesso: false, erro: e.message }],
-                    })
-                  } finally {
-                    setTestando(false)
-                  }
-                }}
-                className="text-purple-700 border-purple-300 hover:bg-purple-50 flex items-center gap-1.5"
-              >
-                <ShieldCheck className="w-4 h-4 text-purple-600" />
-                Auditar Cenários Sintéticos
-              </Button>
-
               <Button
                 size="sm"
                 onClick={() => {
@@ -860,92 +829,6 @@ export const InventarioFarmaciaTab: React.FC<Props> = ({
           </div>
         </Card>
       )}
-
-      {/* MODAL TESTES SINTÉTICOS ISOLADOS */}
-      <Dialog open={modalTestes} onOpenChange={setModalTestes}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-purple-600" />
-              Auditoria de Cenários Sintéticos Isolados
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 pt-2">
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
-              Executa cenários com fixtures sintéticas isoladas temporárias e limpeza automática:
-              retry tardio com idempotência, concorrência vs. inventário, saldo insuficiente e
-              rollback atômico.
-            </div>
-
-            {testando ? (
-              <div className="p-8 text-center text-xs text-slate-500 space-y-2">
-                <RefreshCw className="w-6 h-6 text-purple-600 animate-spin mx-auto" />
-                <p>Executando cenários de estresse transacional no backend...</p>
-              </div>
-            ) : resultadoTestes ? (
-              <div className="space-y-3">
-                <div
-                  className={`p-3 rounded-lg border text-xs font-bold flex items-center gap-2 ${
-                    resultadoTestes.todos_passaram
-                      ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                      : 'bg-red-50 border-red-300 text-red-800'
-                  }`}
-                >
-                  {resultadoTestes.todos_passaram ? (
-                    <>
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      Todos os cenários sintéticos passaram com sucesso comprovado!
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="w-4 h-4 text-red-600" />
-                      Um ou mais cenários reportaram divergência.
-                    </>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  {resultadoTestes.resultados?.map((r: any, idx: number) => (
-                    <div
-                      key={idx}
-                      className="p-3 rounded-lg border border-slate-200 bg-white text-xs space-y-1"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-800 font-mono text-[11px]">
-                          {r.cenario}
-                        </span>
-                        <Badge
-                          variant="outline"
-                          className={
-                            r.sucesso
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                              : 'bg-red-50 text-red-700 border-red-300'
-                          }
-                        >
-                          {r.sucesso ? 'PASSOU' : 'FALHOU'}
-                        </Badge>
-                      </div>
-                      <p className="text-slate-600 text-[11px]">{r.detalhes || r.erro}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setModalTestes(false)}
-              >
-                Fechar
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* MODAL 1: ABRIR NOVO INVENTÁRIO */}
       <Dialog open={modalNovoInv} onOpenChange={setModalNovoInv}>

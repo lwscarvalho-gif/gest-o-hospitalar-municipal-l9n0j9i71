@@ -148,6 +148,29 @@ export async function registrarDispensacao(params: RegistrarDispensacaoParams): 
           expand: 'paciente,item,prescricao_relacionada,internacao,atendimento_pa',
         })
       if (jaExiste) {
+        // (b) Isolamento de usuário: checa se pertence ao usuário da sessão
+        const authNome = pb.authStore.model?.name || ''
+        if (
+          authNome &&
+          jaExiste.profissional_dispensador &&
+          jaExiste.profissional_dispensador !== authNome
+        ) {
+          throw new Error(
+            'Acesso negado: a chave de idempotência informada foi criada por outro usuário.',
+          )
+        }
+
+        // (a) Validação de payload idêntico: se item, paciente ou quantidade diferem, gera conflito
+        if (
+          jaExiste.item !== itemId ||
+          jaExiste.paciente !== pacienteId ||
+          Number(jaExiste.quantidade) !== quantidade
+        ) {
+          throw new Error(
+            'Conflito de Idempotência: A mesma chave já foi usada com parâmetros de dispensação diferentes.',
+          )
+        }
+
         // Retorna o resultado original sem segunda baixa de estoque!
         const itemAtual = (await obterItemFarmacia(jaExiste.item)) || ({} as ItemFarmacia)
         return {
@@ -156,7 +179,13 @@ export async function registrarDispensacao(params: RegistrarDispensacaoParams): 
           idempotenteReutilizado: true,
         }
       }
-    } catch (_) {
+    } catch (errVerif: any) {
+      if (
+        errVerif.message?.includes('Conflito de Idempotência') ||
+        errVerif.message?.includes('Acesso negado')
+      ) {
+        throw errVerif
+      }
       // Registro não encontrado previamente com essa chave, segue fluxo normal
     }
   }
@@ -219,6 +248,11 @@ export async function registrarDispensacao(params: RegistrarDispensacaoParams): 
           idempotenteReutilizado: true,
         }
       }
+    }
+    if (msg.includes('IDEMPOTENCY_PAYLOAD_CONFLICT')) {
+      throw new Error(
+        'Conflito de Idempotência: A mesma chave já foi utilizada com dados de dispensação diferentes.',
+      )
     }
     throw err
   }
