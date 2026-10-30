@@ -34,9 +34,11 @@ import {
   FileText,
   Loader2,
   Pill,
+  FlaskConical,
 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PrescricaoEnfermagemTab } from '@/components/PrescricaoEnfermagemTab'
+import { ModalSolicitarExame } from '@/components/ModalSolicitarExame'
 import { useToast } from '@/hooks/use-toast'
 
 interface AssistencialViewProps {
@@ -65,9 +67,12 @@ export const AssistencialView: React.FC<AssistencialViewProps> = ({
   // Filtros
   const [pacienteSelecionado, setPacienteSelecionado] = useState<string>(pacienteIdFoco || 'todos')
 
-  // Modal
+  // Modal Evolução
   const [dialogAberto, setDialogAberto] = useState(false)
   const [salvando, setSalvando] = useState(false)
+
+  // Modal Exame
+  const [modalExameAberto, setModalExameAberto] = useState(false)
 
   // Form
   const [formPaciente, setFormPaciente] = useState(pacienteIdFoco || '')
@@ -212,6 +217,17 @@ export const AssistencialView: React.FC<AssistencialViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {podePrescrever && (
+            <Button
+              variant="outline"
+              onClick={() => setModalExameAberto(true)}
+              className="border-blue-300 text-blue-700 hover:bg-blue-50 text-xs sm:text-sm flex items-center gap-1.5"
+            >
+              <FlaskConical className="w-4 h-4 text-blue-600" />
+              Solicitar Exame
+            </Button>
+          )}
+
           {subAba === 'evolucoes' && (
             <Button
               onClick={abrirNovaEvolucao}
@@ -500,6 +516,19 @@ export const AssistencialView: React.FC<AssistencialViewProps> = ({
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL SOLICITAÇÃO DE EXAMES */}
+      <ModalSolicitarExame
+        aberto={modalExameAberto}
+        onClose={() => setModalExameAberto(false)}
+        paciente={
+          pacienteSelecionado !== 'todos'
+            ? pacientes.find((p) => p.id === pacienteSelecionado)
+            : pacientes[0]
+        }
+        internacaoId={internacaoIdFoco}
+        onSucesso={() => carregar()}
+      />
     </div>
   )
 }

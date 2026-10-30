@@ -13,6 +13,50 @@ export interface AppUser {
 }
 
 // -------------------------------------------------------------
+// FASE 4: MÓDULO EXAMES & LAUDOS
+// -------------------------------------------------------------
+export type CategoriaExame = 'laboratorial' | 'imagem' | 'grafico' | 'outro'
+export type PrioridadeExame = 'urgente' | 'eletiva'
+export type StatusExame = 'solicitado' | 'coletado' | 'em_analise' | 'liberado' | 'cancelado'
+
+export interface ExameItem {
+  id: string
+  paciente: string
+  internacao?: string
+  atendimento_pa?: string
+  setor?: string
+  tipo_exame: string
+  categoria?: CategoriaExame
+  prioridade: PrioridadeExame
+  justificativa?: string
+  data_solicitacao: string
+  solicitante?: string
+  solicitante_nome: string
+  status: StatusExame
+  data_coleta?: string
+  responsavel_coleta_nome?: string
+  observacoes_coleta?: string
+  data_inicio_analise?: string
+  responsavel_analise_nome?: string
+  data_laudo?: string
+  responsavel_laudo?: string
+  responsavel_laudo_nome?: string
+  resultado_sumario?: string
+  laudo_texto?: string
+  motivo_cancelamento?: string
+  expand?: {
+    paciente?: Paciente
+    internacao?: Internacao
+    atendimento_pa?: FichaProntoAtendimento
+    setor?: Setor
+    solicitante?: Profissional
+    responsavel_laudo?: Profissional
+  }
+  created: string
+  updated: string
+}
+
+// -------------------------------------------------------------
 // FASE 3 / SAME: PRESCRIÇÃO MÉDICA DIGITAL NA INTERNAÇÃO
 // -------------------------------------------------------------
 export type ViaAdministracaoMedicamento =
@@ -110,6 +154,11 @@ export type TipoEventoProntuario =
   | 'dispensacao_farmacia'
   | 'vacina_aplicacao'
   | 'agendamento'
+  | 'exame_solicitado'
+  | 'exame_coletado'
+  | 'exame_em_analise'
+  | 'exame_laudado'
+  | 'exame_cancelado'
 
 export interface EventoProntuarioUnificado {
   id: string

@@ -10,8 +10,10 @@ import {
   Agendamento,
   PrescricaoMedica,
   AdministracaoMedicamento,
+  ExameItem,
 } from '@/types/hospital'
 import { listarPrescricoes, listarAdministracoesMedicamentos } from './prescricoes'
+import { listarExames } from './exames'
 
 /**
  * SERVIÇO SAME — PRONTUÁRIO ELETRÔNICO ÚNICO / CONSOLIDADO
@@ -34,6 +36,7 @@ export async function carregarProntuarioUnificado(
     agendamentos,
     prescricoes,
     administracoes,
+    exames,
   ] = await Promise.all([
     pb
       .collection('pronto_atendimento')
@@ -92,6 +95,8 @@ export async function carregarProntuarioUnificado(
     listarPrescricoes({ pacienteId }),
 
     listarAdministracoesMedicamentos({ pacienteId }),
+
+    listarExames({ pacienteId }),
   ])
 
   const eventos: EventoProntuarioUnificado[] = []
@@ -397,6 +402,95 @@ export async function carregarProntuarioUnificado(
       badgeCor: ag.status === 'atendido' ? 'bg-emerald-600 text-white' : 'bg-slate-600 text-white',
       icone: 'Calendar',
       registroOriginal: ag,
+    })
+  })
+
+  // I. Ciclo de Exames & Laudos (Solicitação, Coleta, Análise e Laudo Liberado)
+  exames.forEach((ex) => {
+    // 1. Evento do Laudo / Resultado Concluído
+    if (ex.status === 'liberado' && (ex.laudo_texto || ex.resultado_sumario)) {
+      eventos.push({
+        id: `ex-laudo-${ex.id}`,
+        tipo: 'exame_laudado',
+        dataHora: ex.data_laudo || ex.updated || ex.created,
+        titulo: `Laudo de Exame Liberado: ${ex.tipo_exame}`,
+        subtitulo: ex.responsavel_laudo_nome
+          ? `Laudado por: ${ex.responsavel_laudo_nome}`
+          : undefined,
+        descricao: ex.resultado_sumario
+          ? `Resultado: ${ex.resultado_sumario}\n\n${ex.laudo_texto || ''}`
+          : ex.laudo_texto || 'Laudo emitido e disponibilizado ao prontuário',
+        detalhes: {
+          tipo_exame: ex.tipo_exame,
+          categoria: ex.categoria,
+          resultado_sumario: ex.resultado_sumario,
+          laudo_texto: ex.laudo_texto,
+          responsavel_laudo: ex.responsavel_laudo_nome,
+          data_solicitacao: ex.data_solicitacao,
+          solicitante: ex.solicitante_nome,
+        },
+        profissionalNome: ex.responsavel_laudo_nome || ex.solicitante_nome,
+        badgeTexto: `Resultado: ${ex.resultado_sumario || 'Liberado'}`,
+        badgeCor: 'bg-teal-700 text-white',
+        icone: 'FlaskConical',
+        registroOriginal: ex,
+      })
+    }
+
+    // 2. Evento do Pedido / Solicitação Inicial do Exame
+    const rotuloStatus =
+      {
+        solicitado: 'Solicitado (Fila)',
+        coletado: 'Material Coletado',
+        em_analise: 'Em Análise',
+        liberado: 'Laudo Liberado',
+        cancelado: 'Cancelado',
+      }[ex.status] || ex.status
+
+    const corStatus =
+      {
+        solicitado: 'bg-amber-600 text-white',
+        coletado: 'bg-blue-600 text-white',
+        em_analise: 'bg-purple-600 text-white',
+        liberado: 'bg-emerald-600 text-white',
+        cancelado: 'bg-red-600 text-white',
+      }[ex.status] || 'bg-slate-600 text-white'
+
+    eventos.push({
+      id: `ex-ped-${ex.id}`,
+      tipo:
+        ex.status === 'cancelado'
+          ? 'exame_cancelado'
+          : ex.status === 'em_analise'
+            ? 'exame_em_analise'
+            : ex.status === 'coletado'
+              ? 'exame_coletado'
+              : 'exame_solicitado',
+      dataHora: ex.data_solicitacao || ex.created,
+      titulo: `Pedido de Exame: ${ex.tipo_exame} (${ex.prioridade.toUpperCase()})`,
+      subtitulo: `Solicitante: ${ex.solicitante_nome}${ex.expand?.setor?.nome ? ` • Setor: ${ex.expand.setor.nome}` : ''}`,
+      descricao: `${ex.justificativa ? `Justificativa clínica: ${ex.justificativa}` : 'Exame complementar solicitado'}${
+        ex.motivo_cancelamento ? ` • Motivo do cancelamento: ${ex.motivo_cancelamento}` : ''
+      }${
+        ex.data_coleta
+          ? ` • Coleta realizada em ${ex.data_coleta}${ex.responsavel_coleta_nome ? ` por ${ex.responsavel_coleta_nome}` : ''}`
+          : ''
+      }`,
+      detalhes: {
+        tipo_exame: ex.tipo_exame,
+        categoria: ex.categoria,
+        prioridade: ex.prioridade,
+        justificativa: ex.justificativa,
+        status: ex.status,
+        data_coleta: ex.data_coleta,
+        responsavel_coleta: ex.responsavel_coleta_nome,
+        resultado_sumario: ex.resultado_sumario,
+      },
+      profissionalNome: ex.solicitante_nome,
+      badgeTexto: `Exame • ${rotuloStatus}`,
+      badgeCor: corStatus,
+      icone: 'Microscope',
+      registroOriginal: ex,
     })
   })
 

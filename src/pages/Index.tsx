@@ -16,6 +16,7 @@ import { AuditoriaView } from '@/components/AuditoriaView'
 import { FarmaciaView } from '@/components/FarmaciaView'
 import { ImunizacaoView } from '@/components/ImunizacaoView'
 import { ProntuarioSAMEView } from '@/components/ProntuarioSAMEView'
+import { ExamesLaudosView } from '@/components/ExamesLaudosView'
 import { Loader2 } from 'lucide-react'
 
 // Mapeamento de tela inicial padrão conforme o perfil do operador
@@ -91,6 +92,8 @@ const Index: React.FC = () => {
         {activeTab === 'prontuario_same' && temPermissao(['admin', 'gestor', 'profissional']) && (
           <ProntuarioSAMEView />
         )}
+        {activeTab === 'exames_laudos' &&
+          temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && <ExamesLaudosView />}
         {activeTab === 'farmacia' && temPermissao(['admin', 'gestor', 'recepcao']) && (
           <FarmaciaView />
         )}
@@ -126,8 +129,8 @@ const Index: React.FC = () => {
       <footer className="border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
           <span>
-            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar v0.0.4 (SAME
-            Unificado, Prescrição Digital & Farmácia Integrada)
+            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar v0.0.7
+            (Módulo Exames & Laudos, SAME Unificado, Prescrição Digital & Farmácia)
           </span>
           <span className="text-slate-400">
             Acesso em nuvem seguro • Usuário: {user?.name} ({user?.role})

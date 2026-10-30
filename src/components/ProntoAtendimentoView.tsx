@@ -61,7 +61,9 @@ import {
   Filter,
   Check,
   ShieldAlert,
+  FlaskConical,
 } from 'lucide-react'
+import { ModalSolicitarExame } from '@/components/ModalSolicitarExame'
 
 export const ProntoAtendimentoView: React.FC<{
   onNavegarInternacao?: () => void
@@ -88,6 +90,7 @@ export const ProntoAtendimentoView: React.FC<{
   const [modalTriagemAberto, setModalTriagemAberto] = useState(false)
   const [modalAtendimentoAberto, setModalAtendimentoAberto] = useState(false)
   const [modalDetalhesAberto, setModalDetalhesAberto] = useState(false)
+  const [modalExamePAAberto, setModalExamePAAberto] = useState(false)
 
   // Ficha em Foco
   const [fichaEmFoco, setFichaEmFoco] = useState<FichaProntoAtendimento | null>(null)
@@ -1125,6 +1128,29 @@ export const ProntoAtendimentoView: React.FC<{
           </DialogHeader>
 
           <form onSubmit={handleSalvarAtendimento} className="space-y-4 pt-2">
+            {/* Botão de Solicitação de Exame no Atendimento do PA */}
+            <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50/70 border border-blue-200">
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
+                  <FlaskConical className="w-4 h-4 text-blue-600" />
+                  Necessita de Exames Complementares (Urgência)?
+                </span>
+                <p className="text-[11px] text-blue-700">
+                  Solicite hemograma, raio-x, urina ou ecg imediatamente para apoiar a conduta
+                  médica
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setModalExamePAAberto(true)}
+                className="bg-white border-blue-300 text-blue-700 hover:bg-blue-100 text-xs shrink-0"
+              >
+                + Solicitar Exame
+              </Button>
+            </div>
+
             {/* ALERTA CLÍNICO DE ALERGIAS E COMORBIDADES DO PACIENTE NO PA */}
             {fichaEmFoco?.expand?.paciente && (
               <div className="rounded-lg border-2 border-red-500 bg-red-50 p-3 text-red-950 space-y-1">
@@ -1355,6 +1381,15 @@ export const ProntoAtendimentoView: React.FC<{
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL SOLICITAÇÃO DE EXAMES NO PA */}
+      <ModalSolicitarExame
+        aberto={modalExamePAAberto}
+        onClose={() => setModalExamePAAberto(false)}
+        paciente={fichaEmFoco?.expand?.paciente}
+        atendimentoPaId={fichaEmFoco?.id}
+        onSucesso={() => carregarDados()}
+      />
 
       {/* MODAL 4: DETALHES COMPLETOS DA FICHA DE PA */}
       <Dialog open={modalDetalhesAberto} onOpenChange={setModalDetalhesAberto}>

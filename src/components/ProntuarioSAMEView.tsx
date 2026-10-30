@@ -30,6 +30,8 @@ import {
   RefreshCw,
   FileText,
   ShieldAlert,
+  FlaskConical,
+  Microscope,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -125,6 +127,7 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
         if (filtroTipo === 'farmacia' && ev.tipo !== 'dispensacao_farmacia') return false
         if (filtroTipo === 'vacina' && ev.tipo !== 'vacina_aplicacao') return false
         if (filtroTipo === 'agendamento' && ev.tipo !== 'agendamento') return false
+        if (filtroTipo === 'exames' && !ev.tipo.startsWith('exame_')) return false
       }
 
       // Filtro período
@@ -168,6 +171,13 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
         return <Syringe className="w-4 h-4 text-cyan-600" />
       case 'agendamento':
         return <Calendar className="w-4 h-4 text-slate-600" />
+      case 'exame_laudado':
+        return <FlaskConical className="w-4 h-4 text-teal-600" />
+      case 'exame_solicitado':
+      case 'exame_coletado':
+      case 'exame_em_analise':
+      case 'exame_cancelado':
+        return <Microscope className="w-4 h-4 text-purple-600" />
       default:
         return <HeartPulse className="w-4 h-4 text-blue-600" />
     }
@@ -398,6 +408,7 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
             <option value="prescricao">Prescrições Médicas</option>
             <option value="enfermagem">Checagens de Enfermagem</option>
             <option value="assistencial">Evoluções Clínicas</option>
+            <option value="exames">Exames & Laudos Complementares</option>
             <option value="farmacia">Dispensações de Medicamentos</option>
             <option value="vacina">Vacinas & Aplicações</option>
             <option value="agendamento">Agendamentos</option>
