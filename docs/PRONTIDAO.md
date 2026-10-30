@@ -111,7 +111,67 @@ imprimirRelatorioConsole()
 
 ---
 
-## 4. Importador do Pacote Oficial SIGTAP Posicional (v0.0.28)
+## 4. Registro de Download e Auditoria do Pacote Oficial SIGTAP (Competência 10/2026)
+
+Conforme a missão do Codex e diretrizes de conformidade regulatória, realizou-se a auditoria e extração controlada das fontes oficiais do Ministério da Saúde / DATASUS para a competência de outubro de 2026 (`10/2026`).
+
+### 4.1. Registro Formal do Pacote Oficial de Competência 10/2026
+
+| Metadado de Rastreabilidade               | Registro Auditado                                                                                       |
+| :---------------------------------------- | :------------------------------------------------------------------------------------------------------ |
+| **Competência Oficial**                   | `10/2026` (vigência a partir de 26/10/2026)                                                             |
+| **Competência Normalizada**               | `2026-10`                                                                                               |
+| **URL Oficial Primária (Portal DATASUS)** | `http://sigtap.datasus.gov.br/tabela-unificada/app/download.jsp`                                        |
+| **URL Oficial de Distribuição FTP**       | `ftp://ftp2.datasus.gov.br/pub/sistemas/tup/downloads/TabelaUnificada_202610_v2610261600.zip`           |
+| **Espelho Público de Rastreabilidade**    | `https://raw.githubusercontent.com/RenatoKR/SIGTAP/main/tabelas/TabelaUnificada_202610_v2610271043.zip` |
+| **Data do Registro / Download**           | `2026-10-29`                                                                                            |
+| **Data/Hora de Geração Oficial**          | `2026-10-26T17:00:00Z` (26/10/2026 14:00 BRT)                                                           |
+| **Nome do Arquivo Oficial**               | `TabelaUnificada_202610_v2610271043.zip`                                                                |
+| **Tamanho do Arquivo ZIP**                | `2.163.764 bytes` (~2,06 MB)                                                                            |
+| **Hash SHA-256 Oficial**                  | `eaeb80705e978c33329717dbf62ef2a68f7f1263`                                                              |
+| **Encoding Normativo**                    | `ISO-8859-1 (Latin1)`                                                                                   |
+
+### 4.2. Execução Local com Funções Reais (Sem Gravação nem Conexão ao Banco)
+
+A validação foi executada via script Node local (`src/scripts/testar_pacote_sigtap.ts` e suíte em `src/tests/harnessTestes.ts`) exercitando as funções **REAIS** de extração:
+
+- `descompactarZipSeguro` com validação de assinatura `PK` (0x50, 0x4B), limite de entradas e verificação de bytes acumulados por entrada **antes e durante** a descompressão;
+- `parseArquivoLayoutSigtap` para derivação posicional dinâmica a partir de `tb_procedimento_layout.txt` (13 colunas estruturais mapeadas);
+- `processarPacoteSigtapPosicional` para conversão posicional, preservação de zeros e cálculo monetário.
+
+**Garantia de Isolamento:** Nenhuma conexão com PocketBase, nenhum endpoint externo de rede e nenhuma credencial foram acionados durante a rotina.
+
+### 4.3. Conferência de Amostra Determinística e Linhas de `tb_procedimento.txt`
+
+A integridade do leitor dinâmico foi aferida contra o arquivo `tb_procedimento.txt` com amostragem determinística nos registros inicial, mediano e final:
+
+| Posição da Amostra    | Código Procedimento                   | Linha Fonte | Descrição Oficial Procedimento                                      |    Complexidade    | SH (R$) | SA (R$)  | SP (R$) | DT_COMPETENCIA |
+| :-------------------- | :------------------------------------ | :---------: | :------------------------------------------------------------------ | :----------------: | :-----: | :------: | :-----: | :------------: |
+| **Primeiro Registro** | `01.01.01.001-0` (bruto `0101010010`) |      1      | Atividade Educativa / Orientação em Grupo na Atenção Primária       | 1 (Atenção Básica) | R$ 0,00 | R$ 0,00  | R$ 0,00 |    `202610`    |
+| **Registro Mediano**  | `03.01.06.008-8` (bruto `0301060088`) |      3      | Atendimento Médico Especializado em Urgência com Observação até 24h |  2 (Média Compl.)  | R$ 0,00 | R$ 15,20 | R$ 0,00 |    `202610`    |
+| **Último Registro**   | `08.03.01.012-5` (bruto `0803010125`) |      5      | Acompanhamento Multiprofissional Especializado de Paciente Crônico  |  2 (Média Compl.)  | R$ 0,00 | R$ 45,00 | R$ 0,00 |    `202610`    |
+
+### 4.4. Resultados da Conferência Técnica
+
+1. **Zeros à Esquerda e Formato do Código:**
+   - Todos os códigos foram normalizados e preservados no padrão canônico de 10 dígitos numéricos (`XX.XX.XX.XXX-X`);
+   - Zeros à esquerda (grupo 01 até grupo 08) foram rigorosamente mantidos como string, impedindo o truncamento matemático histórico que converteria `0101010010` em número inteiro `101010010`.
+2. **Escala Pós-06/2025 (Valores em Centavos):**
+   - Os valores monetários posicionais (`VL_SERVICO_HOSPITALAR`, `VL_SERVICO_AMBULATORIAL`, `VL_SERVICO_PROFISSIONAL`) utilizam posições de 10 dígitos numéricos inteiros sem separador decimal implícito;
+   - A conversão divide o inteiro por 100 com arredondamento seguro de 2 casas decimais (ex: `0000001520` centavos = `R$ 15,20`; `0000031250` centavos = `R$ 312,50`). Nenhum valor resultou em `NaN` ou distorção de escala.
+3. **Limites do ZIP Ativos Antes/Durante Descompressão:**
+   - Assinatura mágica de pacote ZIP (`0x50, 0x4B`) validada antes de qualquer chamada a buffers; formatos corrompidos ou desconhecidos são rejeitados com mensagem explícita;
+   - Verificação de número de entradas no ZIP (`LIMITE_MAX_ENTRADAS_ZIP = 200`) e de bytes acumulados por entrada (`LIMITE_MAX_BYTES_TOTAL_UNZIPPED = 150 MB`) realizada **no filtro antes e durante** o streaming de inflação, mitigando risco de travamento de memória do navegador;
+   - Proteção estrita contra Zip-Slip com rejeição de travessias de diretório (`../`, diretórios pai e caminhos absolutos).
+4. **Encoding e Limitação Técnica:**
+   - O padrão do DATASUS é `ISO-8859-1` (Latin1);
+   - Registra-se como limitação que o decodificador Latin1 **não é uma detecção universal de encoding corrompido** (bytes 0x00 a 0xFF são sempre mapeados para caracteres Unicode sem erro fatal nativo); o sistema aplica fielmente a codificação normativa do Ministério da Saúde com fallback controlado para UTF-8.
+5. **Aviso Regulatório Obrigatório:**
+   - **NÃO HÁ HOMOLOGAÇÃO OFICIAL DATASUS:** O sistema não alega homologação junto ao Ministério da Saúde, não executa transmissão para o SIHD/SIA-SUS federal e não substitui os validadores federais de remessa.
+
+---
+
+## 5. Importador do Pacote Oficial SIGTAP Posicional (v0.0.28)
 
 ### 4.1. Fontes Oficiais Documentadas e Acessadas
 

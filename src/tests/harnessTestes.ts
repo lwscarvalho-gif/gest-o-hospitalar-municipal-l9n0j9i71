@@ -41,6 +41,7 @@ import {
   LIMITE_MAX_BYTES_ZIP,
   LIMITE_MAX_ENTRADAS_ZIP,
 } from '../services/importadorSigtapPosicional'
+import { executarAuditoriaPacoteOficial10_2026 } from '../services/inspecaoPacoteSigtap'
 import {
   ContaFaturamento,
   ProducaoBPAItem,
@@ -1858,14 +1859,29 @@ export function executarHarnessLocal(): {
     const caminhoZipSlip2 = validarCaminhoSeguroZip('..\\..\\windows\\system32')
     const caminhoAbsoluto = validarCaminhoSeguroZip('/var/log/teste.txt')
 
-    // 2. Validação de limite de tamanho de ZIP (excesso de bytes)
+    // 2. Validação de limite de tamanho de ZIP (excesso de bytes) com assinatura PK válida
     let rejeitouTamanhoExcessivo = false
     try {
       const bufferFalsoGigante = new Uint8Array(LIMITE_MAX_BYTES_ZIP + 1024)
+      bufferFalsoGigante[0] = 0x50
+      bufferFalsoGigante[1] = 0x4b
+      bufferFalsoGigante[2] = 0x03
+      bufferFalsoGigante[3] = 0x04
       descompactarZipSeguro(bufferFalsoGigante)
     } catch (err: any) {
       if (err.message.includes('excede o limite máximo permitido')) {
         rejeitouTamanhoExcessivo = true
+      }
+    }
+
+    // 3. Validação de formato desconhecido / assinatura inválida
+    let rejeitouFormatoDesconhecido = false
+    try {
+      const bufferNaoZip = new Uint8Array([0x00, 0x11, 0x22, 0x33])
+      descompactarZipSeguro(bufferNaoZip)
+    } catch (err: any) {
+      if (err.message.includes('Formato desconhecido ou corrompido')) {
+        rejeitouFormatoDesconhecido = true
       }
     }
 
@@ -1875,7 +1891,8 @@ export function executarHarnessLocal(): {
       caminhoZipSlip1 === false &&
       caminhoZipSlip2 === false &&
       caminhoAbsoluto === false &&
-      rejeitouTamanhoExcessivo === true
+      rejeitouTamanhoExcessivo === true &&
+      rejeitouFormatoDesconhecido === true
 
     resultados.push({
       id: 'sigtap_posicional_7_seguranca_zip_slip_e_limites',
@@ -1921,6 +1938,44 @@ export function executarHarnessLocal(): {
       cenario: '(8) Formato desconhecido ou layout ausente falha com mensagem clara e explícita ao usuário',
       passou: false,
       detalhes: 'Falha na validação de formato desconhecido',
+      erro: err.message,
+    })
+  }
+
+  // 9. Execução auditada do pacote oficial 10/2026 com funções reais (descompressão, layout e parsing)
+  try {
+    const auditoria = executarAuditoriaPacoteOficial10_2026()
+
+    const rel = auditoria.relatorio
+    const det = auditoria.detalhesValidacao
+
+    const passou9 =
+      det.zerosAEsquerdaPreservados === true &&
+      det.escalaCentavosCorreta === true &&
+      det.nomesArquivosEColunasBatem === true &&
+      det.divergenciasDetectadas.length === 0 &&
+      rel.totalLinhasTbProcedimento === 5 &&
+      rel.totalValidos === 5 &&
+      rel.totalRejeitados === 0 &&
+      rel.primeiroProcedimento.codigo === '01.01.01.001-0' &&
+      rel.primeiroProcedimento.codigo.startsWith('01.') &&
+      rel.registroMeioProcedimento.codigo === '03.01.06.008-8' &&
+      rel.registroMeioProcedimento.vl_sa === 15.2 &&
+      rel.ultimoProcedimento.codigo === '08.03.01.012-5' &&
+      rel.ultimoProcedimento.vl_sa === 45.0
+
+    resultados.push({
+      id: 'sigtap_posicional_9_execucao_auditoria_pacote_10_2026',
+      cenario: '(9) Execução auditada do pacote oficial SIGTAP 10/2026 com amostragem determinística (primeiro/meio/último)',
+      passou: passou9,
+      detalhes: `Validado: ${rel.totalValidos}/${rel.totalLinhasTbProcedimento} registros conferidos; primeiro=${rel.primeiroProcedimento.codigo}, meio=${rel.registroMeioProcedimento.codigo} (SA=R$ 15,20), último=${rel.ultimoProcedimento.codigo} (SA=R$ 45,00); zeros e escala estritamente preservados.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'sigtap_posicional_9_execucao_auditoria_pacote_10_2026',
+      cenario: '(9) Execução auditada do pacote oficial SIGTAP 10/2026 com amostragem determinística (primeiro/meio/último)',
+      passou: false,
+      detalhes: 'Falha na auditoria do pacote oficial 10/2026',
       erro: err.message,
     })
   }

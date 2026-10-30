@@ -150,6 +150,13 @@ export function descompactarZipSeguro(
 ): Record<string, Uint8Array> {
   const bytes = zipBuffer instanceof Uint8Array ? zipBuffer : new Uint8Array(zipBuffer)
 
+  // Validação explícita de formato: assinatura ZIP mágica PK (0x50, 0x4B)
+  if (bytes.byteLength < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+    throw new Error(
+      'Formato desconhecido ou corrompido: o arquivo não possui a assinatura mágica de um pacote ZIP válido (esperado cabeçalho PK). Formatos proprietários ou arquivos arbitrários são estritamente recusados.',
+    )
+  }
+
   if (bytes.byteLength > LIMITE_MAX_BYTES_ZIP) {
     throw new Error(
       `Arquivo ZIP excede o limite máximo permitido (${(LIMITE_MAX_BYTES_ZIP / (1024 * 1024)).toFixed(0)} MB). Tamanho enviado: ${(bytes.byteLength / (1024 * 1024)).toFixed(1)} MB.`,
@@ -158,7 +165,7 @@ export function descompactarZipSeguro(
 
   // Contadores para validação ativa ANTES e DURANTE a descompressão (no filter de cada entrada)
   let entradasVistas = 0
-  let tamanhoEstimadoAcumulado = 0
+  let bytesEstimadosAcumulados = 0
 
   let arquivosBrutos: Record<string, Uint8Array>
   try {
@@ -174,27 +181,26 @@ export function descompactarZipSeguro(
           )
         }
 
-        // 2. Validação ativa do número de entradas ANTES de inflar
+        // 2. Validação ativa do número de entradas ANTES e DURANTE a leitura (não pós-alocação)
         entradasVistas++
         if (entradasVistas > LIMITE_MAX_ENTRADAS_ZIP) {
           throw new Error(
-            `Número excessivo de arquivos no pacote ZIP (${entradasVistas} entradas detectadas; limite de segurança: ${LIMITE_MAX_ENTRADAS_ZIP}).`,
+            `Número de entradas no ZIP excede o limite de segurança (${entradasVistas} > ${LIMITE_MAX_ENTRADAS_ZIP}). Pacote rejeitado para prevenir travamento do navegador.`,
           )
         }
 
-        // 3. Validação preventiva contra Zip-Bomb usando tamanho original declarado no cabeçalho (size)
-        if (typeof file.size === 'number' && file.size > 0) {
-          if (file.size > LIMITE_MAX_BYTES_ARQUIVO_UNICO) {
-            throw new Error(
-              `Entrada "${file.name}" declara tamanho descompactado de ${(file.size / (1024 * 1024)).toFixed(1)} MB, excedendo o limite individual permitido (${(LIMITE_MAX_BYTES_ARQUIVO_UNICO / (1024 * 1024)).toFixed(0)} MB).`,
-            )
-          }
-          tamanhoEstimadoAcumulado += file.size
-          if (tamanhoEstimadoAcumulado > LIMITE_MAX_BYTES_TOTAL_UNZIPPED) {
-            throw new Error(
-              `Tamanho expandido total declarado pelo pacote ZIP (${(tamanhoEstimadoAcumulado / (1024 * 1024)).toFixed(1)} MB) excede o limite máximo de segurança (${(LIMITE_MAX_BYTES_TOTAL_UNZIPPED / (1024 * 1024)).toFixed(0)} MB).`,
-            )
-          }
+        // 3. Validação preventiva de bytes acumulados por entrada ANTES e DURANTE a descompressão
+        const entradaSize = typeof file.size === 'number' ? file.size : 0
+        if (entradaSize > LIMITE_MAX_BYTES_ARQUIVO_UNICO) {
+          throw new Error(
+            `Entrada "${file.name}" declara tamanho de ${(entradaSize / (1024 * 1024)).toFixed(1)} MB, excedendo o limite individual (${(LIMITE_MAX_BYTES_ARQUIVO_UNICO / (1024 * 1024)).toFixed(0)} MB).`,
+          )
+        }
+        bytesEstimadosAcumulados += entradaSize
+        if (bytesEstimadosAcumulados > LIMITE_MAX_BYTES_TOTAL_UNZIPPED) {
+          throw new Error(
+            `Tamanho cumulativo declarado das entradas do ZIP (${(bytesEstimadosAcumulados / (1024 * 1024)).toFixed(1)} MB) excede o teto permitido (${(LIMITE_MAX_BYTES_TOTAL_UNZIPPED / (1024 * 1024)).toFixed(0)} MB). Bloqueado antes da alocação de memória.`,
+          )
         }
 
         return true
@@ -204,7 +210,7 @@ export function descompactarZipSeguro(
     throw new Error(`Falha ao descompactar pacote ZIP do SIGTAP: ${err.message}`)
   }
 
-  // Validação estrita DURANTE/APÓS montagem em memória
+  // Validação estrita DURANTE a consolidação em memória (bytes reais extraídos)
   let tamanhoRealAcumulado = 0
   const resultado: Record<string, Uint8Array> = {}
 
