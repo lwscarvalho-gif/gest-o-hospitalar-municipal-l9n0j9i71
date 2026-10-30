@@ -119,6 +119,9 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
   )
   const [checagemCargo, setChecagemCargo] = useState('Enfermagem Leito')
   const [checagemObs, setChecagemObs] = useState('')
+  const [filtroOrigemPresc, setFiltroOrigemPresc] = useState<
+    'todas' | 'internacao' | 'pronto_atendimento'
+  >('todas')
 
   // Carregar catálogo da farmácia
   useEffect(() => {
@@ -141,14 +144,26 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
     if (pacienteId) {
       carregarDados()
     }
-  }, [pacienteId])
+  }, [pacienteId, filtroOrigemPresc])
 
   const carregarDados = async () => {
     setLoading(true)
     try {
+      const filtrosPresc: any = {}
+      const filtrosAdms: any = {}
+      if (pacienteId) {
+        filtrosPresc.pacienteId = pacienteId
+        filtrosAdms.pacienteId = pacienteId
+      }
+      if (filtroOrigemPresc !== 'todas') {
+        filtrosPresc.origem = filtroOrigemPresc
+      }
+
       const [prescs, adms] = await Promise.all([
-        listarPrescricoes({ pacienteId }),
-        listarAdministracoesMedicamentos({ pacienteId }),
+        listarPrescricoes(Object.keys(filtrosPresc).length > 0 ? filtrosPresc : undefined),
+        listarAdministracoesMedicamentos(
+          Object.keys(filtrosAdms).length > 0 ? filtrosAdms : undefined,
+        ),
       ])
       setPrescricoes(prescs)
       setAdministracoes(adms)
@@ -306,10 +321,14 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
   const abrirModalChecagem = (presc: PrescricaoMedica, item: PrescricaoItem) => {
     setItemParaChecar({ prescricao: presc, item })
     setChecagemStatus('administrado')
-    setChecagemDose(item.dose)
+    setChecagemDose(item.dose || '')
     setChecagemVia(item.via_administracao)
     setChecagemResponsavel(user?.name || 'Técnico(a) Enfermagem')
-    setChecagemCargo('Equipe de Enfermagem')
+    setChecagemCargo(
+      presc.origem === 'pronto_atendimento' || presc.atendimento_pa
+        ? 'Enfermagem PA / Medicação'
+        : 'Enfermagem Leito',
+    )
     setChecagemObs('')
     setModalChecagemAberto(true)
   }
@@ -323,6 +342,7 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
       await registrarAdministracaoMedicamento({
         pacienteId: itemParaChecar.prescricao.paciente,
         internacaoId: itemParaChecar.prescricao.internacao,
+        atendimentoPaId: itemParaChecar.prescricao.atendimento_pa,
         prescricaoId: itemParaChecar.prescricao.id,
         prescricaoItemId: itemParaChecar.item.id,
         medicamentoNome: itemParaChecar.item.medicamento_nome,
@@ -411,9 +431,48 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
             Prescrições Médicas Hospitalares & Aprazamento de Enfermagem
           </h2>
           <p className="text-xs text-slate-500">
-            Prescrição digital de medicamentos da farmácia, doses, vias e horários de checagem ao
-            leito
+            Prescrição digital de medicamentos da farmácia, doses, vias e administração na unidade
+            (PA e Internação)
           </p>
+        </div>
+
+        {/* Filtro de Origem: Todas / PA / Internação */}
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setFiltroOrigemPresc('todas')}
+              className={`px-2.5 py-1 rounded text-xs font-semibold transition-all ${
+                filtroOrigemPresc === 'todas'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Todas
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltroOrigemPresc('pronto_atendimento')}
+              className={`px-2.5 py-1 rounded text-xs font-semibold transition-all ${
+                filtroOrigemPresc === 'pronto_atendimento'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Pronto Atendimento (PA)
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltroOrigemPresc('internacao')}
+              className={`px-2.5 py-1 rounded text-xs font-semibold transition-all ${
+                filtroOrigemPresc === 'internacao'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Internação
+            </button>
+          </div>
         </div>
 
         {podePrescrever && (
@@ -456,13 +515,22 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
                   <span className="text-xs font-mono font-bold bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-700">
                     {presc.data_prescricao}
                   </span>
+                  {presc.origem === 'pronto_atendimento' || presc.atendimento_pa ? (
+                    <Badge className="bg-amber-100 text-amber-900 border-amber-300 text-[10px] font-bold">
+                      ORIGEM: PRONTO ATENDIMENTO (PA)
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-blue-100 text-blue-900 border-blue-300 text-[10px] font-bold">
+                      ORIGEM: INTERNAÇÃO
+                    </Badge>
+                  )}
                   <Badge
                     className={
                       presc.status === 'ativa'
-                        ? 'bg-emerald-600 text-white'
+                        ? 'bg-emerald-600 text-white text-[10px]'
                         : presc.status === 'suspensa'
-                          ? 'bg-rose-600 text-white'
-                          : 'bg-slate-600 text-white'
+                          ? 'bg-rose-600 text-white text-[10px]'
+                          : 'bg-slate-600 text-white text-[10px]'
                     }
                   >
                     {presc.status.toUpperCase()}
@@ -568,16 +636,18 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
                               )}
                             </div>
 
-                            {/* BOTÃO DA ENFERMAGEM: CHECAGEM AO LEITO */}
+                            {/* BOTÃO DA ENFERMAGEM: CHECAGEM AO LEITO OU NA SALA DE MEDICAÇÃO DO PA */}
                             <div className="shrink-0 flex items-center gap-2">
                               <Button
                                 size="sm"
                                 onClick={() => abrirModalChecagem(presc, item)}
                                 disabled={presc.status !== 'ativa'}
-                                className="text-xs h-8 bg-teal-600 hover:bg-teal-500 text-white flex items-center gap-1 shadow-sm"
+                                className="text-xs h-8 bg-teal-600 hover:bg-teal-500 text-white flex items-center gap-1 shadow-sm font-semibold"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
-                                Checar ao Leito (Enfermagem)
+                                {presc.origem === 'pronto_atendimento' || presc.atendimento_pa
+                                  ? 'Checar / Administrar no PA (Enfermagem)'
+                                  : 'Checar ao Leito (Enfermagem)'}
                               </Button>
                             </div>
                           </div>
@@ -844,10 +914,16 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-teal-600" />
-              Checagem de Medicamento ao Leito (Enfermagem)
+              {itemParaChecar?.prescricao.origem === 'pronto_atendimento' ||
+              itemParaChecar?.prescricao.atendimento_pa
+                ? 'Administração & Checagem no PA (Enfermagem)'
+                : 'Checagem de Medicamento ao Leito (Enfermagem)'}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Registro com data, hora, dose administrada e profissional responsável
+              {itemParaChecar?.prescricao.origem === 'pronto_atendimento' ||
+              itemParaChecar?.prescricao.atendimento_pa
+                ? 'Confirmação de administração na sala de medicação/repouso do Pronto Atendimento'
+                : 'Registro com data, hora, dose administrada e profissional responsável'}
             </DialogDescription>
           </DialogHeader>
 
@@ -876,7 +952,7 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
                     onClick={() => setChecagemStatus('administrado')}
                     className={`p-2 rounded-lg border text-center text-xs font-semibold ${
                       checagemStatus === 'administrado'
-                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        ? 'bg-emerald-600 text-white border-emerald-600 ring-2 ring-emerald-400'
                         : 'bg-white text-slate-700 border-slate-300'
                     }`}
                   >
@@ -963,7 +1039,7 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
                   disabled={salvandoChecagem}
                   className="bg-teal-600 hover:bg-teal-500 text-white"
                 >
-                  {salvandoChecagem ? 'Registrando...' : 'Confirmar Checagem ao Leito'}
+                  {salvandoChecagem ? 'Registrando...' : 'Confirmar Administração'}
                 </Button>
               </DialogFooter>
             </form>

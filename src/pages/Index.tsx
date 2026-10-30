@@ -126,7 +126,7 @@ const Index: React.FC = () => {
       <footer className="border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
           <span>
-            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar v0.0.8
+            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar v0.0.9
             (Módulo Exames & Laudos, SAME Unificado, Prescrição Digital & Farmácia)
           </span>
           <span className="text-slate-400">

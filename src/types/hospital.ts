@@ -94,10 +94,14 @@ export interface PrescricaoItem {
   updated: string
 }
 
+export type OrigemPrescricao = 'internacao' | 'pronto_atendimento'
+
 export interface PrescricaoMedica {
   id: string
   paciente: string
-  internacao: string
+  internacao?: string
+  atendimento_pa?: string
+  origem?: OrigemPrescricao
   medico?: string
   medico_nome?: string
   data_prescricao: string
@@ -106,6 +110,7 @@ export interface PrescricaoMedica {
   expand?: {
     paciente?: Paciente
     internacao?: Internacao
+    atendimento_pa?: FichaProntoAtendimento
     medico?: Profissional
   }
   itens?: PrescricaoItem[]
@@ -117,6 +122,7 @@ export interface AdministracaoMedicamento {
   id: string
   paciente: string
   internacao?: string
+  atendimento_pa?: string
   prescricao?: string
   prescricao_item?: string
   medicamento_nome: string
@@ -131,6 +137,7 @@ export interface AdministracaoMedicamento {
   expand?: {
     paciente?: Paciente
     internacao?: Internacao
+    atendimento_pa?: FichaProntoAtendimento
     prescricao?: PrescricaoMedica
     prescricao_item?: PrescricaoItem
     profissional_enfermagem?: Profissional
@@ -221,11 +228,13 @@ export interface DispensacaoFarmacia {
   observacoes?: string
   prescricao_relacionada?: string
   internacao?: string
+  atendimento_pa?: string
   expand?: {
     paciente?: Paciente
     item?: ItemFarmacia
     prescricao_relacionada?: PrescricaoMedica
     internacao?: Internacao
+    atendimento_pa?: FichaProntoAtendimento
   }
   created: string
   updated: string

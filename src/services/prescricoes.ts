@@ -26,7 +26,9 @@ export interface ItemPrescricaoInput {
 
 export interface CriarPrescricaoParams {
   pacienteId: string
-  internacaoId: string
+  internacaoId?: string
+  atendimentoPaId?: string
+  origem?: 'internacao' | 'pronto_atendimento'
   medicoId?: string
   medicoNome?: string
   observacoesGerais?: string
@@ -36,6 +38,8 @@ export interface CriarPrescricaoParams {
 export async function listarPrescricoes(filtros?: {
   pacienteId?: string
   internacaoId?: string
+  atendimentoPaId?: string
+  origem?: 'internacao' | 'pronto_atendimento'
   status?: StatusPrescricao
 }): Promise<PrescricaoMedica[]> {
   try {
@@ -46,6 +50,12 @@ export async function listarPrescricoes(filtros?: {
     if (filtros?.internacaoId) {
       parts.push(`internacao = "${filtros.internacaoId}"`)
     }
+    if (filtros?.atendimentoPaId) {
+      parts.push(`atendimento_pa = "${filtros.atendimentoPaId}"`)
+    }
+    if (filtros?.origem) {
+      parts.push(`origem = "${filtros.origem}"`)
+    }
     if (filtros?.status) {
       parts.push(`status = "${filtros.status}"`)
     }
@@ -53,7 +63,7 @@ export async function listarPrescricoes(filtros?: {
     const records = await pb.collection('prescricoes').getFullList<PrescricaoMedica>({
       filter: parts.join(' && ') || undefined,
       sort: '-created',
-      expand: 'paciente,internacao,medico',
+      expand: 'paciente,internacao,atendimento_pa,medico',
     })
 
     // Carregar itens para cada prescrição
@@ -82,19 +92,31 @@ export async function listarPrescricoes(filtros?: {
 export async function criarPrescricaoMedica(
   params: CriarPrescricaoParams,
 ): Promise<PrescricaoMedica> {
-  const { pacienteId, internacaoId, medicoId, medicoNome, observacoesGerais, itens } = params
+  const {
+    pacienteId,
+    internacaoId,
+    atendimentoPaId,
+    origem,
+    medicoId,
+    medicoNome,
+    observacoesGerais,
+    itens,
+  } = params
 
   if (!itens || itens.length === 0) {
     throw new Error('A prescrição médica deve conter pelo menos um medicamento.')
   }
 
   const agora = new Date().toISOString().replace('T', ' ').slice(0, 16)
+  const origemFinal = origem || (atendimentoPaId ? 'pronto_atendimento' : 'internacao')
 
   // 1. Criar cabeçalho da Prescrição
   const prescricaoRecord = await pb.collection('prescricoes').create<PrescricaoMedica>(
     {
       paciente: pacienteId,
-      internacao: internacaoId,
+      internacao: internacaoId || undefined,
+      atendimento_pa: atendimentoPaId || undefined,
+      origem: origemFinal,
       medico: medicoId || undefined,
       medico_nome: medicoNome || pb.authStore.model?.name || 'Médico Plantonista',
       data_prescricao: agora,
@@ -102,7 +124,7 @@ export async function criarPrescricaoMedica(
       observacoes_gerais: observacoesGerais || '',
     },
     {
-      expand: 'paciente,internacao,medico',
+      expand: 'paciente,internacao,atendimento_pa,medico',
     },
   )
 
@@ -132,8 +154,9 @@ export async function criarPrescricaoMedica(
   // 3. Auditoria
   await registrarAuditoria({
     acao: 'PRESCRIÇÃO_MEDICA_CRIADA',
-    modulo: 'Assistencial / Prescrição',
-    detalhes: `Prescrição emitida para internação ${internacaoId} com ${itens.length} medicamento(s): ${itens.map((i) => i.medicamento_nome).join(', ')}`,
+    modulo:
+      origemFinal === 'pronto_atendimento' ? 'Pronto Atendimento' : 'Assistencial / Prescrição',
+    detalhes: `Prescrição (${origemFinal === 'pronto_atendimento' ? 'PA' : 'Internação'}) emitida com ${itens.length} medicamento(s): ${itens.map((i) => i.medicamento_nome).join(', ')}`,
     registro_id: prescricaoRecord.id,
   })
 
@@ -168,6 +191,7 @@ export async function atualizarStatusPrescricao(
 export interface RegistrarAdministracaoParams {
   pacienteId: string
   internacaoId?: string
+  atendimentoPaId?: string
   prescricaoId?: string
   prescricaoItemId?: string
   medicamentoNome: string
@@ -189,6 +213,7 @@ export async function registrarAdministracaoMedicamento(
     {
       paciente: params.pacienteId,
       internacao: params.internacaoId || undefined,
+      atendimento_pa: params.atendimentoPaId || undefined,
       prescricao: params.prescricaoId || undefined,
       prescricao_item: params.prescricaoItemId || undefined,
       medicamento_nome: params.medicamentoNome,
@@ -202,7 +227,8 @@ export async function registrarAdministracaoMedicamento(
       observacoes: params.observacoes || '',
     },
     {
-      expand: 'paciente,internacao,prescricao,prescricao_item,profissional_enfermagem',
+      expand:
+        'paciente,internacao,atendimento_pa,prescricao,prescricao_item,profissional_enfermagem',
     },
   )
 
@@ -219,6 +245,7 @@ export async function registrarAdministracaoMedicamento(
 export async function listarAdministracoesMedicamentos(filtros?: {
   pacienteId?: string
   internacaoId?: string
+  atendimentoPaId?: string
   prescricaoId?: string
 }): Promise<AdministracaoMedicamento[]> {
   try {
@@ -229,6 +256,9 @@ export async function listarAdministracoesMedicamentos(filtros?: {
     if (filtros?.internacaoId) {
       parts.push(`internacao = "${filtros.internacaoId}"`)
     }
+    if (filtros?.atendimentoPaId) {
+      parts.push(`atendimento_pa = "${filtros.atendimentoPaId}"`)
+    }
     if (filtros?.prescricaoId) {
       parts.push(`prescricao = "${filtros.prescricaoId}"`)
     }
@@ -238,7 +268,8 @@ export async function listarAdministracoesMedicamentos(filtros?: {
       .getFullList<AdministracaoMedicamento>({
         filter: parts.join(' && ') || undefined,
         sort: '-data_hora_administracao',
-        expand: 'paciente,internacao,prescricao,prescricao_item,profissional_enfermagem',
+        expand:
+          'paciente,internacao,atendimento_pa,prescricao,prescricao_item,profissional_enfermagem',
       })
     return records
   } catch (error) {

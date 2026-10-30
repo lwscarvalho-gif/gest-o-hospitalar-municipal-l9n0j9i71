@@ -1,5 +1,5 @@
 import pb from '@/lib/pocketbase/client'
-import { ItemFarmacia, DispensacaoFarmacia } from '@/types/hospital'
+import { ItemFarmacia, DispensacaoFarmacia, TipoMovimentoFarmacia } from '@/types/hospital'
 import { registrarAuditoria } from './auditoria'
 
 // ---------------------------------------------------------------------------
@@ -96,11 +96,12 @@ export interface RegistrarDispensacaoParams {
   lote?: string
   prescricaoOrigem?: string
   profissionalDispensador?: string
-  tipoMovimento?: 'dispensacao_paciente' | 'remessa_setor'
+  tipoMovimento?: TipoMovimentoFarmacia
   setorDestino?: string
   observacoes?: string
   prescricaoRelacionadaId?: string
   internacaoId?: string
+  atendimentoPaId?: string
 }
 
 export async function registrarDispensacao(
@@ -118,8 +119,8 @@ export async function registrarDispensacao(
     observacoes,
     prescricaoRelacionadaId,
     internacaoId,
+    atendimentoPaId,
   } = params
-
   if (quantidade <= 0) {
     throw new Error('A quantidade dispensada deve ser maior que zero.')
   }
@@ -156,9 +157,10 @@ export async function registrarDispensacao(
       observacoes: observacoes || '',
       prescricao_relacionada: prescricaoRelacionadaId || undefined,
       internacao: internacaoId || undefined,
+      atendimento_pa: atendimentoPaId || undefined,
     },
     {
-      expand: 'paciente,item,prescricao_relacionada,internacao',
+      expand: 'paciente,item,prescricao_relacionada,internacao,atendimento_pa',
     },
   )
 
@@ -208,7 +210,7 @@ export async function listarDispensacoes(filtros?: {
     const records = await pb.collection('farmacia_dispensacoes').getFullList<DispensacaoFarmacia>({
       filter: filter || undefined,
       sort: '-data_dispensacao',
-      expand: 'paciente,item',
+      expand: 'paciente,item,prescricao_relacionada,atendimento_pa',
     })
     return records
   } catch (error) {

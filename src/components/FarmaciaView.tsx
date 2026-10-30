@@ -270,6 +270,7 @@ export const FarmaciaView: React.FC = () => {
         prescricaoRelacionadaId:
           modoDispensacao === 'prescricao' ? prescricaoSelecionadaId || undefined : undefined,
         internacaoId: modoDispensacao === 'prescricao' ? prescObj?.internacao : undefined,
+        atendimentoPaId: modoDispensacao === 'prescricao' ? prescObj?.atendimento_pa : undefined,
       })
 
       toast({
@@ -506,7 +507,7 @@ export const FarmaciaView: React.FC = () => {
                   {modoDispensacao === 'prescricao' && (
                     <div className="space-y-1">
                       <Label className="text-xs text-purple-900 font-bold">
-                        Prescrição Médica Ativa na Internação *
+                        Prescrição Médica Ativa (PA ou Internação) *
                       </Label>
                       <select
                         className="w-full mt-1 px-3 py-2 text-xs border border-purple-300 rounded-md bg-purple-50/50 focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium text-purple-950"
@@ -520,16 +521,12 @@ export const FarmaciaView: React.FC = () => {
                             // Se tiver itens prescritos e algum coincidir com catálogo, já preseleciona
                             if (pObj.itens && pObj.itens.length > 0) {
                               const itPresc = pObj.itens[0]
-                              if (itPresc.item_farmacia) {
-                                setDispItemId(itPresc.item_farmacia)
-                              } else {
-                                const found = itens.find((it) =>
-                                  it.nome
-                                    .toLowerCase()
-                                    .includes(itPresc.medicamento_nome.toLowerCase()),
-                                )
-                                if (found) setDispItemId(found.id)
-                              }
+                              const found = itens.find((it) =>
+                                it.nome
+                                  .toLowerCase()
+                                  .includes(itPresc.medicamento_nome.toLowerCase()),
+                              )
+                              if (found) setDispItemId(found.id)
                             }
                           }
                         }}
@@ -537,21 +534,29 @@ export const FarmaciaView: React.FC = () => {
                         <option value="">Selecione uma prescrição ativa...</option>
                         {prescricoesAtivas.map((p) => {
                           const pacNome = p.expand?.paciente?.nome || 'Paciente'
-                          const leitoNome =
-                            p.expand?.internacao?.expand?.leito_atual?.codigo || 'Leito'
-                          const itensStr = p.itens?.map((i) => i.medicamento_nome).join(', ') || ''
+                          const isPA = p.origem === 'pronto_atendimento' || !!p.atendimento_pa
+                          const origemTexto = isPA
+                            ? '[PA - Pronto Atendimento]'
+                            : `[Internação - Leito ${p.expand?.internacao?.expand?.leito_atual?.codigo || 'Geral'}]`
+                          const itensStr =
+                            p.itens
+                              ?.map(
+                                (i) =>
+                                  `${i.medicamento_nome} (${i.via_administracao?.toUpperCase() || 'VO'})`,
+                              )
+                              .join(', ') || ''
                           return (
                             <option key={p.id} value={p.id}>
-                              {pacNome} (Leito: {leitoNome}) —{' '}
-                              {itensStr ? `[${itensStr}]` : 'Prescrição'} ({p.data_prescricao})
+                              {origemTexto} {pacNome} — {itensStr ? `${itensStr}` : 'Prescrição'} (
+                              {p.data_prescricao})
                             </option>
                           )
                         })}
                       </select>
                       {prescricoesAtivas.length === 0 && (
                         <p className="text-[11px] text-amber-700 pt-0.5">
-                          Não há prescrições médicas ativas no momento. Você pode mudar para a
-                          modalidade "Dispensação Avulsa".
+                          Não há prescrições médicas ativas (PA ou internação) no momento. Você pode
+                          mudar para a modalidade "Dispensação Avulsa".
                         </p>
                       )}
                     </div>

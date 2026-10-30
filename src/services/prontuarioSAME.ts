@@ -264,33 +264,36 @@ export async function carregarProntuarioUnificado(
         ?.map((i) => `${i.medicamento_nome} (${i.dose} ${i.via_administracao} ${i.frequencia})`)
         .join('; ') || ''
 
+    const isPA = p.origem === 'pronto_atendimento' || !!p.atendimento_pa
     eventos.push({
       id: `presc-${p.id}`,
       tipo: 'prescricao_medica',
       dataHora: p.data_prescricao || p.created,
-      titulo: `Prescrição Médica Hospitalar (${qtdItens} item${qtdItens !== 1 ? 'ns' : ''}) — Status: ${p.status.toUpperCase()}`,
+      titulo: `Prescrição Médica ${isPA ? '(Pronto Atendimento)' : '(Internação)'} (${qtdItens} item${qtdItens !== 1 ? 'ns' : ''}) — Status: ${p.status.toUpperCase()}`,
       subtitulo: p.medico_nome ? `Médico: ${p.medico_nome}` : undefined,
       descricao: listaNomes || p.observacoes_gerais || 'Prescrição medicamentosa emitida',
       detalhes: {
         status: p.status,
+        origem: isPA ? 'Pronto Atendimento' : 'Internação',
         itens: p.itens,
         observacoes: p.observacoes_gerais,
       },
       profissionalNome: p.medico_nome,
-      badgeTexto: `Prescrição ${p.status.toUpperCase()}`,
+      badgeTexto: `${isPA ? 'PA' : 'Internação'} • ${p.status.toUpperCase()}`,
       badgeCor: p.status === 'ativa' ? 'bg-purple-600 text-white' : 'bg-slate-600 text-white',
       icone: 'FileText',
       registroOriginal: p,
     })
   })
 
-  // E. Administração de Medicamentos ao Leito (Enfermagem)
+  // E. Administração de Medicamentos ao Leito / Sala de Medicação PA (Enfermagem)
   administracoes.forEach((adm) => {
+    const isPAAdm = !!adm.atendimento_pa
     eventos.push({
       id: `adm-${adm.id}`,
       tipo: 'administracao_enfermagem',
       dataHora: adm.data_hora_administracao || adm.created,
-      titulo: `Checagem Enfermagem: ${adm.medicamento_nome} (${adm.status.toUpperCase()})`,
+      titulo: `Administração/Checagem (${isPAAdm ? 'PA' : 'Leito'}): ${adm.medicamento_nome} (${adm.status.toUpperCase()})`,
       subtitulo: `Aplicado por: ${adm.responsavel_nome} (${adm.responsavel_cargo || 'Enfermagem'})`,
       descricao: `Dose: ${adm.dose_administrada || 'Padrão'} | Via: ${adm.via_administrada || 'Conforme prescrição'}${adm.observacoes ? ` • Obs: ${adm.observacoes}` : ''}`,
       detalhes: {
@@ -298,10 +301,11 @@ export async function carregarProntuarioUnificado(
         dose: adm.dose_administrada,
         via: adm.via_administrada,
         status: adm.status,
+        origem: isPAAdm ? 'Pronto Atendimento' : 'Internação',
         observacoes: adm.observacoes,
       },
       profissionalNome: adm.responsavel_nome,
-      badgeTexto: `Checagem: ${adm.status}`,
+      badgeTexto: `${isPAAdm ? 'PA' : 'Leito'} • ${adm.status}`,
       badgeCor:
         adm.status === 'administrado'
           ? 'bg-emerald-600 text-white'

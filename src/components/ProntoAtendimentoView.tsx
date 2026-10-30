@@ -62,8 +62,12 @@ import {
   Check,
   ShieldAlert,
   FlaskConical,
+  Maximize2,
+  Minimize2,
+  Pill,
 } from 'lucide-react'
 import { ModalSolicitarExame } from '@/components/ModalSolicitarExame'
+import { SecaoPrescricaoPAMedica } from '@/components/SecaoPrescricaoPAMedica'
 
 export const ProntoAtendimentoView: React.FC<{
   onNavegarInternacao?: () => void
@@ -89,6 +93,7 @@ export const ProntoAtendimentoView: React.FC<{
   const [modalEntradaAberto, setModalEntradaAberto] = useState(false)
   const [modalTriagemAberto, setModalTriagemAberto] = useState(false)
   const [modalAtendimentoAberto, setModalAtendimentoAberto] = useState(false)
+  const [modalAtendimentoMaximizado, setModalAtendimentoMaximizado] = useState(false)
   const [modalDetalhesAberto, setModalDetalhesAberto] = useState(false)
   const [modalExamePAAberto, setModalExamePAAberto] = useState(false)
 
@@ -1112,19 +1117,56 @@ export const ProntoAtendimentoView: React.FC<{
 
       {/* MODAL 3: ATENDIMENTO MÉDICO COM CONDUTAS */}
       <Dialog open={modalAtendimentoAberto} onOpenChange={setModalAtendimentoAberto}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <Stethoscope className="w-5 h-5 text-emerald-600" />
-              Atendimento Médico / Registro de Conduta do PA
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Paciente:{' '}
-              <strong className="text-slate-800">
-                {fichaEmFoco?.expand?.paciente?.nome || 'N/A'}
-              </strong>{' '}
-              • Risco: {fichaEmFoco?.classificacao_risco?.toUpperCase()}
-            </DialogDescription>
+        <DialogContent
+          className={`transition-all duration-200 overflow-y-auto ${
+            modalAtendimentoMaximizado
+              ? 'max-w-[98vw] w-[98vw] h-[96vh] max-h-[96vh]'
+              : 'max-w-4xl w-[95vw] max-h-[92vh]'
+          }`}
+        >
+          <DialogHeader className="border-b border-slate-100 pb-2.5">
+            <div className="flex items-center justify-between gap-2 pr-6">
+              <div className="space-y-0.5">
+                <DialogTitle className="flex items-center gap-2 text-base text-slate-900 font-bold">
+                  <Stethoscope className="w-5 h-5 text-emerald-600" />
+                  Atendimento Médico / Registro de Conduta do PA
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-600">
+                  Paciente:{' '}
+                  <strong className="text-slate-900 font-bold">
+                    {fichaEmFoco?.expand?.paciente?.nome || 'N/A'}
+                  </strong>{' '}
+                  • SUS: {fichaEmFoco?.expand?.paciente?.cartao_sus || 'N/A'} • Risco:{' '}
+                  <span className="font-bold text-slate-800">
+                    {fichaEmFoco?.classificacao_risco?.toUpperCase()}
+                  </span>
+                </DialogDescription>
+              </div>
+
+              {/* Botão Maximizar / Restaurar Janela */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setModalAtendimentoMaximizado((prev) => !prev)}
+                title={
+                  modalAtendimentoMaximizado ? 'Restaurar tamanho' : 'Maximizar janela (tela cheia)'
+                }
+                className="h-8 px-2.5 text-xs text-slate-700 hover:bg-slate-100 shrink-0 gap-1.5"
+              >
+                {modalAtendimentoMaximizado ? (
+                  <>
+                    <Minimize2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Restaurar</span>
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Maximizar</span>
+                  </>
+                )}
+              </Button>
+            </div>
           </DialogHeader>
 
           <form onSubmit={handleSalvarAtendimento} className="space-y-4 pt-2">
@@ -1181,14 +1223,23 @@ export const ProntoAtendimentoView: React.FC<{
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Evolução Clínica & Conduta Médica *</Label>
+            {/* ÁREA AMPLA: EVOLUÇÃO CLÍNICA MÉDICA */}
+            <div className="space-y-1.5 rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <Stethoscope className="w-4 h-4 text-emerald-600" />
+                  Evolução Clínica Médica (Anamnese & Exame Físico) *
+                </Label>
+                <span className="text-[11px] text-slate-500">
+                  Espaço amplo para registro detalhado do atendimento de emergência
+                </span>
+              </div>
               <Textarea
-                placeholder="Anamnese, exame físico sumário e conduta imediata..."
+                placeholder="Descreva a anamnese completa, história pregressa, exame físico detalhado (GCS, pupilas, ausculta cardiopulmonar, abdome, extremidades), hipóteses diagnósticas e justificativas clínicas..."
                 value={evolucaoAtend}
                 onChange={(e) => setEvolucaoAtend(e.target.value)}
-                className="text-xs"
-                rows={3}
+                className="text-xs font-mono leading-relaxed"
+                rows={modalAtendimentoMaximizado ? 10 : 7}
                 required
               />
             </div>
@@ -1197,7 +1248,7 @@ export const ProntoAtendimentoView: React.FC<{
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold">Diagnóstico Principal *</Label>
                 <Input
-                  placeholder="Ex: Crise Hipertensiva, Amigdalite Aguda..."
+                  placeholder="Ex: Crise Hipertensiva, Amigdalite Aguda, IAM sem supra..."
                   value={diagnosticoAtend}
                   onChange={(e) => setDiagnosticoAtend(e.target.value)}
                   className="text-xs"
@@ -1208,7 +1259,7 @@ export const ProntoAtendimentoView: React.FC<{
               <div className="space-y-1.5">
                 <Label className="text-xs">Código CID-10 (opcional)</Label>
                 <Input
-                  placeholder="Ex: I10, J03.9, K29.7..."
+                  placeholder="Ex: I10, J03.9, K29.7, I21..."
                   value={cid10Atend}
                   onChange={(e) => setCid10Atend(e.target.value)}
                   className="text-xs"
@@ -1216,11 +1267,44 @@ export const ProntoAtendimentoView: React.FC<{
               </div>
             </div>
 
-            {/* SELETOR DE CONDUTA FINAL */}
-            <div className="border-t border-slate-200 pt-3 space-y-3">
+            {/* SEÇÃO 4: PRESCRIÇÃO MÉDICA NA UNIDADE (FÁRMACO, APRESENTAÇÃO, POSOLOGIA E VIA) */}
+            {fichaEmFoco?.paciente && (
+              <SecaoPrescricaoPAMedica
+                pacienteId={fichaEmFoco.paciente}
+                pacienteNome={fichaEmFoco.expand?.paciente?.nome}
+                atendimentoPaId={fichaEmFoco.id}
+              />
+            )}
+
+            {/* SEÇÃO PRÓPRIA DE CONDUTA MÉDICA */}
+            <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <Label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <Activity className="w-4 h-4 text-blue-600" />
+                  Conduta Médica & Plano Terapêutico
+                </Label>
+                <span className="text-[11px] text-slate-500">
+                  Condutas imediatas na unidade e desfecho final
+                </span>
+              </div>
+
               <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-700">
+                  Descrição Detalhada da Conduta Médica Realizada / Planejada *
+                </Label>
+                <Textarea
+                  placeholder="Descreva as condutas médicas: hidratação venosa, oxigenoterapia, monitorização contínua, nebulização, repouso sob observação, pedidos de reavaliação após medicação..."
+                  value={obsCondutaAtend}
+                  onChange={(e) => setObsCondutaAtend(e.target.value)}
+                  className="text-xs"
+                  rows={modalAtendimentoMaximizado ? 5 : 3}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5 pt-1">
                 <Label className="text-xs font-semibold text-slate-900">
-                  Conduta Final do Atendimento *
+                  Desfecho / Destino do Paciente *
                 </Label>
                 <div className="grid grid-cols-3 gap-2">
                   <button
@@ -1234,7 +1318,7 @@ export const ProntoAtendimentoView: React.FC<{
                   >
                     <Check className="w-4 h-4 mx-auto mb-1 text-emerald-600" />
                     <div className="text-xs">ALTA MÉDICA</div>
-                    <div className="text-[10px] text-slate-400">Receita & Orientações</div>
+                    <div className="text-[10px] text-slate-400">Receita & Orientações de Saída</div>
                   </button>
 
                   <button
@@ -1248,7 +1332,7 @@ export const ProntoAtendimentoView: React.FC<{
                   >
                     <Bed className="w-4 h-4 mx-auto mb-1 text-red-600" />
                     <div className="text-xs">INTERNAÇÃO</div>
-                    <div className="text-[10px] text-slate-400">Ocupar Leito Vago</div>
+                    <div className="text-[10px] text-slate-400">Encaminhar ao Leito Hospitalar</div>
                   </button>
 
                   <button
@@ -1262,7 +1346,7 @@ export const ProntoAtendimentoView: React.FC<{
                   >
                     <Calendar className="w-4 h-4 mx-auto mb-1 text-blue-600" />
                     <div className="text-xs">AMBULATÓRIO</div>
-                    <div className="text-[10px] text-slate-400">Criar Agendamento</div>
+                    <div className="text-[10px] text-slate-400">Agendar Retorno / Especialista</div>
                   </button>
                 </div>
               </div>
@@ -1345,27 +1429,16 @@ export const ProntoAtendimentoView: React.FC<{
                   </div>
                 </div>
               )}
-
-              <div className="space-y-1.5">
-                <Label className="text-xs">Observações da Conduta / Prescrição de Saída</Label>
-                <Textarea
-                  placeholder="Orientações ao paciente, medicamentos prescritos para uso domiciliar..."
-                  value={obsCondutaAtend}
-                  onChange={(e) => setObsCondutaAtend(e.target.value)}
-                  className="text-xs"
-                  rows={2}
-                />
-              </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="border-t border-slate-100 pt-3">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setModalAtendimentoAberto(false)}
               >
-                Cancelar
+                Fechar / Continuar Depois
               </Button>
               <Button
                 type="submit"
@@ -1373,7 +1446,7 @@ export const ProntoAtendimentoView: React.FC<{
                 disabled={
                   processando || (condutaAtend === 'internacao' && leitosVagos.length === 0)
                 }
-                className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
               >
                 {processando ? 'Processando Conduta...' : 'Concluir Atendimento de PA'}
               </Button>
