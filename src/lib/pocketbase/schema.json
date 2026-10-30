@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T13:05:37.496Z",
+  "generatedAt": "2026-10-30T13:23:15.133Z",
   "collections": [
     {
       "name": "users",
@@ -5746,6 +5746,174 @@
         "CREATE INDEX idx_laudos_vers_exame ON laudos_versoes (exame)",
         "CREATE INDEX idx_laudos_vers_numero ON laudos_versoes (exame, numero_versao)",
         "CREATE INDEX idx_laudos_vers_idemp ON laudos_versoes (idempotency_key)"
+      ]
+    },
+    {
+      "name": "canais_grupos_mensageria",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && ativo = true",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor')",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "sigla",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "membros",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "criado_por",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_cgm_ativo ON canais_grupos_mensageria (ativo)"]
+    },
+    {
+      "name": "mensagens_internas",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (remetente = @request.auth.id || destinatarios_resolvidos_ids ~ @request.auth.id)",
+        "view": "@request.auth.id != '' && (remetente = @request.auth.id || destinatarios_resolvidos_ids ~ @request.auth.id)",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && destinatarios_resolvidos_ids ~ @request.auth.id",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "remetente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "remetente_nome_snapshot",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tipo_destinatario",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["usuario", "grupo"]
+        },
+        {
+          "name": "destinatario_usuario",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "destinatario_grupo",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "canais_grupos_mensageria"
+        },
+        {
+          "name": "destinatarios_resolvidos_ids",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "destinatarios_snapshot",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "assunto",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "conteudo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "lida_por",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_msg_remetente_created ON mensagens_internas (remetente, created DESC)",
+        "CREATE INDEX idx_msg_idempotency ON mensagens_internas (idempotency_key)",
+        "CREATE INDEX idx_msg_tipo_dest ON mensagens_internas (tipo_destinatario, created DESC)"
       ]
     }
   ]

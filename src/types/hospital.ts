@@ -13,6 +13,89 @@ export interface AppUser {
 }
 
 // -------------------------------------------------------------
+// FASE 8: MENSAGERIA INTERNA HOSPITALAR (SEÇÃO 7 / BLOCO 1)
+// -------------------------------------------------------------
+export type TipoDestinatarioMensagem = 'usuario' | 'grupo'
+
+export interface DestinatarioSnapshot {
+  id: string
+  nome: string
+  cargo?: string
+  role?: string
+}
+
+export interface CanalGrupoMensageria {
+  id: string
+  nome: string
+  sigla?: string
+  descricao?: string
+  ativo: boolean
+  membros: string[]
+  criado_por?: string
+  expand?: {
+    membros?: AppUser[]
+    criado_por?: AppUser
+  }
+  created: string
+  updated: string
+}
+
+export interface MensagemInterna {
+  id: string
+  remetente: string
+  remetente_nome_snapshot?: string
+  tipo_destinatario: TipoDestinatarioMensagem
+  destinatario_usuario?: string
+  destinatario_grupo?: string
+  destinatarios_resolvidos_ids: string[]
+  destinatarios_snapshot: DestinatarioSnapshot[]
+  assunto: string
+  conteudo: string
+  lida_por: string[]
+  idempotency_key?: string
+  expand?: {
+    remetente?: AppUser
+    destinatario_usuario?: AppUser
+    destinatario_grupo?: CanalGrupoMensageria
+  }
+  created: string
+  updated: string
+}
+
+export interface UsuarioDiretorioFuncional {
+  id: string
+  nome: string
+  cargo?: string
+  role: UserRole | string
+}
+
+export interface EnviarMensagemParams {
+  tipo_destinatario: TipoDestinatarioMensagem
+  destinatario_usuario?: string
+  destinatario_grupo?: string
+  assunto: string
+  conteudo: string
+  idempotency_key?: string
+}
+
+export interface ListarMensagensFiltros {
+  tipo_caixa: 'entrada' | 'enviadas'
+  somente_nao_lidas?: boolean
+  pagina?: number
+  por_pagina?: number
+  busca?: string
+}
+
+export interface ResultadoPaginadoMensagens {
+  items: MensagemInterna[]
+  totalItems: number
+  totalPages: number
+  page: number
+  perPage: number
+  totalNaoLidas?: number
+}
+
+// -------------------------------------------------------------
 // FASE 6: VIGILÂNCIA EM SAÚDE (CONTROLE INTERNO MUNICIPAL)
 // -------------------------------------------------------------
 export type TipoVigilancia = 'epidemiologica' | 'sanitaria' | 'saude_trabalhador'
