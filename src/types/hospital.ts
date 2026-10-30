@@ -504,6 +504,8 @@ export interface PrescricaoMedica {
   updated: string
 }
 
+export type TipoRegistroAdministracao = 'ato_original' | 'retificacao' | 'anotacao_complementar'
+
 export interface AdministracaoMedicamento {
   id: string
   paciente: string
@@ -520,6 +522,11 @@ export interface AdministracaoMedicamento {
   responsavel_cargo?: string
   status: StatusAdministracao
   observacoes?: string
+  idempotency_key?: string
+  tipo_registro?: TipoRegistroAdministracao
+  registro_original?: string
+  motivo_correcao?: string
+  usuario_id?: string
   expand?: {
     paciente?: Paciente
     internacao?: Internacao
@@ -527,6 +534,7 @@ export interface AdministracaoMedicamento {
     prescricao?: PrescricaoMedica
     prescricao_item?: PrescricaoItem
     profissional_enfermagem?: Profissional
+    registro_original?: AdministracaoMedicamento
   }
   created: string
   updated: string

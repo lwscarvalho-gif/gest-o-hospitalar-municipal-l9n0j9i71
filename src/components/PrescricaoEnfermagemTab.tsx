@@ -15,6 +15,7 @@ import {
   criarPrescricaoMedica,
   atualizarStatusPrescricao,
   registrarAdministracaoMedicamento,
+  retificarAdministracaoMedicamento,
   listarAdministracoesMedicamentos,
   ItemPrescricaoInput,
 } from '@/services/prescricoes'
@@ -106,6 +107,9 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
     },
   ])
 
+  // Controle de sequência / descarte de resposta em voo na troca de paciente
+  const seqPacienteRef = React.useRef(0)
+
   // Dialog de Checagem / Administração ao leito (Enfermagem)
   const [modalChecagemAberto, setModalChecagemAberto] = useState(false)
   const [salvandoChecagem, setSalvandoChecagem] = useState(false)
@@ -121,6 +125,19 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
   )
   const [checagemCargo, setChecagemCargo] = useState('Enfermagem Leito')
   const [checagemObs, setChecagemObs] = useState('')
+  const [idempotencyKeyChecagem, setIdempotencyKeyChecagem] = useState<string>('')
+
+  // Dialog de Retificação Rastreável de Administração Anterior
+  const [modalRetificacaoAberto, setModalRetificacaoAberto] = useState(false)
+  const [salvandoRetificacao, setSalvandoRetificacao] = useState(false)
+  const [admParaRetificar, setAdmParaRetificar] = useState<AdministracaoMedicamento | null>(null)
+  const [motivoRetificacao, setMotivoRetificacao] = useState('')
+  const [retifStatus, setRetifStatus] = useState<StatusAdministracao>('administrado')
+  const [retifDose, setRetifDose] = useState('')
+  const [retifVia, setRetifVia] = useState('')
+  const [retifObs, setRetifObs] = useState('')
+  const [idempotencyKeyRetificacao, setIdempotencyKeyRetificacao] = useState<string>('')
+
   const [filtroOrigemPresc, setFiltroOrigemPresc] = useState<
     'todas' | 'internacao' | 'pronto_atendimento'
   >('todas')
@@ -135,27 +152,41 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
   // Sincronizar com prop de paciente quando mudar no componente pai
   useEffect(() => {
     if (pacienteSelecionadoId && pacienteSelecionadoId !== 'todos') {
-      setPacienteId(pacienteSelecionadoId)
+      trocarPaciente(pacienteSelecionadoId)
     } else if (!pacienteId && pacientes.length > 0) {
-      setPacienteId(pacientes[0].id)
+      trocarPaciente(pacientes[0].id)
     }
   }, [pacienteSelecionadoId, pacientes])
+
+  const trocarPaciente = (novoPacienteId: string) => {
+    seqPacienteRef.current += 1
+    // Fecha quaisquer modais abertos do paciente anterior para evitar ação no paciente errado
+    setModalChecagemAberto(false)
+    setItemParaChecar(null)
+    setModalRetificacaoAberto(false)
+    setAdmParaRetificar(null)
+    setPacienteId(novoPacienteId)
+  }
 
   // Carregar prescrições e administrações do paciente
   useEffect(() => {
     if (pacienteId) {
-      carregarDados()
+      carregarDados(pacienteId)
+    } else {
+      setPrescricoes([])
+      setAdministracoes([])
     }
   }, [pacienteId, filtroOrigemPresc])
 
-  const carregarDados = async () => {
+  const carregarDados = async (pacienteAlvoId: string = pacienteId) => {
+    const seqAtual = ++seqPacienteRef.current
     setLoading(true)
     try {
       const filtrosPresc: any = {}
       const filtrosAdms: any = {}
-      if (pacienteId) {
-        filtrosPresc.pacienteId = pacienteId
-        filtrosAdms.pacienteId = pacienteId
+      if (pacienteAlvoId) {
+        filtrosPresc.pacienteId = pacienteAlvoId
+        filtrosAdms.pacienteId = pacienteAlvoId
       }
       if (filtroOrigemPresc !== 'todas') {
         filtrosPresc.origem = filtroOrigemPresc
@@ -167,9 +198,16 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
           Object.keys(filtrosAdms).length > 0 ? filtrosAdms : undefined,
         ),
       ])
+
+      // Descarte de resposta em voo se o usuário trocou de paciente durante o carregamento
+      if (seqAtual !== seqPacienteRef.current) {
+        return
+      }
+
       setPrescricoes(prescs)
       setAdministracoes(adms)
     } catch (err) {
+      if (seqAtual !== seqPacienteRef.current) return
       console.error(err)
       toast({
         title: 'Erro ao carregar prescrições',
@@ -177,7 +215,9 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
         variant: 'destructive',
       })
     } finally {
-      setLoading(false)
+      if (seqAtual === seqPacienteRef.current) {
+        setLoading(false)
+      }
     }
   }
 
@@ -321,6 +361,15 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
 
   // Abertura do modal de checagem da enfermagem
   const abrirModalChecagem = (presc: PrescricaoMedica, item: PrescricaoItem) => {
+    if (presc.status === 'suspensa' || presc.status === 'concluida') {
+      toast({
+        title: 'Prescrição Inativa',
+        description: `Esta prescrição está ${presc.status.toUpperCase()} e não aceita novas administrações.`,
+        variant: 'destructive',
+      })
+      return
+    }
+
     setItemParaChecar({ prescricao: presc, item })
     setChecagemStatus('administrado')
     setChecagemDose(item.dose || '')
@@ -332,12 +381,35 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
         : 'Enfermagem Leito',
     )
     setChecagemObs('')
+    // Chave estável para a tentativa desta dose aberta
+    setIdempotencyKeyChecagem(
+      `adm_${presc.id}_${item.id}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    )
     setModalChecagemAberto(true)
   }
 
   const handleSalvarChecagem = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!itemParaChecar) return
+
+    // Validação preventiva: se a prescrição estiver inativa/suspensa
+    if (
+      itemParaChecar.prescricao.status === 'suspensa' ||
+      itemParaChecar.prescricao.status === 'concluida'
+    ) {
+      toast({
+        title: 'Prescrição Inativa',
+        description: `A prescrição está ${itemParaChecar.prescricao.status.toUpperCase()} e não aceita nova administração.`,
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const seqMomento = seqPacienteRef.current
+    const pacienteAtualId = pacienteId
+    const chaveOperacao =
+      idempotencyKeyChecagem ||
+      `adm_${itemParaChecar.prescricao.id}_${itemParaChecar.item.id}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 
     setSalvandoChecagem(true)
     try {
@@ -354,7 +426,13 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
         responsavelCargo: checagemCargo.trim(),
         status: checagemStatus,
         observacoes: checagemObs.trim(),
+        idempotencyKey: chaveOperacao,
       })
+
+      // Se o usuário trocou de paciente enquanto a requisição estava em voo, descarta a atualização de tela
+      if (seqMomento !== seqPacienteRef.current || pacienteAtualId !== pacienteId) {
+        return
+      }
 
       toast({
         title: 'Checagem Registrada ao Leito',
@@ -362,16 +440,105 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
       })
 
       setModalChecagemAberto(false)
+      setItemParaChecar(null)
       carregarDados()
     } catch (err: any) {
+      if (seqMomento !== seqPacienteRef.current) return
       console.error(err)
+      // Preserva o formulário e o texto digitado pelo profissional sem fechar o modal
       toast({
-        title: 'Erro ao registrar checagem',
-        description: err.message,
+        title: 'Erro ou Conflito ao Registrar Checagem',
+        description: `${err.message || 'Falha ao comunicar com o servidor'}. Seu texto e dados permanecem no formulário para reenvio.`,
         variant: 'destructive',
       })
     } finally {
-      setSalvandoChecagem(false)
+      if (seqMomento === seqPacienteRef.current) {
+        setSalvandoChecagem(false)
+      }
+    }
+  }
+
+  // Abertura do modal de retificação rastreável
+  const abrirModalRetificacao = (adm: AdministracaoMedicamento) => {
+    setAdmParaRetificar(adm)
+    setMotivoRetificacao('')
+    setRetifStatus(adm.status)
+    setRetifDose(adm.dose_administrada || '')
+    setRetifVia(adm.via_administrada || '')
+    setRetifObs(adm.observacoes || '')
+    setIdempotencyKeyRetificacao(
+      `retif_${adm.id}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    )
+    setModalRetificacaoAberto(true)
+  }
+
+  const handleSalvarRetificacao = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!admParaRetificar) return
+
+    if (!motivoRetificacao.trim() || motivoRetificacao.trim().length < 5) {
+      toast({
+        title: 'Motivo Obrigatório',
+        description:
+          'Informe uma justificativa detalhada para a retificação (mínimo de 5 caracteres).',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const seqMomento = seqPacienteRef.current
+    const pacienteAtualId = pacienteId
+    const chaveOperacao =
+      idempotencyKeyRetificacao ||
+      `retif_${admParaRetificar.id}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+
+    setSalvandoRetificacao(true)
+    try {
+      await retificarAdministracaoMedicamento({
+        registroOriginalId: admParaRetificar.id,
+        motivoCorrecao: motivoRetificacao.trim(),
+        pacienteId: admParaRetificar.paciente,
+        internacaoId: admParaRetificar.internacao,
+        atendimentoPaId: admParaRetificar.atendimento_pa,
+        prescricaoId: admParaRetificar.prescricao,
+        prescricaoItemId: admParaRetificar.prescricao_item,
+        medicamentoNome: admParaRetificar.medicamento_nome,
+        doseAdministrada: retifDose.trim(),
+        viaAdministrada: retifVia.trim(),
+        profissionalEnfermagemId: user?.id,
+        responsavelNome: user?.name || admParaRetificar.responsavel_nome,
+        responsavelCargo: user?.role || admParaRetificar.responsavel_cargo,
+        status: retifStatus,
+        observacoes: retifObs.trim(),
+        idempotencyKey: chaveOperacao,
+      })
+
+      if (seqMomento !== seqPacienteRef.current || pacienteAtualId !== pacienteId) {
+        return
+      }
+
+      toast({
+        title: 'Retificação Rastreável Concluída',
+        description:
+          'Novo registro de retificação gravado com referência ao registro original preservado.',
+      })
+
+      setModalRetificacaoAberto(false)
+      setAdmParaRetificar(null)
+      carregarDados()
+    } catch (err: any) {
+      if (seqMomento !== seqPacienteRef.current) return
+      console.error(err)
+      // Preserva texto e motivo digitados
+      toast({
+        title: 'Erro ao Registrar Retificação',
+        description: `${err.message || 'Falha ao comunicar com o servidor'}. Seus dados permanecem intactos para reenvio.`,
+        variant: 'destructive',
+      })
+    } finally {
+      if (seqMomento === seqPacienteRef.current) {
+        setSalvandoRetificacao(false)
+      }
     }
   }
 
@@ -623,17 +790,31 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
                                     Últimas administrações:
                                   </span>
                                   {admsItem.slice(0, 3).map((a) => (
-                                    <Badge
-                                      key={a.id}
-                                      className={`text-[9px] ${
-                                        a.status === 'administrado'
-                                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                          : 'bg-rose-100 text-rose-800 border-rose-300'
-                                      }`}
-                                    >
-                                      {a.data_hora_administracao.slice(5, 16)} •{' '}
-                                      {a.responsavel_nome.split(' ')[0]} ({a.status})
-                                    </Badge>
+                                    <div key={a.id} className="flex items-center gap-1">
+                                      <Badge
+                                        className={`text-[9px] ${
+                                          a.tipo_registro === 'retificacao'
+                                            ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                            : a.status === 'administrado'
+                                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                              : 'bg-rose-100 text-rose-800 border-rose-300'
+                                        }`}
+                                      >
+                                        {a.tipo_registro === 'retificacao' && '[Retificado] '}
+                                        {a.data_hora_administracao.slice(5, 16)} •{' '}
+                                        {a.responsavel_nome.split(' ')[0]} ({a.status})
+                                      </Badge>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => abrirModalRetificacao(a)}
+                                        className="h-5 px-1 text-[9px] text-amber-700 hover:text-amber-800 hover:bg-amber-50"
+                                        title="Retificar este registro de administração com justificativa rastreável"
+                                      >
+                                        Retificar
+                                      </Button>
+                                    </div>
                                   ))}
                                 </div>
                               )}
@@ -1040,9 +1221,148 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
                   type="submit"
                   size="sm"
                   disabled={salvandoChecagem}
-                  className="bg-teal-600 hover:bg-teal-500 text-white"
+                  className="bg-teal-600 hover:bg-teal-500 text-white flex items-center gap-1.5"
                 >
-                  {salvandoChecagem ? 'Registrando...' : 'Confirmar Administração'}
+                  {salvandoChecagem ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Gravando Checagem...
+                    </>
+                  ) : (
+                    'Confirmar Administração'
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: RETIFICAÇÃO RASTREÁVEL DE ADMINISTRAÇÃO (SEM APAGAR/SOBRESCREVER O ORIGINAL) */}
+      <Dialog open={modalRetificacaoAberto} onOpenChange={setModalRetificacaoAberto}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2 text-amber-900">
+              <ShieldCheck className="w-5 h-5 text-amber-600" />
+              Retificação Rastreável de Administração
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Gera um novo registro vinculado com autor, data e motivo da retificação, mantendo o
+              histórico original inalterado.
+            </DialogDescription>
+          </DialogHeader>
+
+          {admParaRetificar && (
+            <form onSubmit={handleSalvarRetificacao} className="space-y-3 pt-2">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs space-y-1 text-amber-950">
+                <div className="font-bold text-amber-900">{admParaRetificar.medicamento_nome}</div>
+                <div>
+                  <strong>Registro Original:</strong> #{admParaRetificar.id.slice(-6)} • Realizado
+                  em: {admParaRetificar.data_hora_administracao} por{' '}
+                  {admParaRetificar.responsavel_nome}
+                </div>
+                <div>
+                  <strong>Status Original:</strong> {admParaRetificar.status.toUpperCase()} • Dose:{' '}
+                  {admParaRetificar.dose_administrada || 'Padrão'}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-rose-900">
+                  Motivo da Retificação / Justificativa *
+                </Label>
+                <Textarea
+                  value={motivoRetificacao}
+                  onChange={(e) => setMotivoRetificacao(e.target.value)}
+                  placeholder="Informe detalhadamente por que este registro está sendo corrigido (obrigatório, min 5 letras)..."
+                  className="text-xs border-amber-300 focus-visible:ring-amber-500"
+                  rows={2}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Novo Status Corrigido *</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRetifStatus('administrado')}
+                    className={`p-2 rounded-lg border text-center text-xs font-semibold ${
+                      retifStatus === 'administrado'
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-white text-slate-700 border-slate-300'
+                    }`}
+                  >
+                    Administrado
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRetifStatus('recusado')}
+                    className={`p-2 rounded-lg border text-center text-xs font-semibold ${
+                      retifStatus === 'recusado'
+                        ? 'bg-rose-600 text-white border-rose-600'
+                        : 'bg-white text-slate-700 border-slate-300'
+                    }`}
+                  >
+                    Recusado / Não Aplicado
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Dose Retificada</Label>
+                  <Input
+                    value={retifDose}
+                    onChange={(e) => setRetifDose(e.target.value)}
+                    className="text-xs h-8"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Via Retificada</Label>
+                  <Input
+                    value={retifVia}
+                    onChange={(e) => setRetifVia(e.target.value)}
+                    className="text-xs h-8"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs">Observações Complementares</Label>
+                <Textarea
+                  value={retifObs}
+                  onChange={(e) => setRetifObs(e.target.value)}
+                  placeholder="Anotações adicionais da equipe de enfermagem..."
+                  className="text-xs"
+                  rows={2}
+                />
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setModalRetificacaoAberto(false)}
+                  disabled={salvandoRetificacao}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={salvandoRetificacao}
+                  className="bg-amber-600 hover:bg-amber-500 text-white flex items-center gap-1.5"
+                >
+                  {salvandoRetificacao ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Salvando Retificação...
+                    </>
+                  ) : (
+                    'Salvar Retificação Rastreável'
+                  )}
                 </Button>
               </DialogFooter>
             </form>

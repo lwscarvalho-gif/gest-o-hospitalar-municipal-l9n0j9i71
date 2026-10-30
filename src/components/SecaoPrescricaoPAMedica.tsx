@@ -60,6 +60,9 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
   const [carregandoPrescricoes, setCarregandoPrescricoes] = useState(false)
   const [salvandoPrescricao, setSalvandoPrescricao] = useState(false)
 
+  // Controle de sequência / descarte de resposta em voo na troca de atendimento/paciente
+  const seqAtendimentoRef = React.useRef(0)
+
   // Itens em rascunho da nova prescrição
   const [itensRascunho, setItensRascunho] = useState<ItemPrescricaoInput[]>([])
 
@@ -75,13 +78,22 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
   const [obsGerais, setObsGerais] = useState('')
 
   useEffect(() => {
+    seqAtendimentoRef.current += 1
+    const seqMomento = seqAtendimentoRef.current
+
     carregarCatalogo()
-    carregarPrescricoesPA()
+    carregarPrescricoesPA(seqMomento, atendimentoPaId)
     if (pacienteId) {
       pb.collection('pacientes')
         .getOne<Paciente>(pacienteId)
-        .then((p) => setPacienteDados(p))
+        .then((p) => {
+          if (seqMomento === seqAtendimentoRef.current) {
+            setPacienteDados(p)
+          }
+        })
         .catch(() => {})
+    } else {
+      setPacienteDados(null)
     }
   }, [atendimentoPaId, pacienteId])
 
@@ -97,18 +109,27 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
     }
   }
 
-  const carregarPrescricoesPA = async () => {
-    if (!atendimentoPaId) return
+  const carregarPrescricoesPA = async (seqMomento: number, atId: string) => {
+    if (!atId) {
+      setPrescricoesExistentes([])
+      return
+    }
     setCarregandoPrescricoes(true)
     try {
       const lista = await listarPrescricoes({
-        atendimentoPaId,
+        atendimentoPaId: atId,
       })
-      setPrescricoesExistentes(lista)
+      if (seqMomento === seqAtendimentoRef.current) {
+        setPrescricoesExistentes(lista)
+      }
     } catch (err) {
-      console.error('Erro ao carregar prescrições do PA:', err)
+      if (seqMomento === seqAtendimentoRef.current) {
+        console.error('Erro ao carregar prescrições do PA:', err)
+      }
     } finally {
-      setCarregandoPrescricoes(false)
+      if (seqMomento === seqAtendimentoRef.current) {
+        setCarregandoPrescricoes(false)
+      }
     }
   }
 
@@ -187,6 +208,9 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
       return
     }
 
+    const seqMomento = seqAtendimentoRef.current
+    const atIdAtual = atendimentoPaId
+
     setSalvandoPrescricao(true)
     try {
       const prescricaoCriada = await criarPrescricaoMedica({
@@ -199,6 +223,10 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
         itens: itensRascunho,
       })
 
+      if (seqMomento !== seqAtendimentoRef.current || atIdAtual !== atendimentoPaId) {
+        return
+      }
+
       toast({
         title: 'Prescrição Emitida com Sucesso!',
         description: `Encaminhada automaticamente para a FARMÁCIA (dispensação) e para a ENFERMAGEM (administração e checagem).`,
@@ -209,12 +237,13 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
       setObsGerais('')
 
       // Recarregar histórico de prescrições da ficha
-      await carregarPrescricoesPA()
+      await carregarPrescricoesPA(seqMomento, atendimentoPaId)
 
       if (onPrescricaoCriada) {
         onPrescricaoCriada(prescricaoCriada)
       }
     } catch (err: any) {
+      if (seqMomento !== seqAtendimentoRef.current) return
       console.error(err)
       const msg = err?.message || 'Falha ao salvar prescrição médica no sistema.'
       // Preserva itens do rascunho em memória para não perder dados digitados

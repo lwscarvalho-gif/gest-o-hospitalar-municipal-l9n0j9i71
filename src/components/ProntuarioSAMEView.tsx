@@ -90,6 +90,9 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
     carregarListaPacientes()
   }, [])
 
+  // Controle de sequência para descarte de resposta em voo na troca de paciente no SAME
+  const seqPacienteSAMERef = React.useRef(0)
+
   // 2. Carregar o prontuário do paciente selecionado
   useEffect(() => {
     if (pacienteSelecionadoId) {
@@ -98,12 +101,20 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
   }, [pacienteSelecionadoId])
 
   const carregarDadosProntuario = async (pId: string) => {
+    seqPacienteSAMERef.current += 1
+    const seqMomento = seqPacienteSAMERef.current
+
     setLoading(true)
     try {
       const res = await carregarProntuarioUnificado(pId)
+      // Se o usuário trocou de paciente durante o carregamento em voo, descarta resultado
+      if (seqMomento !== seqPacienteSAMERef.current) {
+        return
+      }
       setPacienteAtivo(res.paciente)
       setEventos(res.eventos)
     } catch (err: any) {
+      if (seqMomento !== seqPacienteSAMERef.current) return
       console.error(err)
       toast({
         title: 'Erro ao carregar prontuário',
@@ -111,7 +122,9 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
         variant: 'destructive',
       })
     } finally {
-      setLoading(false)
+      if (seqMomento === seqPacienteSAMERef.current) {
+        setLoading(false)
+      }
     }
   }
 

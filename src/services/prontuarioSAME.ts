@@ -411,25 +411,42 @@ export async function carregarProntuarioUnificado(
   // E. Administração de Medicamentos ao Leito / Sala de Medicação PA (Enfermagem)
   administracoes.forEach((adm) => {
     const isPAAdm = !!adm.atendimento_pa
+    const isRetificacao = adm.tipo_registro === 'retificacao'
+    const titulo = isRetificacao
+      ? `Retificação Rastreável de Administração (${isPAAdm ? 'PA' : 'Leito'}): ${adm.medicamento_nome} (${adm.status.toUpperCase()})`
+      : `Administração/Checagem (${isPAAdm ? 'PA' : 'Leito'}): ${adm.medicamento_nome} (${adm.status.toUpperCase()})`
+
+    const subtitulo = isRetificacao
+      ? `Retificado por: ${adm.responsavel_nome} (${adm.responsavel_cargo || 'Enfermagem'})${adm.registro_original ? ` • Ref. Original: #${adm.registro_original.slice(-6)}` : ''}`
+      : `Aplicado por: ${adm.responsavel_nome} (${adm.responsavel_cargo || 'Enfermagem'})`
+
+    const descricao = `${isRetificacao ? `[RETIFICAÇÃO] Motivo: ${adm.motivo_correcao || 'Correção de registro'}\n` : ''}Dose: ${adm.dose_administrada || 'Padrão'} | Via: ${adm.via_administrada || 'Conforme prescrição'}${adm.observacoes ? ` • Obs: ${adm.observacoes}` : ''}`
+
     eventos.push({
       id: `adm-${adm.id}`,
       tipo: 'administracao_enfermagem',
       dataHora: adm.data_hora_administracao || adm.created,
-      titulo: `Administração/Checagem (${isPAAdm ? 'PA' : 'Leito'}): ${adm.medicamento_nome} (${adm.status.toUpperCase()})`,
-      subtitulo: `Aplicado por: ${adm.responsavel_nome} (${adm.responsavel_cargo || 'Enfermagem'})`,
-      descricao: `Dose: ${adm.dose_administrada || 'Padrão'} | Via: ${adm.via_administrada || 'Conforme prescrição'}${adm.observacoes ? ` • Obs: ${adm.observacoes}` : ''}`,
+      titulo,
+      subtitulo,
+      descricao,
       detalhes: {
         medicamento: adm.medicamento_nome,
         dose: adm.dose_administrada,
         via: adm.via_administrada,
         status: adm.status,
+        tipo_registro: adm.tipo_registro || 'ato_original',
+        registro_original: adm.registro_original,
+        motivo_correcao: adm.motivo_correcao,
         origem: isPAAdm ? 'Pronto Atendimento' : 'Internação',
         observacoes: adm.observacoes,
       },
       profissionalNome: adm.responsavel_nome,
-      badgeTexto: `${isPAAdm ? 'PA' : 'Leito'} • ${adm.status}`,
-      badgeCor:
-        adm.status === 'administrado'
+      badgeTexto: isRetificacao
+        ? `Retificação • ${adm.status}`
+        : `${isPAAdm ? 'PA' : 'Leito'} • ${adm.status}`,
+      badgeCor: isRetificacao
+        ? 'bg-amber-700 text-white'
+        : adm.status === 'administrado'
           ? 'bg-emerald-600 text-white'
           : adm.status === 'recusado'
             ? 'bg-rose-600 text-white'
