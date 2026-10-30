@@ -99,6 +99,8 @@ export interface RegistrarDispensacaoParams {
   tipoMovimento?: 'dispensacao_paciente' | 'remessa_setor'
   setorDestino?: string
   observacoes?: string
+  prescricaoRelacionadaId?: string
+  internacaoId?: string
 }
 
 export async function registrarDispensacao(
@@ -114,6 +116,8 @@ export async function registrarDispensacao(
     tipoMovimento = 'dispensacao_paciente',
     setorDestino,
     observacoes,
+    prescricaoRelacionadaId,
+    internacaoId,
   } = params
 
   if (quantidade <= 0) {
@@ -150,9 +154,11 @@ export async function registrarDispensacao(
       tipo_movimento: tipoMovimento,
       setor_destino: setorDestino || '',
       observacoes: observacoes || '',
+      prescricao_relacionada: prescricaoRelacionadaId || undefined,
+      internacao: internacaoId || undefined,
     },
     {
-      expand: 'paciente,item',
+      expand: 'paciente,item,prescricao_relacionada,internacao',
     },
   )
 
@@ -162,10 +168,13 @@ export async function registrarDispensacao(
   })
 
   // 4. Trilha de auditoria da movimentação
+  const detalhesVínculo = prescricaoRelacionadaId
+    ? ` (Vinculado à Prescrição ID ${prescricaoRelacionadaId})`
+    : ''
   await registrarAuditoria({
     acao: 'DISPENSACAO_FARMACIA',
     modulo: 'Farmácia',
-    detalhes: `Dispensado ${quantidade} ${item.unidade_medida}(s) de "${item.nome}" (Lote: ${lote || item.lote || 'N/I'}). Estoque restante: ${novoEstoque}. Paciente ID: ${pacienteId}`,
+    detalhes: `Dispensado ${quantidade} ${item.unidade_medida}(s) de "${item.nome}" (Lote: ${lote || item.lote || 'N/I'}). Estoque restante: ${novoEstoque}. Paciente ID: ${pacienteId}${detalhesVínculo}`,
     registro_id: dispensacao.id,
   })
 

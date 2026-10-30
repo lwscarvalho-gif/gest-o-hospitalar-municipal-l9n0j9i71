@@ -5,8 +5,9 @@ import {
   DispensacaoFarmacia,
   Paciente,
   TipoItemFarmacia,
-  UnidadeMedidaFarmacia,
   TipoMovimentoFarmacia,
+  UnidadeMedidaFarmacia,
+  PrescricaoMedica,
 } from '@/types/hospital'
 import {
   listarItensFarmacia,
@@ -16,6 +17,7 @@ import {
   listarDispensacoes,
 } from '@/services/farmacia'
 import { listarPacientes } from '@/services/cadastros'
+import { listarPrescricoes } from '@/services/prescricoes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -60,7 +62,12 @@ export const FarmaciaView: React.FC = () => {
   const [itens, setItens] = useState<ItemFarmacia[]>([])
   const [dispensacoes, setDispensacoes] = useState<DispensacaoFarmacia[]>([])
   const [pacientes, setPacientes] = useState<Paciente[]>([])
+  const [prescricoesAtivas, setPrescricoesAtivas] = useState<PrescricaoMedica[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Modalidade de dispensação: 'avulsa' ou 'prescricao'
+  const [modoDispensacao, setModoDispensacao] = useState<'avulsa' | 'prescricao'>('prescricao')
+  const [prescricaoSelecionadaId, setPrescricaoSelecionadaId] = useState('')
 
   // Filtros
   const [buscaItem, setBuscaItem] = useState('')
@@ -102,14 +109,16 @@ export const FarmaciaView: React.FC = () => {
   const carregarDados = async () => {
     setLoading(true)
     try {
-      const [itensData, pacData, dispData] = await Promise.all([
+      const [itensData, pacData, dispData, prescsData] = await Promise.all([
         listarItensFarmacia(),
         listarPacientes(),
         listarDispensacoes(),
+        listarPrescricoes({ status: 'ativa' }),
       ])
       setItens(itensData)
       setPacientes(pacData)
       setDispensacoes(dispData)
+      setPrescricoesAtivas(prescsData)
     } catch (e) {
       console.error(e)
       toast({
@@ -244,16 +253,23 @@ export const FarmaciaView: React.FC = () => {
 
     setSalvandoDispensacao(true)
     try {
+      const prescObj = prescricoesAtivas.find((p) => p.id === prescricaoSelecionadaId)
       await registrarDispensacao({
         pacienteId: dispPacienteId,
         itemId: dispItemId,
         quantidade: qtd,
         lote: itemSelecionadoParaDisp?.lote,
-        prescricaoOrigem: dispPrescricao.trim(),
+        prescricaoOrigem:
+          modoDispensacao === 'prescricao' && prescObj
+            ? `Prescrição #${prescObj.id.slice(0, 7)} (${prescObj.medico_nome || 'Médico'})`
+            : dispPrescricao.trim(),
         profissionalDispensador: user?.name || 'Recepção / Farmácia',
         tipoMovimento: dispTipoMovimento,
         setorDestino: dispSetorDestino.trim(),
         observacoes: dispObservacoes.trim(),
+        prescricaoRelacionadaId:
+          modoDispensacao === 'prescricao' ? prescricaoSelecionadaId || undefined : undefined,
+        internacaoId: modoDispensacao === 'prescricao' ? prescObj?.internacao : undefined,
       })
 
       toast({
@@ -455,8 +471,96 @@ export const FarmaciaView: React.FC = () => {
               </CardHeader>
               <CardContent className="p-4">
                 <form onSubmit={handleSalvarDispensacao} className="space-y-3.5">
+                  {/* SELETOR DE MODALIDADE: VINCULADA À PRESCRIÇÃO vs AVULSA */}
+                  <div className="space-y-1.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                    <Label className="text-xs font-semibold text-slate-800">
+                      Modalidade de Dispensação
+                    </Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setModoDispensacao('prescricao')}
+                        className={`py-1.5 px-2 rounded border text-xs font-semibold transition-all ${
+                          modoDispensacao === 'prescricao'
+                            ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                            : 'bg-white text-slate-700 border-slate-300'
+                        }`}
+                      >
+                        Contra Prescrição Médica
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModoDispensacao('avulsa')}
+                        className={`py-1.5 px-2 rounded border text-xs font-semibold transition-all ${
+                          modoDispensacao === 'avulsa'
+                            ? 'bg-slate-700 text-white border-slate-700 shadow-sm'
+                            : 'bg-white text-slate-700 border-slate-300'
+                        }`}
+                      >
+                        Dispensação Avulsa
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* CASO CONTRA PRESCRIÇÃO: SELEÇÃO DA PRESCRIÇÃO ATIVA */}
+                  {modoDispensacao === 'prescricao' && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-purple-900 font-bold">
+                        Prescrição Médica Ativa na Internação *
+                      </Label>
+                      <select
+                        className="w-full mt-1 px-3 py-2 text-xs border border-purple-300 rounded-md bg-purple-50/50 focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium text-purple-950"
+                        value={prescricaoSelecionadaId}
+                        onChange={(e) => {
+                          const pId = e.target.value
+                          setPrescricaoSelecionadaId(pId)
+                          const pObj = prescricoesAtivas.find((p) => p.id === pId)
+                          if (pObj) {
+                            setDispPacienteId(pObj.paciente)
+                            // Se tiver itens prescritos e algum coincidir com catálogo, já preseleciona
+                            if (pObj.itens && pObj.itens.length > 0) {
+                              const itPresc = pObj.itens[0]
+                              if (itPresc.item_farmacia) {
+                                setDispItemId(itPresc.item_farmacia)
+                              } else {
+                                const found = itens.find((it) =>
+                                  it.nome
+                                    .toLowerCase()
+                                    .includes(itPresc.medicamento_nome.toLowerCase()),
+                                )
+                                if (found) setDispItemId(found.id)
+                              }
+                            }
+                          }
+                        }}
+                      >
+                        <option value="">Selecione uma prescrição ativa...</option>
+                        {prescricoesAtivas.map((p) => {
+                          const pacNome = p.expand?.paciente?.nome || 'Paciente'
+                          const leitoNome =
+                            p.expand?.internacao?.expand?.leito_atual?.codigo || 'Leito'
+                          const itensStr = p.itens?.map((i) => i.medicamento_nome).join(', ') || ''
+                          return (
+                            <option key={p.id} value={p.id}>
+                              {pacNome} (Leito: {leitoNome}) —{' '}
+                              {itensStr ? `[${itensStr}]` : 'Prescrição'} ({p.data_prescricao})
+                            </option>
+                          )
+                        })}
+                      </select>
+                      {prescricoesAtivas.length === 0 && (
+                        <p className="text-[11px] text-amber-700 pt-0.5">
+                          Não há prescrições médicas ativas no momento. Você pode mudar para a
+                          modalidade "Dispensação Avulsa".
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <div>
-                    <Label className="text-xs text-slate-700 font-medium">Paciente *</Label>
+                    <Label className="text-xs text-slate-700 font-medium">
+                      Paciente Recebedor *
+                    </Label>
                     <select
                       className="w-full mt-1 px-3 py-2 text-xs border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                       value={dispPacienteId}
@@ -470,6 +574,19 @@ export const FarmaciaView: React.FC = () => {
                         </option>
                       ))}
                     </select>
+
+                    {/* Alerta de Alergia do Paciente Selecionado */}
+                    {dispPacienteId &&
+                      (() => {
+                        const pac = pacientes.find((p) => p.id === dispPacienteId)
+                        if (!pac?.alergias) return null
+                        return (
+                          <div className="mt-1.5 p-2 rounded bg-red-50 border border-red-200 text-[11px] text-red-900 font-semibold flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-red-600 inline-block animate-pulse" />
+                            <span>Alergias do Paciente: {pac.alergias}</span>
+                          </div>
+                        )
+                      })()}
                   </div>
 
                   <div>

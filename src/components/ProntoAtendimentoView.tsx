@@ -1125,6 +1125,26 @@ export const ProntoAtendimentoView: React.FC<{
           </DialogHeader>
 
           <form onSubmit={handleSalvarAtendimento} className="space-y-4 pt-2">
+            {/* ALERTA CLÍNICO DE ALERGIAS E COMORBIDADES DO PACIENTE NO PA */}
+            {fichaEmFoco?.expand?.paciente && (
+              <div className="rounded-lg border-2 border-red-500 bg-red-50 p-3 text-red-950 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse" />
+                  <span className="text-xs font-black uppercase text-red-900 tracking-wide">
+                    ALERTA DE ALERGIA & COMORBIDADES (SAME):
+                  </span>
+                </div>
+                <div className="text-xs font-bold text-red-800">
+                  Alergias: {fichaEmFoco.expand.paciente.alergias || 'Nenhuma alergia conhecida'}
+                </div>
+                {fichaEmFoco.expand.paciente.condicoes_cronicas && (
+                  <div className="text-[11px] text-red-900 font-medium">
+                    Condições Crônicas: {fichaEmFoco.expand.paciente.condicoes_cronicas}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Resumo da Triagem */}
             <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-xs space-y-1">
               <div>

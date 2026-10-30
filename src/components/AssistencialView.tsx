@@ -33,7 +33,10 @@ import {
   Calendar,
   FileText,
   Loader2,
+  Pill,
 } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PrescricaoEnfermagemTab } from '@/components/PrescricaoEnfermagemTab'
 import { useToast } from '@/hooks/use-toast'
 
 interface AssistencialViewProps {
@@ -48,11 +51,16 @@ export const AssistencialView: React.FC<AssistencialViewProps> = ({
   const { user } = useAuth()
   const { toast } = useToast()
 
+  const podePrescrever = user?.role === 'profissional' || user?.role === 'admin'
+
   const [evolucoes, setEvolucoes] = useState<EvolucaoClinica[]>([])
   const [pacientes, setPacientes] = useState<Paciente[]>([])
   const [internacoes, setInternacoes] = useState<Internacao[]>([])
   const [profissionais, setProfissionais] = useState<Profissional[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Sub-abas
+  const [subAba, setSubAba] = useState<'evolucoes' | 'prescricao'>('evolucoes')
 
   // Filtros
   const [pacienteSelecionado, setPacienteSelecionado] = useState<string>(pacienteIdFoco || 'todos')
@@ -196,131 +204,170 @@ export const AssistencialView: React.FC<AssistencialViewProps> = ({
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <Stethoscope className="w-5 h-5 text-blue-600" />
-            Registro Assistencial Mínimo & Prontuário
+            Registro Assistencial Hospitalar & Prescrição
           </h1>
           <p className="text-xs text-slate-500">
-            Evoluções médicas, anotações de enfermagem, sinais vitais e diagnósticos vinculados
+            Evoluções clínicas, prescrições médicas na internação e checagem de enfermagem ao leito
           </p>
         </div>
 
-        <Button
-          onClick={abrirNovaEvolucao}
-          className="bg-blue-600 hover:bg-blue-500 text-xs sm:text-sm"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Registrar Evolução
-        </Button>
+        <div className="flex items-center gap-2">
+          {subAba === 'evolucoes' && (
+            <Button
+              onClick={abrirNovaEvolucao}
+              className="bg-blue-600 hover:bg-blue-500 text-xs sm:text-sm"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Registrar Evolução
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Filtro por Paciente */}
-      <Card className="border-slate-200">
-        <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="w-full sm:w-96 space-y-1">
-            <Label className="text-xs text-slate-500">Filtrar por Paciente</Label>
-            <Select value={pacienteSelecionado} onValueChange={setPacienteSelecionado}>
-              <SelectTrigger className="text-sm">
-                <SelectValue placeholder="Todos os pacientes" />
-              </SelectTrigger>
-              <SelectContent className="max-h-60">
-                <SelectItem value="todos">Todos os Pacientes</SelectItem>
-                {pacientes.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.nome} (CNS: {p.cartao_sus})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      {/* ABAS SUPERIORES: EVOLUÇÕES vs PRESCRIÇÃO MÉDICA / ENFERMAGEM */}
+      <Tabs value={subAba} onValueChange={(val: any) => setSubAba(val)} className="space-y-4">
+        <TabsList className="bg-slate-100 p-1">
+          <TabsTrigger
+            value="evolucoes"
+            className="text-xs flex items-center gap-1.5 data-[state=active]:bg-white"
+          >
+            <Activity className="w-3.5 h-3.5 text-blue-600" />
+            Evoluções & Anotações de Enfermagem
+          </TabsTrigger>
+          <TabsTrigger
+            value="prescricao"
+            className="text-xs flex items-center gap-1.5 data-[state=active]:bg-white"
+          >
+            <Pill className="w-3.5 h-3.5 text-purple-600" />
+            Prescrição Médica & Checagem ao Leito
+          </TabsTrigger>
+        </TabsList>
 
-          <p className="text-xs text-slate-500">
-            Exibindo <strong>{evolucoes.length}</strong> registro(s) assistenciais
-          </p>
-        </CardContent>
-      </Card>
+        <TabsContent value="evolucoes" className="space-y-4">
+          {/* Filtro por Paciente */}
+          <Card className="border-slate-200">
+            <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="w-full sm:w-96 space-y-1">
+                <Label className="text-xs text-slate-500">Filtrar por Paciente</Label>
+                <Select value={pacienteSelecionado} onValueChange={setPacienteSelecionado}>
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="Todos os pacientes" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    <SelectItem value="todos">Todos os Pacientes</SelectItem>
+                    {pacientes.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.nome} (CNS: {p.cartao_sus})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-      {/* Lista de Registros Clínicos */}
-      <Card className="border-slate-200">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold text-slate-800">
-            Histórico de Evoluções e Anotações Clínicas
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="py-12 flex justify-center items-center gap-2 text-slate-500 text-sm">
-              <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-              Carregando prontuário...
-            </div>
-          ) : evolucoes.length === 0 ? (
-            <div className="py-12 text-center text-slate-500 text-sm">
-              Nenhuma evolução clínica registrada até o momento.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {evolucoes.map((ev) => (
-                <div
-                  key={ev.id}
-                  className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors space-y-2.5"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 text-sm">
-                        {ev.expand?.paciente?.nome || 'Paciente'}
-                      </span>
-                      {tipoBadge(ev.tipo)}
-                      {ev.cid10 && (
-                        <Badge variant="outline" className="text-[10px] font-mono">
-                          CID-10: {ev.cid10}
-                        </Badge>
-                      )}
-                    </div>
-                    <span className="text-xs text-slate-500 flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      {ev.data_hora}
-                    </span>
-                  </div>
+              <p className="text-xs text-slate-500">
+                Exibindo <strong>{evolucoes.length}</strong> registro(s) assistenciais
+              </p>
+            </CardContent>
+          </Card>
 
-                  <p className="text-xs text-slate-800 whitespace-pre-wrap leading-relaxed">
-                    {ev.descricao}
-                  </p>
-
-                  {ev.diagnostico && (
-                    <div className="p-2 rounded bg-purple-50 border border-purple-200 text-xs text-purple-900">
-                      <strong>Diagnóstico / Hipótese:</strong> {ev.diagnostico}
-                    </div>
-                  )}
-
-                  {ev.sinais_vitais && (
-                    <div className="flex items-center gap-2 text-xs text-slate-600 bg-white p-2 rounded border border-slate-200">
-                      <HeartPulse className="w-4 h-4 text-red-500" />
-                      <span>
-                        <strong>Sinais Vitais:</strong> {ev.sinais_vitais}
-                      </span>
-                    </div>
-                  )}
-
-                  {ev.conduta && (
-                    <div className="text-xs text-slate-700 bg-emerald-50/60 p-2 rounded border border-emerald-200">
-                      <strong>Conduta Terapêutica / Prescrição:</strong> {ev.conduta}
-                    </div>
-                  )}
-
-                  <div className="text-[11px] text-slate-500 pt-1 flex items-center justify-between">
-                    <span>
-                      Registrado por:{' '}
-                      <strong>{ev.expand?.profissional?.nome || 'Profissional de Plantão'}</strong>{' '}
-                      ({ev.expand?.profissional?.registro_conselho || 'SMS'})
-                    </span>
-                    {ev.expand?.internacao && (
-                      <span className="text-blue-600">Vinculado à Internação</span>
-                    )}
-                  </div>
+          {/* Lista de Registros Clínicos */}
+          <Card className="border-slate-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-slate-800">
+                Histórico de Evoluções e Anotações Clínicas
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="py-12 flex justify-center items-center gap-2 text-slate-500 text-sm">
+                  <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                  Carregando prontuário...
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              ) : evolucoes.length === 0 ? (
+                <div className="py-12 text-center text-slate-500 text-sm">
+                  Nenhuma evolução clínica registrada até o momento.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {evolucoes.map((ev) => (
+                    <div
+                      key={ev.id}
+                      className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors space-y-2.5"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 text-sm">
+                            {ev.expand?.paciente?.nome || 'Paciente'}
+                          </span>
+                          {tipoBadge(ev.tipo)}
+                          {ev.cid10 && (
+                            <Badge variant="outline" className="text-[10px] font-mono">
+                              CID-10: {ev.cid10}
+                            </Badge>
+                          )}
+                        </div>
+                        <span className="text-xs text-slate-500 flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                          {ev.data_hora}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-slate-800 whitespace-pre-wrap leading-relaxed">
+                        {ev.descricao}
+                      </p>
+
+                      {ev.diagnostico && (
+                        <div className="p-2 rounded bg-purple-50 border border-purple-200 text-xs text-purple-900">
+                          <strong>Diagnóstico / Hipótese:</strong> {ev.diagnostico}
+                        </div>
+                      )}
+
+                      {ev.sinais_vitais && (
+                        <div className="flex items-center gap-2 text-xs text-slate-600 bg-white p-2 rounded border border-slate-200">
+                          <HeartPulse className="w-4 h-4 text-red-500" />
+                          <span>
+                            <strong>Sinais Vitais:</strong> {ev.sinais_vitais}
+                          </span>
+                        </div>
+                      )}
+
+                      {ev.conduta && (
+                        <div className="text-xs text-slate-700 bg-emerald-50/60 p-2 rounded border border-emerald-200">
+                          <strong>Conduta Terapêutica / Prescrição:</strong> {ev.conduta}
+                        </div>
+                      )}
+
+                      <div className="text-[11px] text-slate-500 pt-1 flex items-center justify-between">
+                        <span>
+                          Registrado por:{' '}
+                          <strong>
+                            {ev.expand?.profissional?.nome || 'Profissional de Plantão'}
+                          </strong>{' '}
+                          ({ev.expand?.profissional?.registro_conselho || 'SMS'})
+                        </span>
+                        {ev.expand?.internacao && (
+                          <span className="text-blue-600">Vinculado à Internação</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="prescricao" className="space-y-4">
+          <PrescricaoEnfermagemTab
+            pacienteSelecionadoId={pacienteSelecionado}
+            internacaoSelecionadaId={internacaoIdFoco}
+            pacientes={pacientes}
+            internacoes={internacoes}
+            profissionais={profissionais}
+            podePrescrever={podePrescrever}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* MODAL REGISTRAR EVOLUÇÃO */}
       <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>

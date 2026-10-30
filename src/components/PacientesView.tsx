@@ -56,6 +56,7 @@ export const PacientesView: React.FC = () => {
   const [formCidade, setFormCidade] = useState('Mirante da Serra')
   const [formTipoSanguineo, setFormTipoSanguineo] = useState('O+')
   const [formAlergias, setFormAlergias] = useState('')
+  const [formCondicoesCronicas, setFormCondicoesCronicas] = useState('')
   const [formObservacoes, setFormObservacoes] = useState('')
 
   useEffect(() => {
@@ -98,6 +99,7 @@ export const PacientesView: React.FC = () => {
     setFormCidade('Mirante da Serra')
     setFormTipoSanguineo('O+')
     setFormAlergias('')
+    setFormCondicoesCronicas('')
     setFormObservacoes('')
     setDialogAberto(true)
   }
@@ -116,6 +118,7 @@ export const PacientesView: React.FC = () => {
     setFormCidade(p.cidade || 'Mirante da Serra')
     setFormTipoSanguineo(p.tipo_sanguineo || 'O+')
     setFormAlergias(p.alergias || '')
+    setFormCondicoesCronicas(p.condicoes_cronicas || '')
     setFormObservacoes(p.observacoes || '')
     setDialogAberto(true)
   }
@@ -146,6 +149,7 @@ export const PacientesView: React.FC = () => {
         cidade: formCidade.trim(),
         tipo_sanguineo: formTipoSanguineo,
         alergias: formAlergias.trim(),
+        condicoes_cronicas: formCondicoesCronicas.trim(),
         observacoes: formObservacoes.trim(),
       }
 
@@ -266,7 +270,6 @@ export const PacientesView: React.FC = () => {
                         {p.sexo === 'M' ? 'Masc' : p.sexo === 'F' ? 'Fem' : 'Outro'}
                       </Badge>
                     </div>
-
                     <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-slate-500">
                       {p.data_nascimento && <span>Nascimento: {p.data_nascimento}</span>}
                       {p.telefone && (
@@ -286,12 +289,17 @@ export const PacientesView: React.FC = () => {
                         </span>
                       )}
                     </div>
-
                     {p.alergias && (
-                      <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-0.5 inline-block border border-amber-200">
+                      <p className="text-xs text-red-600 font-semibold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-600 inline-block" />
                         <strong>Alergias:</strong> {p.alergias}
                       </p>
                     )}
+                    {p.condicoes_cronicas && (
+                      <p className="text-xs text-purple-700">
+                        <strong>Condições:</strong> {p.condicoes_cronicas}
+                      </p>
+                    )}{' '}
                   </div>
 
                   <div className="flex items-center gap-2 self-end md:self-center">
@@ -481,15 +489,35 @@ export const PacientesView: React.FC = () => {
               </div>
 
               <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor="alergias" className="text-xs text-amber-700 font-semibold">
-                  Alergias Conhecidas
+                <Label
+                  htmlFor="alergias"
+                  className="text-xs text-red-700 font-bold flex items-center gap-1"
+                >
+                  <span className="w-2 h-2 rounded-full bg-red-600 inline-block" /> Alergias
+                  Conhecidas (Medicamentosas, Alimentares)
                 </Label>
                 <Input
                   id="alergias"
-                  placeholder="Ex: Dipirona, Penicilina, Iodo (ou Nenhuma)"
+                  placeholder="Ex: Penicilina, Dipirona, AINEs, Frutos do Mar..."
                   value={formAlergias}
                   onChange={(e) => setFormAlergias(e.target.value)}
-                  className="text-sm border-amber-200"
+                  className="text-sm border-red-300 bg-red-50/40"
+                />
+              </div>
+
+              <div className="space-y-1 sm:col-span-2">
+                <Label
+                  htmlFor="condicoesCronicas"
+                  className="text-xs text-purple-800 font-semibold"
+                >
+                  Condições Crônicas / Comorbidades
+                </Label>
+                <Input
+                  id="condicoesCronicas"
+                  placeholder="Ex: Hipertensão Arterial (HAS), Diabetes Mellitus tipo 2, Asma..."
+                  value={formCondicoesCronicas}
+                  onChange={(e) => setFormCondicoesCronicas(e.target.value)}
+                  className="text-sm border-purple-200 bg-purple-50/40"
                 />
               </div>
 

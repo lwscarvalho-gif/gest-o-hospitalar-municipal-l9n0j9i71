@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T02:41:56.818Z",
+  "generatedAt": "2026-10-30T03:02:16.465Z",
   "collections": [
     {
       "name": "users",
@@ -299,6 +299,12 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "condicoes_cronicas",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": []
@@ -1169,6 +1175,20 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "prescricao_relacionada",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "prescricoes"
+        },
+        {
+          "name": "internacao",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "internacoes"
         }
       ],
       "indexes": [
@@ -1360,6 +1380,307 @@
         "CREATE INDEX idx_imun_paciente ON imunizacao_registros (paciente)",
         "CREATE INDEX idx_imun_vacina ON imunizacao_registros (vacina)",
         "CREATE INDEX idx_imun_data ON imunizacao_registros (data_aplicacao)"
+      ]
+    },
+    {
+      "name": "prescricoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "internacao",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "internacoes"
+        },
+        {
+          "name": "medico",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "medico_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_prescricao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["ativa", "suspensa", "concluida"]
+        },
+        {
+          "name": "observacoes_gerais",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_presc_paciente ON prescricoes (paciente)",
+        "CREATE INDEX idx_presc_internacao ON prescricoes (internacao)",
+        "CREATE INDEX idx_presc_status ON prescricoes (status)"
+      ]
+    },
+    {
+      "name": "prescricao_itens",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "prescricao",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "prescricoes"
+        },
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "item_farmacia",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "farmacia_itens"
+        },
+        {
+          "name": "medicamento_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "dose",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "via_administracao",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "oral",
+            "intravenosa",
+            "intramuscular",
+            "subcutanea",
+            "inalatoria",
+            "topica",
+            "retal",
+            "oftalmica",
+            "nasal",
+            "outra"
+          ]
+        },
+        {
+          "name": "frequencia",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "duracao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "instrucoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["ativo", "suspenso", "concluido"]
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_item_prescricao ON prescricao_itens (prescricao)",
+        "CREATE INDEX idx_item_farmacia ON prescricao_itens (item_farmacia)"
+      ]
+    },
+    {
+      "name": "administracao_medicamentos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "internacao",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "internacoes"
+        },
+        {
+          "name": "prescricao",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "prescricoes"
+        },
+        {
+          "name": "prescricao_item",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "prescricao_itens"
+        },
+        {
+          "name": "medicamento_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "dose_administrada",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "via_administrada",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_administracao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "profissional_enfermagem",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "responsavel_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "responsavel_cargo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["administrado", "recusado", "suspenso", "nao_administrado"]
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_adm_paciente ON administracao_medicamentos (paciente)",
+        "CREATE INDEX idx_adm_item ON administracao_medicamentos (prescricao_item)",
+        "CREATE INDEX idx_adm_data ON administracao_medicamentos (data_hora_administracao)"
       ]
     }
   ]

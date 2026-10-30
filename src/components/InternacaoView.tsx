@@ -726,6 +726,31 @@ export const InternacaoView: React.FC<{
               </Select>
             </div>
 
+            {/* ALERTA DE ALERGIAS E COMORBIDADES NA ADMISSÃO HOSPITALAR */}
+            {formAdmPaciente &&
+              (() => {
+                const pacSel = pacientes.find((p) => p.id === formAdmPaciente)
+                if (!pacSel) return null
+                return (
+                  <div className="rounded-lg border-2 border-red-500 bg-red-50 p-2.5 text-red-950 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse" />
+                      <span className="text-xs font-black uppercase text-red-900 tracking-wide">
+                        ALERTA OBRIGATÓRIO DE ADMISSÃO — ALERGIAS DO PACIENTE:
+                      </span>
+                    </div>
+                    <div className="text-xs font-bold text-red-800">
+                      Alergias: {pacSel.alergias || 'Nenhuma alergia conhecida'}
+                    </div>
+                    {pacSel.condicoes_cronicas && (
+                      <div className="text-[11px] text-red-900 font-medium">
+                        Condições Crônicas: {pacSel.condicoes_cronicas}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Leito Vago *</Label>

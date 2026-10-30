@@ -13,6 +13,121 @@ export interface AppUser {
 }
 
 // -------------------------------------------------------------
+// FASE 3 / SAME: PRESCRIÇÃO MÉDICA DIGITAL NA INTERNAÇÃO
+// -------------------------------------------------------------
+export type ViaAdministracaoMedicamento =
+  | 'oral'
+  | 'intravenosa'
+  | 'intramuscular'
+  | 'subcutanea'
+  | 'inalatoria'
+  | 'topica'
+  | 'retal'
+  | 'oftalmica'
+  | 'nasal'
+  | 'outra'
+
+export type StatusPrescricao = 'ativa' | 'suspensa' | 'concluida'
+export type StatusPrescricaoItem = 'ativo' | 'suspenso' | 'concluido'
+export type StatusAdministracao = 'administrado' | 'recusado' | 'suspenso' | 'nao_administrado'
+
+export interface PrescricaoItem {
+  id: string
+  prescricao: string
+  paciente: string
+  item_farmacia?: string
+  medicamento_nome: string
+  dose: string
+  via_administracao: ViaAdministracaoMedicamento
+  frequencia: string
+  duracao?: string
+  instrucoes?: string
+  status: StatusPrescricaoItem
+  expand?: {
+    item_farmacia?: ItemFarmacia
+  }
+  created: string
+  updated: string
+}
+
+export interface PrescricaoMedica {
+  id: string
+  paciente: string
+  internacao: string
+  medico?: string
+  medico_nome?: string
+  data_prescricao: string
+  status: StatusPrescricao
+  observacoes_gerais?: string
+  expand?: {
+    paciente?: Paciente
+    internacao?: Internacao
+    medico?: Profissional
+  }
+  itens?: PrescricaoItem[]
+  created: string
+  updated: string
+}
+
+export interface AdministracaoMedicamento {
+  id: string
+  paciente: string
+  internacao?: string
+  prescricao?: string
+  prescricao_item?: string
+  medicamento_nome: string
+  dose_administrada?: string
+  via_administrada?: string
+  data_hora_administracao: string
+  profissional_enfermagem?: string
+  responsavel_nome: string
+  responsavel_cargo?: string
+  status: StatusAdministracao
+  observacoes?: string
+  expand?: {
+    paciente?: Paciente
+    internacao?: Internacao
+    prescricao?: PrescricaoMedica
+    prescricao_item?: PrescricaoItem
+    profissional_enfermagem?: Profissional
+  }
+  created: string
+  updated: string
+}
+
+// -------------------------------------------------------------
+// FASE 3 / SAME: LINHA DO TEMPO CONSOLIDADA DO PRONTUÁRIO
+// -------------------------------------------------------------
+export type TipoEventoProntuario =
+  | 'pa_triagem'
+  | 'pa_atendimento'
+  | 'internacao_admissao'
+  | 'internacao_alta'
+  | 'internacao_transferencia'
+  | 'evolucao_clinica'
+  | 'prescricao_medica'
+  | 'administracao_enfermagem'
+  | 'dispensacao_farmacia'
+  | 'vacina_aplicacao'
+  | 'agendamento'
+
+export interface EventoProntuarioUnificado {
+  id: string
+  tipo: TipoEventoProntuario
+  dataHora: string
+  titulo: string
+  subtitulo?: string
+  descricao?: string
+  detalhes?: Record<string, any>
+  profissionalNome?: string
+  setorOuLeito?: string
+  badgeTexto: string
+  badgeCor: string
+  icone: string
+  registroOriginal?: any
+}
+
+// -------------------------------------------------------------
 // FASE 2: MÓDULO FARMÁCIA
 // -------------------------------------------------------------
 export type TipoItemFarmacia = 'medicamento' | 'material'
@@ -56,9 +171,13 @@ export interface DispensacaoFarmacia {
   tipo_movimento: TipoMovimentoFarmacia
   setor_destino?: string
   observacoes?: string
+  prescricao_relacionada?: string
+  internacao?: string
   expand?: {
     paciente?: Paciente
     item?: ItemFarmacia
+    prescricao_relacionada?: PrescricaoMedica
+    internacao?: Internacao
   }
   created: string
   updated: string
@@ -147,6 +266,7 @@ export interface Paciente {
   cidade?: string
   tipo_sanguineo?: string
   alergias?: string
+  condicoes_cronicas?: string
   observacoes?: string
   created: string
   updated: string

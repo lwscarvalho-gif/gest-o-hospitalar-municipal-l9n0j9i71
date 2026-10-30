@@ -5,26 +5,28 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   Hospital,
-  Users,
-  Calendar,
+  Flame,
   Bed,
-  FileText,
-  BarChart3,
+  Stethoscope,
+  Users,
+  ClipboardList,
+  Calendar,
   Sliders,
+  BarChart3,
+  FileText,
   ShieldCheck,
   LogOut,
-  Stethoscope,
-  ClipboardList,
-  Flame,
   Menu,
   X,
   Pill,
   Syringe,
+  FolderOpen,
 } from 'lucide-react'
 
 export type ActiveTab =
   | 'dashboard'
   | 'pronto_atendimento'
+  | 'prontuario_same'
   | 'farmacia'
   | 'imunizacao'
   | 'pacientes'
@@ -36,7 +38,6 @@ export type ActiveTab =
   | 'relatorios'
   | 'integracoes'
   | 'auditoria'
-
 interface NavItem {
   id: ActiveTab
   label: string
@@ -59,8 +60,14 @@ const NAV_ITEMS: NavItem[] = [
     allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
   },
   {
+    id: 'prontuario_same',
+    label: 'Prontuário (SAME)',
+    icon: FolderOpen,
+    allowedRoles: ['admin', 'gestor', 'profissional'],
+  },
+  {
     id: 'farmacia',
-    label: 'Farmácia & Estoque',
+    label: 'Farmácia & Dispensação',
     icon: Pill,
     allowedRoles: ['admin', 'gestor', 'recepcao'],
   },
@@ -166,7 +173,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({ activeTab, onSelec
               <div className="flex items-center gap-2">
                 <span className="font-bold text-base tracking-tight text-white">SGH Municipal</span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  v0.0.3
+                  v0.0.4
                 </span>
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">
