@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T14:51:13.701Z",
+  "generatedAt": "2026-10-30T15:20:10.388Z",
   "collections": [
     {
       "name": "users",
@@ -6846,6 +6846,13 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "tfd_processo",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "tfd_processos"
         }
       ],
       "indexes": [
@@ -7031,6 +7038,354 @@
         "CREATE INDEX idx_transp_pass_viagem ON transporte_passageiros (viagem, status)",
         "CREATE INDEX idx_transp_pass_paciente ON transporte_passageiros (paciente)",
         "CREATE INDEX idx_transp_pass_idemp ON transporte_passageiros (idempotency_key)"
+      ]
+    },
+    {
+      "name": "tfd_processos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "update": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "numero_processo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_abertura",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "profissional_responsavel",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "cid10",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tratamento_solicitado",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo_atendimento",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "consulta_especializada",
+            "exame_alta_complexidade",
+            "procedimento_cirurgico",
+            "tratamento_oncologico",
+            "terapia_renal_substitutiva",
+            "urgencia_emergencia",
+            "outro"
+          ]
+        },
+        {
+          "name": "justificativa_clinica",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["autorizado", "cancelado", "enviado_para_estado", "negado", "inconcluso"]
+        },
+        {
+          "name": "motivo_situacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes_gerais",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "municipio_destino",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estabelecimento_destino",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tipo_transporte_recomendado",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "exige_acompanhante",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "justificativa_acompanhante",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "usuario_autor_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "ultimo_alterador_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "data_ultima_transicao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "is_renovacao",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "processo_anterior_ref",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "tfd_processos"
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_tfd_num_processo ON tfd_processos (numero_processo)",
+        "CREATE INDEX idx_tfd_proc_paciente ON tfd_processos (paciente, created DESC)",
+        "CREATE INDEX idx_tfd_proc_status ON tfd_processos (status, created DESC)",
+        "CREATE INDEX idx_tfd_proc_idemp ON tfd_processos (idempotency_key)"
+      ]
+    },
+    {
+      "name": "tfd_historico_estados",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "processo",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "tfd_processos"
+        },
+        {
+          "name": "estado_anterior",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estado_novo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "motivo_justificativa",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "usuario_autor_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "data_hora",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_tfd_hist_proc ON tfd_historico_estados (processo, created DESC)",
+        "CREATE INDEX idx_tfd_hist_autor ON tfd_historico_estados (usuario_autor_id)"
+      ]
+    },
+    {
+      "name": "tfd_viagens_lote",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "update": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "lote_codigo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "processo",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "tfd_processos"
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "confirmado",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_confirmacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "itens_solicitados",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "itens_criados",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "itens_conflito",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "resultado_sumario",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "usuario_autor_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_tfd_lote_idemp ON tfd_viagens_lote (idempotency_key)",
+        "CREATE INDEX idx_tfd_lote_proc ON tfd_viagens_lote (processo)"
       ]
     }
   ]

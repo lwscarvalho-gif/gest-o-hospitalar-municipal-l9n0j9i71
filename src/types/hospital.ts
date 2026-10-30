@@ -25,6 +25,215 @@ export interface TransporteTipoVeiculo {
   updated: string
 }
 
+// ============================================================================
+// MÓDULO DE TRATAMENTO FORA DO DOMICÍLIO (TFD) - SEÇÃO 7.4.4.2.e
+// ============================================================================
+
+export type StatusProcessoTFD =
+  | 'autorizado'
+  | 'cancelado'
+  | 'enviado_para_estado'
+  | 'negado'
+  | 'inconcluso'
+
+export type TipoAtendimentoTFD =
+  | 'consulta_especializada'
+  | 'exame_alta_complexidade'
+  | 'procedimento_cirurgico'
+  | 'tratamento_oncologico'
+  | 'terapia_renal_substitutiva'
+  | 'urgencia_emergencia'
+  | 'outro'
+
+export interface TfdProcesso {
+  id: string
+  numero_processo: string
+  data_abertura: string
+  paciente: string
+  profissional_responsavel: string
+  cid10: string
+  tratamento_solicitado: string
+  tipo_atendimento: TipoAtendimentoTFD
+  justificativa_clinica: string
+  status: StatusProcessoTFD
+  motivo_situacao?: string
+  observacoes_gerais?: string
+  municipio_destino?: string
+  estabelecimento_destino?: string
+  tipo_transporte_recomendado?: string
+  exige_acompanhante?: boolean
+  justificativa_acompanhante?: string
+  usuario_autor_id?: string
+  ultimo_alterador_id?: string
+  data_ultima_transicao?: string
+  idempotency_key?: string
+  is_renovacao?: boolean
+  processo_anterior_ref?: string
+  expand?: {
+    paciente?: Paciente
+    profissional_responsavel?: Profissional
+    usuario_autor_id?: AppUser
+    ultimo_alterador_id?: AppUser
+    processo_anterior_ref?: TfdProcesso
+  }
+  created: string
+  updated: string
+}
+
+export interface TfdHistoricoEstado {
+  id: string
+  processo: string
+  estado_anterior?: string
+  estado_novo: StatusProcessoTFD
+  motivo_justificativa: string
+  observacoes?: string
+  usuario_autor_id: string
+  data_hora: string
+  expand?: {
+    processo?: TfdProcesso
+    usuario_autor_id?: AppUser
+  }
+  created: string
+  updated: string
+}
+
+export interface TfdViagensLote {
+  id: string
+  lote_codigo: string
+  processo: string
+  idempotency_key: string
+  confirmado: boolean
+  data_confirmacao?: string
+  itens_solicitados: number
+  itens_criados?: number
+  itens_conflito?: number
+  resultado_sumario?: any
+  usuario_autor_id: string
+  created: string
+  updated: string
+}
+
+export interface CriarProcessoTfdParams {
+  paciente: string
+  profissional_responsavel: string
+  cid10: string
+  tratamento_solicitado: string
+  tipo_atendimento: TipoAtendimentoTFD
+  justificativa_clinica: string
+  status?: StatusProcessoTFD
+  motivo_situacao?: string
+  observacoes_gerais?: string
+  municipio_destino?: string
+  estabelecimento_destino?: string
+  tipo_transporte_recomendado?: string
+  exige_acompanhante?: boolean
+  justificativa_acompanhante?: string
+  idempotency_key?: string
+}
+
+export interface TransitarEstadoTfdParams {
+  processo_id: string
+  novo_status: StatusProcessoTFD
+  motivo_justificativa: string
+  observacoes?: string
+}
+
+export interface RenovarProcessoTfdParams {
+  processo_original_id: string
+  motivo_renovacao: string
+  tratamento_solicitado?: string
+  justificativa_clinica?: string
+  cid10?: string
+  tipo_atendimento?: TipoAtendimentoTFD
+  profissional_responsavel?: string
+  idempotency_key?: string
+}
+
+export interface ItemViagemLoteInput {
+  item_idempotency_key: string
+  data_saida: string
+  data_retorno_previsto: string
+  veiculo_id: string
+  motorista_id: string
+  cidade_destino?: string
+  local_destino?: string
+}
+
+export interface PreviaViagemLoteItem {
+  indice: number
+  item_idempotency_key: string
+  data_saida: string
+  data_retorno_previsto: string
+  veiculo_id: string
+  motorista_id: string
+  apto: boolean
+  motivo_rejeicao: string | null
+}
+
+export interface PreviaViagemLoteResultado {
+  sucesso: boolean
+  tipo: 'previa_revisao_humana'
+  confirmacao_obrigatoria: true
+  mensagem: string
+  processo_id: string
+  processo_numero: string
+  paciente_nome: string
+  total_solicitados: number
+  total_aptos: number
+  total_conflitos: number
+  itens: PreviaViagemLoteItem[]
+}
+
+export interface ConfirmarViagemLoteParams {
+  processo_id: string
+  lote_idempotency_key: string
+  confirmado: boolean
+  itens: ItemViagemLoteInput[]
+}
+
+export interface ConfirmarViagemLoteResultado {
+  sucesso: boolean
+  idempotente?: boolean
+  mensagem: string
+  lote_codigo: string
+  processo_id: string
+  total_solicitados?: number
+  itens_criados_total?: number
+  itens_conflito_total?: number
+  criados?: Array<{
+    item_idempotency_key: string
+    viagem_id: string
+    codigo_viagem?: string
+    reserva_id?: string
+    status: string
+  }>
+  conflitos?: Array<{
+    item_idempotency_key: string
+    data_saida: string
+    data_retorno_previsto: string
+    veiculo_id: string
+    motorista_id: string
+    motivo_conflito: string
+  }>
+}
+
+export interface ListarProcessosTfdFiltros {
+  paciente?: string
+  status?: StatusProcessoTFD | 'todos'
+  busca?: string
+  page?: number
+  perPage?: number
+}
+
+export interface ResultadoPaginadoTfd {
+  items: TfdProcesso[]
+  page: number
+  perPage: number
+  totalItems: number
+  totalPages: number
+  isolamento_clinico_aplicado?: boolean
+}
+
 export interface TransporteVeiculo {
   id: string
   descricao: string
