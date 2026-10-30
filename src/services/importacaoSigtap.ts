@@ -1,5 +1,5 @@
 /**
- * Validador e Parser de Importação SIGTAP CSV (v0.0.28)
+ * Validador e Parser de Importação SIGTAP CSV (v0.0.30)
  *
  * REQUISITOS NORMATIVOS E DE ROBUSTEZ:
  * 1. Pré-visualização do CSV antes de gravar, com competência explícita.

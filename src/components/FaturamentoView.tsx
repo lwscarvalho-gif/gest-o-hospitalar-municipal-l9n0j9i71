@@ -543,6 +543,7 @@ export function FaturamentoView() {
 
       // Converter para formato de preview compatível com a interface
       const previewAdaptado: PrevisualizacaoSIGTAPResultado = {
+        sucesso: pacote.sucesso,
         competencia: compAlvo,
         delimitadorDetectado: 'Posicional (Layout Oficial Dinâmico)',
         totalLinhasArquivo: pacote.totalLinhasProcedimentos,
