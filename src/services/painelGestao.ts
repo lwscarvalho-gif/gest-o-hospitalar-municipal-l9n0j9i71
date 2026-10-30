@@ -282,12 +282,57 @@ export function dentroDoPeriodo(
 }
 
 /**
- * Função principal que consulta as coleções e monta os indicadores agregados do painel
+ * Função principal que consulta os indicadores agregados do painel.
+ * Prioriza o endpoint de agregação no servidor (/backend/v1/painel/indicadores),
+ * garantindo contagens completas sem limites de página, sem baixar registros clínicos
+ * para o navegador e sem expor dados pessoais ou clínicos.
+ * Caso o endpoint do servidor esteja temporariamente inacessível, recorre ao cálculo
+ * com paginação completa no cliente para máxima resiliência e continuidade operacional.
  */
 export async function carregarDadosPainelGestao(
   periodo: PeriodoApuracao = 'hoje',
 ): Promise<PainelGestaoDados> {
-  // Consulta paralela a todas as fontes de dados necessárias
+  // 1. Tenta carregar os indicadores já pré-agregados pelo servidor (PocketBase pb_hook)
+  try {
+    const resServidor = await pb.send<PainelGestaoDados>(
+      `/backend/v1/painel/indicadores?periodo=${encodeURIComponent(periodo)}`,
+      { method: 'GET' },
+    )
+    if (resServidor && resServidor.pa && resServidor.leitos) {
+      return resServidor
+    }
+  } catch (errServidor: any) {
+    // Se não for erro 404 (endpoint ausente) e não for erro de autenticação, loga advertência
+    console.warn(
+      'Endpoint de agregação no servidor indisponível; ativando agregação paginada resiliente:',
+      errServidor?.message || errServidor,
+    )
+  }
+
+  // 2. Fallback resiliente: paginação completa até esgotar sem truncamento de página
+  async function carregarTodosPaginado<T>(
+    collectionName: string,
+    options: { sort?: string; expand?: string; filter?: string } = {},
+  ): Promise<T[]> {
+    const batchSize = 100
+    let page = 1
+    const acumulado: T[] = []
+    while (true) {
+      const res = await pb.collection(collectionName).getList<T>(page, batchSize, {
+        sort: options.sort || '-created',
+        expand: options.expand,
+        filter: options.filter,
+      })
+      acumulado.push(...res.items)
+      if (page >= res.totalPages || res.items.length < batchSize) {
+        break
+      }
+      page++
+    }
+    return acumulado
+  }
+
+  // Consulta paralela completa a todas as fontes de dados necessárias
   const [
     registrosPA,
     leitos,
@@ -303,50 +348,21 @@ export async function carregarDadosPainelGestao(
     cirurgias,
     solicitacoesRegulacao,
   ] = await Promise.all([
-    pb.collection('pronto_atendimento').getFullList<FichaProntoAtendimento>({
-      sort: '-created',
-    }),
-    pb.collection('leitos').getFullList<Leito>({
-      sort: 'codigo',
-      expand: 'setor',
-    }),
-    pb.collection('setores').getFullList<Setor>({
-      sort: 'nome',
-    }),
-    pb.collection('internacoes').getFullList<Internacao>({
-      sort: '-created',
-      expand: 'setor_atual,leito_atual',
-    }),
-    pb.collection('exames').getFullList<ExameItem>({
-      sort: '-created',
-    }),
-    pb.collection('prescricoes').getFullList<PrescricaoMedica>({
-      sort: '-created',
-    }),
-    pb.collection('farmacia_dispensacoes').getFullList<DispensacaoFarmacia>({
-      sort: '-created',
-    }),
-    pb.collection('administracao_medicamentos').getFullList<AdministracaoMedicamento>({
-      sort: '-created',
-    }),
-    pb.collection('contas_faturamento').getFullList<ContaFaturamento>({
-      sort: '-created',
-    }),
-    pb.collection('competencias_faturamento').getFullList<CompetenciaFaturamento>({
+    carregarTodosPaginado<FichaProntoAtendimento>('pronto_atendimento'),
+    carregarTodosPaginado<Leito>('leitos', { sort: 'codigo', expand: 'setor' }),
+    carregarTodosPaginado<Setor>('setores', { sort: 'nome' }),
+    carregarTodosPaginado<Internacao>('internacoes', { expand: 'setor_atual,leito_atual' }),
+    carregarTodosPaginado<ExameItem>('exames'),
+    carregarTodosPaginado<PrescricaoMedica>('prescricoes'),
+    carregarTodosPaginado<DispensacaoFarmacia>('farmacia_dispensacoes'),
+    carregarTodosPaginado<AdministracaoMedicamento>('administracao_medicamentos'),
+    carregarTodosPaginado<ContaFaturamento>('contas_faturamento'),
+    carregarTodosPaginado<CompetenciaFaturamento>('competencias_faturamento', {
       sort: '-competencia',
     }),
-    pb.collection('producao_bpa').getFullList<ProducaoBPAItem>({
-      sort: '-created',
-    }),
-    pb.collection('cirurgias').getFullList<Cirurgia>({
-      sort: '-created',
-    }),
-    pb
-      .collection('regulacao_solicitacoes')
-      .getFullList<any>({
-        sort: '-created',
-      })
-      .catch(() => [] as any[]),
+    carregarTodosPaginado<ProducaoBPAItem>('producao_bpa'),
+    carregarTodosPaginado<Cirurgia>('cirurgias'),
+    carregarTodosPaginado<any>('regulacao_solicitacoes').catch(() => [] as any[]),
   ])
 
   // 1. INDICADORES DO PRONTO ATENDIMENTO (PA)

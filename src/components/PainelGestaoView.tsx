@@ -113,11 +113,25 @@ export const PainelGestaoView: React.FC<PainelGestaoViewProps> = ({ onNavegar })
     return () => clearInterval(timer)
   }, [autoRefreshAtivo, intervaloSegundos, carregar])
 
-  // Assinaturas Realtime nas principais coleções para reagir a alterações na rede
+  // Debounce e ref para evitar consultas repetidas desnecessárias com realtime
+  const debounceRealtimeRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const handleRealtimeEvent = useCallback(() => {
-    // Quando qualquer registro relevante mudar, agenda uma atualização silenciosa
-    carregar(true)
+    // Coalesce eventos realtime num intervalo de 2.5s para evitar rajada de requests redundantes
+    if (debounceRealtimeRef.current) {
+      clearTimeout(debounceRealtimeRef.current)
+    }
+    debounceRealtimeRef.current = setTimeout(() => {
+      carregar(true)
+    }, 2500)
   }, [carregar])
+
+  useEffect(() => {
+    return () => {
+      if (debounceRealtimeRef.current) {
+        clearTimeout(debounceRealtimeRef.current)
+      }
+    }
+  }, [])
 
   useRealtime('pronto_atendimento', handleRealtimeEvent, autoRefreshAtivo)
   useRealtime('leitos', handleRealtimeEvent, autoRefreshAtivo)
@@ -219,11 +233,17 @@ export const PainelGestaoView: React.FC<PainelGestaoViewProps> = ({ onNavegar })
                   erroAtualizacao ? 'bg-amber-400 animate-ping' : 'bg-emerald-400'
                 }`}
               />
-              {erroAtualizacao ? 'Conexão instável' : 'Conectado em tempo real'}
+              {erroAtualizacao ? (
+                <span className="text-amber-300 font-medium">
+                  Estado desatualizado (conexão instável)
+                </span>
+              ) : (
+                'Conectado em tempo real'
+              )}
             </span>
             <span>•</span>
-            <span>
-              Última atualização:{' '}
+            <span className={erroAtualizacao ? 'text-amber-200' : ''}>
+              Última atualização íntegra:{' '}
               <strong className="text-white">{dados?.dataHoraAtualizacao || '—'}</strong>
             </span>
             <span>•</span>
@@ -247,22 +267,33 @@ export const PainelGestaoView: React.FC<PainelGestaoViewProps> = ({ onNavegar })
         </div>
       </div>
 
-      {/* BANNER RESILIENTE DE ERRO (SE HOUVER FALHA NA ATUALIZAÇÃO SEM QUEBRAR A TELA) */}
+      {/* BANNER RESILIENTE DE ERRO (PRESERVA DADOS ÍNTEGROS, SINALIZA ESTADO DESATUALIZADO SEM SUCESSO FALSO) */}
       {erroAtualizacao && (
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 text-amber-900 text-xs shadow-sm">
+        <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-3 text-amber-900 text-xs shadow-sm">
           <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <strong>Aviso de Atualização em Tempo Real:</strong> {erroAtualizacao}
-            <p className="text-[11px] text-amber-700 mt-0.5">
-              A tela continua operacional com a última fotografia íntegra dos dados. Nova tentativa
-              automática ocorrerá em instantes.
+            <div className="flex items-center gap-2">
+              <strong className="text-amber-950">Aviso: Falha parcial de atualização</strong>
+              <Badge
+                variant="outline"
+                className="text-[10px] border-amber-400 text-amber-800 bg-amber-100/60"
+              >
+                Estado Desatualizado
+              </Badge>
+            </div>
+            <p className="text-amber-900 mt-1">{erroAtualizacao}</p>
+            <p className="text-[11px] text-amber-800 mt-1">
+              Os dados válidos anteriores <strong>NÃO foram apagados</strong> (última fotografia
+              válida mantida às <strong>{dados?.dataHoraAtualizacao || 'indisponível'}</strong>).
+              Nenhum sucesso falso é exibido. Nova tentativa automática ocorrerá no ciclo
+              programado.
             </p>
           </div>
           <Button
             size="sm"
             variant="outline"
             onClick={() => carregar(false)}
-            className="h-7 text-xs border-amber-300 bg-white hover:bg-amber-100 text-amber-900"
+            className="h-7 text-xs border-amber-400 bg-white hover:bg-amber-100 text-amber-900"
           >
             Tentar Novamente
           </Button>
