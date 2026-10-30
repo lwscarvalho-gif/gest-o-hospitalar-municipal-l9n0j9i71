@@ -21,6 +21,8 @@ import {
   darAltaPaciente,
 } from '@/services/internacoes'
 import { useAuth } from '@/contexts/AuthContext'
+import { ModalEmissaoImpresso } from '@/components/ModalEmissaoImpresso'
+import { TipoImpressoAssistencial } from '@/types/hospital'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -79,6 +81,10 @@ export const InternacaoView: React.FC<{
   const [modalTransferenciaAberto, setModalTransferenciaAberto] = useState(false)
   const [modalAltaAberto, setModalAltaAberto] = useState(false)
   const [modalHistoricoAberto, setModalHistoricoAberto] = useState(false)
+  const [modalImpressoAberto, setModalImpressoAberto] = useState(false)
+  const [tipoImpressoInicial, setTipoImpressoInicial] =
+    useState<TipoImpressoAssistencial>('resumo_alta')
+  const [internacaoParaImpresso, setInternacaoParaImpresso] = useState<Internacao | null>(null)
 
   // Form Admissão
   const [formAdmPaciente, setFormAdmPaciente] = useState('')
@@ -101,6 +107,8 @@ export const InternacaoView: React.FC<{
   const [historicoAlvo, setHistoricoAlvo] = useState<Internacao | null>(null)
 
   const [processando, setProcessando] = useState(false)
+  const isProfissional = user?.role === 'profissional'
+  const podeEmitirImpresso = isProfissional
 
   useEffect(() => {
     carregarTudo()
@@ -551,7 +559,6 @@ export const InternacaoView: React.FC<{
                             Admitir Aqui
                           </Button>
                         )}
-
                         {isOcupado && internacao && (
                           <>
                             <Button
@@ -560,20 +567,38 @@ export const InternacaoView: React.FC<{
                               onClick={() => abrirTransferencia(internacao)}
                               className="flex-1 text-[11px] h-7 border-slate-300"
                             >
-                              <ArrowRightLeft className="w-3 h-3 mr-1" />
+                              <ArrowRightLeft className="w-3.5 h-3.5 mr-1" />
                               Transferir
                             </Button>
+
+                            {podeEmitirImpresso && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setInternacaoParaImpresso(internacao)
+                                  setTipoImpressoInicial('resumo_alta')
+                                  setModalImpressoAberto(true)
+                                }}
+                                className="text-[11px] h-7 border-emerald-300 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2"
+                                title="Emitir Resumo de Alta / Receita A4"
+                              >
+                                <Bed className="w-3 h-3 mr-1" />
+                                Resumo Alta
+                              </Button>
+                            )}
+
                             <Button
                               size="sm"
                               variant="secondary"
                               onClick={() => abrirAlta(internacao)}
                               className="flex-1 text-[11px] h-7 bg-red-100 text-red-800 hover:bg-red-200"
                             >
-                              <LogOut className="w-3 h-3 mr-1" />
+                              <LogOut className="w-3.5 h-3.5 mr-1" />
                               Alta
                             </Button>
                           </>
-                        )}
+                        )}{' '}
                       </div>
                     </CardContent>
                   </Card>
@@ -680,6 +705,22 @@ export const InternacaoView: React.FC<{
                           <ArrowRightLeft className="w-3.5 h-3.5 mr-1" />
                           Transferir
                         </Button>
+
+                        {podeEmitirImpresso && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setInternacaoParaImpresso(item)
+                              setTipoImpressoInicial('resumo_alta')
+                              setModalImpressoAberto(true)
+                            }}
+                            className="text-xs h-8 border-emerald-300 text-emerald-800 bg-emerald-50 hover:bg-emerald-100"
+                          >
+                            <Bed className="w-3.5 h-3.5 mr-1" />
+                            Resumo de Alta A4
+                          </Button>
+                        )}
 
                         <Button
                           size="sm"
@@ -970,6 +1011,40 @@ export const InternacaoView: React.FC<{
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL DE EMISSÃO DE IMPRESSO ASSISTENCIAL (RESUMO DE ALTA / RECEITA NA INTERNAÇÃO) */}
+      <ModalEmissaoImpresso
+        aberto={modalImpressoAberto}
+        onClose={() => {
+          setModalImpressoAberto(false)
+          setInternacaoParaImpresso(null)
+        }}
+        paciente={internacaoParaImpresso?.expand?.paciente || null}
+        origem="internacao"
+        internacaoId={internacaoParaImpresso?.id}
+        dadosInternacao={
+          internacaoParaImpresso
+            ? {
+                dataAdmissao: internacaoParaImpresso.data_admissao,
+                leitoSetor: `${internacaoParaImpresso.expand?.leito_atual?.codigo || 'Leito'} (${internacaoParaImpresso.expand?.setor_atual?.nome || 'Setor'})`,
+                motivoInternacao: internacaoParaImpresso.motivo_admissao,
+                diagnosticoAdmissao: internacaoParaImpresso.diagnostico_inicial,
+                cid10Admissao: internacaoParaImpresso.cid10_admissao,
+              }
+            : undefined
+        }
+        profissionaisList={profissionais}
+        usuarioAtual={
+          user ? { id: user.id, nome: user.name, role: user.role, email: user.email } : undefined
+        }
+        tipoInicial={tipoImpressoInicial}
+        onImpressoEmitido={() => {
+          toast({
+            title: 'Impresso Emitido com Sucesso',
+            description: 'Documento registrado no prontuário do paciente e na auditoria.',
+          })
+        }}
+      />
 
       {/* MODAL HISTÓRICO DE MOVIMENTAÇÕES DO LEITO */}
       <Dialog open={modalHistoricoAberto} onOpenChange={setModalHistoricoAberto}>

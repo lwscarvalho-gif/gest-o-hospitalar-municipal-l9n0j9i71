@@ -683,106 +683,112 @@ export const SecoesPainelGestao: React.FC<SecoesPainelGestaoProps> = ({
       </div>
 
       {/* 4. FATURAMENTO SUS & BLOCO CIRÚRGICO */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Faturamento SUS */}
-        <Card className="border-slate-200 shadow-sm bg-white">
-          <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                <Receipt className="w-4 h-4" />
+      <div className={`grid grid-cols-1 ${isGestorOuAdmin ? 'lg:grid-cols-2' : ''} gap-6`}>
+        {/* Faturamento SUS — Restrito apenas a administradores e gestores da saúde */}
+        {isGestorOuAdmin && (
+          <Card className="border-slate-200 shadow-sm bg-white">
+            <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                  <Receipt className="w-4 h-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-bold text-slate-900">
+                    Faturamento SUS — Produção Financeira
+                  </CardTitle>
+                  <p className="text-xs text-slate-500">
+                    Competência {faturamento.competenciaAtual} • AIH & BPA SIGTAP
+                  </p>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-base font-bold text-slate-900">
-                  Faturamento SUS — Produção Financeira
-                </CardTitle>
-                <p className="text-xs text-slate-500">
-                  Competência {faturamento.competenciaAtual} • AIH & BPA SIGTAP
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => abrirCriterio('faturamento_producao')}
-                className="text-xs text-slate-500 hover:text-blue-600 flex items-center gap-1 p-1 rounded"
-                title="Critério de faturamento"
-              >
-                <HelpCircle className="w-3.5 h-3.5 text-blue-500" />
-              </button>
-              {onNavegar && isGestorOuAdmin && (
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => onNavegar('faturamento_sus')}
-                  className="text-xs text-blue-600 hover:underline font-medium"
+                  onClick={() => abrirCriterio('faturamento_producao')}
+                  className="text-xs text-slate-500 hover:text-blue-600 flex items-center gap-1 p-1 rounded"
+                  title="Critério de faturamento"
                 >
-                  Faturamento →
+                  <HelpCircle className="w-3.5 h-3.5 text-blue-500" />
                 </button>
-              )}
-            </div>
-          </CardHeader>
-
-          <CardContent className="pt-4 space-y-4">
-            <div className="flex items-center justify-between p-3 bg-emerald-50/60 rounded-xl border border-emerald-100">
-              <div>
-                <span className="text-[11px] uppercase font-bold text-emerald-800 block">
-                  Valor Total Produzido SUS
-                </span>
-                <span className="text-2xl sm:text-3xl font-extrabold text-emerald-950">
-                  R${' '}
-                  {faturamento.valorTotalGeral.toLocaleString('pt-BR', {
-                    minimumFractionDigits: 2,
-                  })}
-                </span>
+                {onNavegar && isGestorOuAdmin && (
+                  <button
+                    onClick={() => onNavegar('faturamento_sus')}
+                    className="text-xs text-blue-600 hover:underline font-medium"
+                  >
+                    Faturamento →
+                  </button>
+                )}
               </div>
-              <Badge className="bg-emerald-700 text-white text-xs">
-                {faturamento.statusCompetencia.toUpperCase()}
-              </Badge>
-            </div>
+            </CardHeader>
 
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                <span className="text-slate-500 text-[11px] block">AIH Hospitalar</span>
-                <strong className="text-slate-800 text-base">
-                  R${' '}
-                  {faturamento.valorTotalAIH.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </strong>
-                <span className="text-[10px] text-slate-400 block mt-0.5">
-                  {faturamento.totalContasAIH} conta(s) registradas
-                </span>
+            <CardContent className="pt-4 space-y-4">
+              <div className="flex items-center justify-between p-3 bg-emerald-50/60 rounded-xl border border-emerald-100">
+                <div>
+                  <span className="text-[11px] uppercase font-bold text-emerald-800 block">
+                    Valor Total Produzido SUS
+                  </span>
+                  <span className="text-2xl sm:text-3xl font-extrabold text-emerald-950">
+                    R${' '}
+                    {faturamento.valorTotalGeral.toLocaleString('pt-BR', {
+                      minimumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+                <Badge className="bg-emerald-700 text-white text-xs">
+                  {faturamento.statusCompetencia.toUpperCase()}
+                </Badge>
               </div>
 
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                <span className="text-slate-500 text-[11px] block">BPA Ambulatorial</span>
-                <strong className="text-slate-800 text-base">
-                  R${' '}
-                  {faturamento.valorTotalBPA.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </strong>
-                <span className="text-[10px] text-slate-400 block mt-0.5">
-                  {faturamento.itensBpaApurados} procedimento(s)
-                </span>
-              </div>
-            </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                  <span className="text-slate-500 text-[11px] block">AIH Hospitalar</span>
+                  <strong className="text-slate-800 text-base">
+                    R${' '}
+                    {faturamento.valorTotalAIH.toLocaleString('pt-BR', {
+                      minimumFractionDigits: 2,
+                    })}
+                  </strong>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                    {faturamento.totalContasAIH} conta(s) registradas
+                  </span>
+                </div>
 
-            {/* Contas por Status */}
-            <div className="grid grid-cols-4 gap-2 text-center text-xs pt-1 border-t border-slate-100">
-              <div>
-                <span className="text-[10px] text-slate-400 block">Abertas</span>
-                <strong className="text-slate-700">{faturamento.totalContasAbertas}</strong>
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                  <span className="text-slate-500 text-[11px] block">BPA Ambulatorial</span>
+                  <strong className="text-slate-800 text-base">
+                    R${' '}
+                    {faturamento.valorTotalBPA.toLocaleString('pt-BR', {
+                      minimumFractionDigits: 2,
+                    })}
+                  </strong>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                    {faturamento.itensBpaApurados} procedimento(s)
+                  </span>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] text-blue-600 block">Conciliadas</span>
-                <strong className="text-blue-700">{faturamento.totalContasConciliadas}</strong>
+
+              {/* Contas por Status */}
+              <div className="grid grid-cols-4 gap-2 text-center text-xs pt-1 border-t border-slate-100">
+                <div>
+                  <span className="text-[10px] text-slate-400 block">Abertas</span>
+                  <strong className="text-slate-700">{faturamento.totalContasAbertas}</strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-blue-600 block">Conciliadas</span>
+                  <strong className="text-blue-700">{faturamento.totalContasConciliadas}</strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-red-500 block">Glosadas</span>
+                  <strong className="text-red-700">{faturamento.totalContasGlosadas}</strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-emerald-600 block">Enviadas</span>
+                  <strong className="text-emerald-700">{faturamento.totalContasEnviadas}</strong>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] text-red-500 block">Glosadas</span>
-                <strong className="text-red-700">{faturamento.totalContasGlosadas}</strong>
-              </div>
-              <div>
-                <span className="text-[10px] text-emerald-600 block">Enviadas</span>
-                <strong className="text-emerald-700">{faturamento.totalContasEnviadas}</strong>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Bloco Cirúrgico */}
         <Card className="border-slate-200 shadow-sm bg-white">

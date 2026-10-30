@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T04:24:59.225Z",
+  "generatedAt": "2026-10-30T04:45:26.904Z",
   "collections": [
     {
       "name": "users",
@@ -3259,6 +3259,161 @@
         "CREATE INDEX idx_bpa_competencia ON producao_bpa (competencia)",
         "CREATE INDEX idx_bpa_procedimento ON producao_bpa (procedimento_codigo)",
         "CREATE INDEX idx_bpa_status ON producao_bpa (status)"
+      ]
+    },
+    {
+      "name": "impressos_assistenciais",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["receita", "atestado", "resumo_alta"]
+        },
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "profissional",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "profissional_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "profissional_profissao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "profissional_registro",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "unidade_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "municipio_uf",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "origem",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pronto_atendimento", "internacao", "ambulatorio", "avulso"]
+        },
+        {
+          "name": "atendimento_pa",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "pronto_atendimento"
+        },
+        {
+          "name": "internacao",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "internacoes"
+        },
+        {
+          "name": "prescricao_origem",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "prescricoes"
+        },
+        {
+          "name": "data_hora_emissao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "cid_consentimento_registrado",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cid_consentimento_data_hora",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cid10_codigo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cid10_descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "conteudo",
+          "type": "json",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "observacoes_gerais",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_impressos_paciente ON impressos_assistenciais (paciente)",
+        "CREATE INDEX idx_impressos_tipo ON impressos_assistenciais (tipo)",
+        "CREATE INDEX idx_impressos_data ON impressos_assistenciais (data_hora_emissao)",
+        "CREATE INDEX idx_impressos_pa ON impressos_assistenciais (atendimento_pa)",
+        "CREATE INDEX idx_impressos_internacao ON impressos_assistenciais (internacao)"
       ]
     }
   ]

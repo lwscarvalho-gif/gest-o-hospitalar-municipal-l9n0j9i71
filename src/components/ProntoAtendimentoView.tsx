@@ -68,6 +68,8 @@ import {
 } from 'lucide-react'
 import { ModalSolicitarExame } from '@/components/ModalSolicitarExame'
 import { SecaoPrescricaoPAMedica } from '@/components/SecaoPrescricaoPAMedica'
+import { ModalEmissaoImpresso } from '@/components/ModalEmissaoImpresso'
+import { TipoImpressoAssistencial } from '@/types/hospital'
 
 export const ProntoAtendimentoView: React.FC<{
   onNavegarInternacao?: () => void
@@ -96,6 +98,9 @@ export const ProntoAtendimentoView: React.FC<{
   const [modalAtendimentoMaximizado, setModalAtendimentoMaximizado] = useState(false)
   const [modalDetalhesAberto, setModalDetalhesAberto] = useState(false)
   const [modalExamePAAberto, setModalExamePAAberto] = useState(false)
+  const [modalImpressoAberto, setModalImpressoAberto] = useState(false)
+  const [tipoImpressoInicial, setTipoImpressoInicial] =
+    useState<TipoImpressoAssistencial>('receita')
 
   // Ficha em Foco
   const [fichaEmFoco, setFichaEmFoco] = useState<FichaProntoAtendimento | null>(null)
@@ -134,6 +139,8 @@ export const ProntoAtendimentoView: React.FC<{
   const isGestorOuAdmin = user?.role === 'admin' || user?.role === 'gestor'
   const podeFazerTriagem = isRecepcao || isGestorOuAdmin
   const podeAtender = isProfissional || isGestorOuAdmin
+  // Emissão de impressos assistenciais: restrito exclusivamente ao perfil profissional de saúde (conforme requisito 6)
+  const podeEmitirImpresso = isProfissional
 
   useEffect(() => {
     carregarDados()
@@ -1182,15 +1189,48 @@ export const ProntoAtendimentoView: React.FC<{
                   médica
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setModalExamePAAberto(true)}
-                className="bg-white border-blue-300 text-blue-700 hover:bg-blue-100 text-xs shrink-0"
-              >
-                + Solicitar Exame
-              </Button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setModalExamePAAberto(true)}
+                  className="bg-white border-blue-300 text-blue-700 hover:bg-blue-100 text-xs"
+                >
+                  + Solicitar Exame
+                </Button>
+
+                {podeEmitirImpresso && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setTipoImpressoInicial('receita')
+                        setModalImpressoAberto(true)
+                      }}
+                      className="bg-purple-50 border-purple-300 text-purple-700 hover:bg-purple-100 text-xs gap-1"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      Receita A4
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setTipoImpressoInicial('atestado')
+                        setModalImpressoAberto(true)
+                      }}
+                      className="bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100 text-xs gap-1"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      Atestado A4
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* ALERTA CLÍNICO DE ALERGIAS E COMORBIDADES DO PACIENTE NO PA */}
@@ -1462,6 +1502,26 @@ export const ProntoAtendimentoView: React.FC<{
         paciente={fichaEmFoco?.expand?.paciente}
         atendimentoPaId={fichaEmFoco?.id}
         onSucesso={() => carregarDados()}
+      />
+
+      {/* MODAL DE EMISSÃO DE IMPRESSOS ASSISTENCIAIS (RECEITA / ATESTADO) */}
+      <ModalEmissaoImpresso
+        aberto={modalImpressoAberto}
+        onClose={() => setModalImpressoAberto(false)}
+        paciente={fichaEmFoco?.expand?.paciente || null}
+        origem="pronto_atendimento"
+        atendimentoPaId={fichaEmFoco?.id}
+        profissionaisList={profissionais}
+        usuarioAtual={
+          user ? { id: user.id, nome: user.name, role: user.role, email: user.email } : undefined
+        }
+        tipoInicial={tipoImpressoInicial}
+        onImpressoEmitido={() => {
+          toast({
+            title: 'Impresso Emitido',
+            description: 'Documento registrado no prontuário do paciente e na auditoria.',
+          })
+        }}
       />
 
       {/* MODAL 4: DETALHES COMPLETOS DA FICHA DE PA */}

@@ -7,6 +7,15 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { FolhaImpressoA4 } from './FolhaImpressoA4'
+import { ImpressoAssistencial } from '@/types/hospital'
+import {
   FolderOpen,
   Search,
   Printer,
@@ -58,6 +67,9 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
   const [filtroDataInicio, setFiltroDataInicio] = useState('')
   const [filtroDataFim, setFiltroDataFim] = useState('')
   const [buscaTextoEvento, setBuscaTextoEvento] = useState('')
+  const [impressoVisualizacao, setImpressoVisualizacao] = useState<ImpressoAssistencial | null>(
+    null,
+  )
 
   // 1. Carregar lista de pacientes para busca
   useEffect(() => {
@@ -129,6 +141,7 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
         if (filtroTipo === 'agendamento' && ev.tipo !== 'agendamento') return false
         if (filtroTipo === 'exames' && !ev.tipo.startsWith('exame_')) return false
         if (filtroTipo === 'cirurgia' && !ev.tipo.startsWith('cirurgia_')) return false
+        if (filtroTipo === 'impressos' && !ev.tipo.startsWith('impresso_')) return false
       }
 
       // Filtro período
@@ -186,6 +199,10 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
         return <Scissors className="w-4 h-4 text-red-700" />
       case 'cirurgia_recuperacao_srpa':
         return <HeartPulse className="w-4 h-4 text-indigo-600" />
+      case 'impresso_receita':
+      case 'impresso_atestado':
+      case 'impresso_resumo_alta':
+        return <Printer className="w-4 h-4 text-emerald-700" />
       default:
         return <HeartPulse className="w-4 h-4 text-blue-600" />
     }
@@ -417,6 +434,7 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
             <option value="prescricao">Prescrições Médicas</option>
             <option value="enfermagem">Checagens de Enfermagem</option>
             <option value="assistencial">Evoluções Clínicas</option>
+            <option value="impressos">Impressos Assistenciais (Receita, Atestado, Alta)</option>
             <option value="exames">Exames & Laudos</option>
             <option value="farmacia">Dispensações de Medicamentos</option>
             <option value="agendamento">Agendamentos</option>
@@ -514,12 +532,26 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
                         </Badge>
                       </div>
 
-                      {ev.profissionalNome && (
-                        <span className="text-xs text-slate-600 font-medium flex items-center gap-1">
-                          <User className="w-3 h-3 text-slate-400" />
-                          {ev.profissionalNome}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {ev.profissionalNome && (
+                          <span className="text-xs text-slate-600 font-medium flex items-center gap-1">
+                            <User className="w-3 h-3 text-slate-400" />
+                            {ev.profissionalNome}
+                          </span>
+                        )}
+
+                        {ev.tipo.startsWith('impresso_') && ev.registroOriginal && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setImpressoVisualizacao(ev.registroOriginal)}
+                            className="h-6 text-[10px] border-emerald-300 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 gap-1 print:hidden"
+                          >
+                            <Printer className="w-3 h-3" />
+                            Visualizar / Re-imprimir A4
+                          </Button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Título e Subtítulo */}
@@ -582,6 +614,57 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
           )}
         </CardContent>
       </Card>
+
+      {/* MODAL DE PRÉ-VISUALIZAÇÃO / RE-IMPRESSÃO DE DOCUMENTO A4 */}
+      <Dialog
+        open={!!impressoVisualizacao}
+        onOpenChange={(aberto) => !aberto && setImpressoVisualizacao(null)}
+      >
+        <DialogContent className="max-w-4xl max-h-[92vh] flex flex-col p-0 overflow-hidden bg-white text-slate-900">
+          <DialogHeader className="p-4 border-b border-slate-200 bg-slate-50 flex flex-row items-center justify-between shrink-0 print:hidden">
+            <div className="flex items-center gap-2">
+              <Printer className="w-5 h-5 text-emerald-700" />
+              <div>
+                <DialogTitle className="text-base font-bold text-slate-900">
+                  Visualização de Impresso Assistencial Oficial
+                </DialogTitle>
+                <p className="text-xs text-slate-500">
+                  Emitido por: {impressoVisualizacao?.profissional_nome} (
+                  {impressoVisualizacao?.profissional_registro})
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => window.print()}
+              className="bg-slate-900 hover:bg-black text-white"
+            >
+              <Printer className="w-4 h-4 mr-1.5" />
+              Imprimir A4
+            </Button>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100/60">
+            {impressoVisualizacao && (
+              <FolhaImpressoA4 impresso={impressoVisualizacao} paciente={pacienteSelecionado} />
+            )}
+          </div>
+
+          <DialogFooter className="p-3 border-t border-slate-200 bg-white flex justify-end gap-2 shrink-0 print:hidden">
+            <Button variant="outline" size="sm" onClick={() => setImpressoVisualizacao(null)}>
+              Fechar
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => window.print()}
+              className="bg-slate-900 hover:bg-black text-white"
+            >
+              <Printer className="w-4 h-4 mr-1.5" />
+              Imprimir Documento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 6. RODAPÉ DE IMPRESSÃO (visível apenas na impressão) */}
       <div className="hidden print:block text-center text-xs text-slate-500 pt-8 border-t border-slate-300">

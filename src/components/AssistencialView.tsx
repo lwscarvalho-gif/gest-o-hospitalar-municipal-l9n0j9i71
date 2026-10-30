@@ -35,10 +35,13 @@ import {
   Loader2,
   Pill,
   FlaskConical,
+  Printer,
 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PrescricaoEnfermagemTab } from '@/components/PrescricaoEnfermagemTab'
 import { ModalSolicitarExame } from '@/components/ModalSolicitarExame'
+import { ModalEmissaoImpresso } from '@/components/ModalEmissaoImpresso'
+import { TipoImpressoAssistencial } from '@/types/hospital'
 import { useToast } from '@/hooks/use-toast'
 
 interface AssistencialViewProps {
@@ -73,6 +76,9 @@ export const AssistencialView: React.FC<AssistencialViewProps> = ({
 
   // Modal Exame
   const [modalExameAberto, setModalExameAberto] = useState(false)
+  const [modalImpressoAberto, setModalImpressoAberto] = useState(false)
+  const [tipoImpressoInicial, setTipoImpressoInicial] =
+    useState<TipoImpressoAssistencial>('receita')
 
   // Form
   const [formPaciente, setFormPaciente] = useState(pacienteIdFoco || '')
@@ -218,14 +224,38 @@ export const AssistencialView: React.FC<AssistencialViewProps> = ({
 
         <div className="flex items-center gap-2">
           {podePrescrever && (
-            <Button
-              variant="outline"
-              onClick={() => setModalExameAberto(true)}
-              className="border-blue-300 text-blue-700 hover:bg-blue-50 text-xs sm:text-sm flex items-center gap-1.5"
-            >
-              <FlaskConical className="w-4 h-4 text-blue-600" />
-              Solicitar Exame
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={() => setModalExameAberto(true)}
+                className="border-blue-300 text-blue-700 hover:bg-blue-50 text-xs sm:text-sm flex items-center gap-1.5"
+              >
+                <FlaskConical className="w-4 h-4 text-blue-600" />
+                Solicitar Exame
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setTipoImpressoInicial('receita')
+                  setModalImpressoAberto(true)
+                }}
+                className="border-purple-300 text-purple-700 hover:bg-purple-50 text-xs sm:text-sm flex items-center gap-1.5"
+              >
+                <Printer className="w-4 h-4 text-purple-600" />
+                Emitir Receita A4
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setTipoImpressoInicial('atestado')
+                  setModalImpressoAberto(true)
+                }}
+                className="border-amber-300 text-amber-800 hover:bg-amber-50 text-xs sm:text-sm flex items-center gap-1.5"
+              >
+                <FileText className="w-4 h-4 text-amber-600" />
+                Emitir Atestado A4
+              </Button>
+            </>
           )}
 
           {subAba === 'evolucoes' && (
@@ -528,6 +558,25 @@ export const AssistencialView: React.FC<AssistencialViewProps> = ({
         }
         internacaoId={internacaoIdFoco}
         onSucesso={() => carregar()}
+      />
+
+      {/* MODAL EMISSÃO DE IMPRESSOS ASSISTENCIAIS */}
+      <ModalEmissaoImpresso
+        aberto={modalImpressoAberto}
+        onClose={() => setModalImpressoAberto(false)}
+        paciente={
+          pacienteSelecionado !== 'todos'
+            ? pacientes.find((p) => p.id === pacienteSelecionado) || null
+            : pacientes[0] || null
+        }
+        origem="ambulatorio"
+        internacaoId={internacaoIdFoco}
+        profissionaisList={profissionais}
+        usuarioAtual={
+          user ? { id: user.id, nome: user.name, role: user.role, email: user.email } : undefined
+        }
+        tipoInicial={tipoImpressoInicial}
+        onImpressoEmitido={() => carregar()}
       />
     </div>
   )

@@ -44,6 +44,7 @@ export async function carregarProntuarioUnificado(
     checklistsPreOp,
     atosOperatorios,
     recuperacoesSrpa,
+    impressosAssistenciais,
   ] = await Promise.all([
     pb
       .collection('pronto_atendimento')
@@ -124,6 +125,15 @@ export async function carregarProntuarioUnificado(
         expand: 'responsavel,cirurgia',
       })
       .catch(() => [] as RecuperacaoPosAnestesica[]),
+
+    pb
+      .collection('impressos_assistenciais')
+      .getFullList<any>({
+        filter: `paciente = "${pacienteId}"`,
+        sort: '-created',
+        expand: 'profissional,atendimento_pa,internacao,prescricao_origem',
+      })
+      .catch(() => [] as any[]),
   ])
 
   const eventos: EventoProntuarioUnificado[] = []
@@ -663,6 +673,83 @@ export async function carregarProntuarioUnificado(
             : 'bg-indigo-700 text-white',
       icone: 'HeartPulse',
       registroOriginal: rec,
+    })
+  })
+
+  // J. Impressos Assistenciais Emitidos (Receitas, Atestados e Resumos de Alta)
+  impressosAssistenciais.forEach((imp) => {
+    const rotuloTipo: Record<string, string> = {
+      receita: 'Receita Médica Emitida',
+      atestado: 'Atestado Assistencial Emitido',
+      resumo_alta: 'Resumo de Alta Hospitalar Emitido',
+    }
+
+    const tipoEventoMap: Record<string, any> = {
+      receita: 'impresso_receita',
+      atestado: 'impresso_atestado',
+      resumo_alta: 'impresso_resumo_alta',
+    }
+
+    let resumoConteudo = ''
+    if (imp.tipo === 'receita') {
+      const conteudoRec = typeof imp.conteudo === 'string' ? JSON.parse(imp.conteudo) : imp.conteudo
+      const itensQtd = conteudoRec?.itens?.length || 0
+      const itensText =
+        conteudoRec?.itens
+          ?.map(
+            (it: any) =>
+              `${it.medicamento_nome} (${it.dose || ''} ${it.via_administracao || ''} - ${it.frequencia_posologia || ''})`,
+          )
+          .join('; ') || ''
+      resumoConteudo = `${itensQtd} medicamento(s) prescrito(s): ${itensText}`
+    } else if (imp.tipo === 'atestado') {
+      const conteudoAt = typeof imp.conteudo === 'string' ? JSON.parse(imp.conteudo) : imp.conteudo
+      resumoConteudo = `${conteudoAt?.texto_atestado || 'Atestado emitido'}${
+        imp.cid_consentimento_registrado && imp.cid10_codigo
+          ? ` • CID autorização registrada: ${imp.cid10_codigo}${imp.cid10_descricao ? ` - ${imp.cid10_descricao}` : ''}`
+          : ' • CID omitido (sem consentimento ou não aplicável)'
+      }`
+    } else if (imp.tipo === 'resumo_alta') {
+      const conteudoAlt = typeof imp.conteudo === 'string' ? JSON.parse(imp.conteudo) : imp.conteudo
+      resumoConteudo = `Condição na alta: ${conteudoAlt?.condicao_alta?.toUpperCase() || 'ALTA'}\nDiagnóstico: ${conteudoAlt?.diagnostico_alta || 'Não informado'}${conteudoAlt?.cid10_alta ? ` (CID: ${conteudoAlt.cid10_alta})` : ''}\nConduta pós-alta: ${conteudoAlt?.conduta_medicacao_alta || 'Sem prescrição pós-alta'}`
+    }
+
+    eventos.push({
+      id: `imp-${imp.id}`,
+      tipo: tipoEventoMap[imp.tipo] || 'impresso_receita',
+      dataHora: imp.data_hora_emissao || imp.created,
+      titulo: `${rotuloTipo[imp.tipo] || 'Impresso Assistencial'} • ${imp.unidade_nome || 'Hospital Municipal'}`,
+      subtitulo: `Emissor: ${imp.profissional_nome} (${imp.profissional_registro}) • Origem: ${imp.origem?.toUpperCase()}`,
+      descricao: resumoConteudo,
+      detalhes: {
+        tipo_impresso: imp.tipo,
+        profissional_nome: imp.profissional_nome,
+        profissional_registro: imp.profissional_registro,
+        profissional_profissao: imp.profissional_profissao,
+        unidade_nome: imp.unidade_nome,
+        origem: imp.origem,
+        cid_consentimento_registrado: imp.cid_consentimento_registrado,
+        cid_consentimento_data_hora: imp.cid_consentimento_data_hora,
+        cid10_codigo: imp.cid10_codigo,
+        cid10_descricao: imp.cid10_descricao,
+        conteudo: typeof imp.conteudo === 'string' ? JSON.parse(imp.conteudo) : imp.conteudo,
+        observacoes_gerais: imp.observacoes_gerais,
+      },
+      profissionalNome: imp.profissional_nome,
+      badgeTexto:
+        imp.tipo === 'receita'
+          ? 'Receita A4'
+          : imp.tipo === 'atestado'
+            ? 'Atestado A4'
+            : 'Resumo de Alta A4',
+      badgeCor:
+        imp.tipo === 'receita'
+          ? 'bg-purple-700 text-white'
+          : imp.tipo === 'atestado'
+            ? 'bg-amber-700 text-white'
+            : 'bg-emerald-800 text-white',
+      icone: 'Printer',
+      registroOriginal: imp,
     })
   })
 

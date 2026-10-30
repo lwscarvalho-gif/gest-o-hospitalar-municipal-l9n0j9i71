@@ -13,6 +13,108 @@ export interface AppUser {
 }
 
 // -------------------------------------------------------------
+// IMPRESSOS ASSISTENCIAIS (Receita, Atestado, Resumo de Alta)
+// -------------------------------------------------------------
+export type TipoImpressoAssistencial = 'receita' | 'atestado' | 'resumo_alta'
+export type OrigemImpressoAssistencial =
+  | 'pronto_atendimento'
+  | 'internacao'
+  | 'ambulatorio'
+  | 'avulso'
+
+export interface ItemReceitaAssistencial {
+  id?: string
+  medicamento_nome: string
+  apresentacao?: string
+  dose: string
+  via_administracao: ViaAdministracaoMedicamento | string
+  frequencia_posologia: string
+  duracao_quantidade: string
+  orientacoes?: string
+}
+
+export interface ConteudoReceitaAssistencial {
+  itens: ItemReceitaAssistencial[]
+  observacoes_gerais?: string
+  uso_continuo?: boolean
+  tipo_receita?: 'simples' | 'controle_especial'
+}
+
+export type TipoAtestado =
+  | 'afastamento_laboral'
+  | 'comparecimento'
+  | 'aptidao_fisica'
+  | 'acompanhante'
+
+export interface ConteudoAtestadoAssistencial {
+  tipo_atestado: TipoAtestado
+  periodo_dias?: number
+  periodo_horas?: string
+  data_inicio: string
+  data_fim?: string
+  finalidade?: string
+  texto_atestado: string
+  // Consentimento obrigatório para CID
+  cid_consentimento_declarado: boolean
+  cid_termo_consentimento?: string
+}
+
+export interface ConteudoResumoAltaAssistencial {
+  // Dados objetivos do histórico
+  data_admissao: string
+  data_alta: string
+  leito_setor: string
+  motivo_internacao: string
+  diagnostico_admissao?: string
+  cid10_admissao?: string
+  procedimentos_cirurgias_realizados?: string
+  // Campos clínicos preenchidos/revisados pelo profissional (nunca inventados pelo sistema)
+  resumo_evolucao_clinica: string
+  diagnostico_alta: string
+  cid10_alta?: string
+  conduta_medicacao_alta: string
+  recomendacoes_cuidados: string
+  retorno_ambulatorial?: string
+  condicao_alta: 'curado' | 'melhorado' | 'inalterado' | 'a_pedido' | 'transferido' | 'obito'
+}
+
+export interface ImpressoAssistencial {
+  id: string
+  tipo: TipoImpressoAssistencial
+  paciente: string
+  profissional?: string
+  profissional_nome: string
+  profissional_profissao: string
+  profissional_registro: string
+  unidade_nome: string
+  municipio_uf?: string
+  origem: OrigemImpressoAssistencial
+  atendimento_pa?: string
+  internacao?: string
+  prescricao_origem?: string
+  data_hora_emissao: string
+  cid_consentimento_registrado?: boolean
+  cid_consentimento_data_hora?: string
+  cid10_codigo?: string
+  cid10_descricao?: string
+  conteudo:
+    | ConteudoReceitaAssistencial
+    | ConteudoAtestadoAssistencial
+    | ConteudoResumoAltaAssistencial
+    | Record<string, any>
+  observacoes_gerais?: string
+  expand?: {
+    paciente?: Paciente
+    profissional?: Profissional
+    atendimento_pa?: FichaProntoAtendimento
+    internacao?: Internacao
+    prescricao_origem?: PrescricaoMedica
+  }
+  created: string
+  updated: string
+}
+
+// -------------------------------------------------------------
 // FASE 4: MÓDULO EXAMES & LAUDOS
 // -------------------------------------------------------------
 export type CategoriaExame = 'laboratorial' | 'imagem' | 'grafico' | 'outro'
@@ -172,6 +274,9 @@ export type TipoEventoProntuario =
   | 'cirurgia_cancelada'
   | 'faturamento_conta_hospitalar'
   | 'faturamento_producao_bpa'
+  | 'impresso_receita'
+  | 'impresso_atestado'
+  | 'impresso_resumo_alta'
 
 export interface EventoProntuarioUnificado {
   id: string
