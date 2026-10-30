@@ -244,6 +244,27 @@ export async function inativarVeiculo(
   return record
 }
 
+export async function inativarMotorista(
+  motoristaId: string,
+  motivo?: string,
+): Promise<TransporteMotorista> {
+  const record = await pb
+    .collection('transporte_motoristas')
+    .update<TransporteMotorista>(motoristaId, {
+      ativo: false,
+      observacoes: motivo || 'Inativação operacional',
+    })
+
+  await registrarAuditoria({
+    acao: 'inativar_motorista',
+    modulo: 'transporte_sanitario',
+    detalhes: `Motorista inativado (ID: ${motoristaId}). Motivo: ${motivo || 'Operacional'}`,
+    registro_id: motoristaId,
+  })
+
+  return record
+}
+
 export async function listarMotoristas(apenasAtivos = true): Promise<TransporteMotorista[]> {
   try {
     const filter = apenasAtivos ? 'ativo = true' : ''
@@ -340,6 +361,78 @@ export async function cadastrarDestino(params: CriarDestinoParams): Promise<Tran
 // ----------------------------------------------------------------------------
 // Gestão de Viagens Sanitárias
 // ----------------------------------------------------------------------------
+
+export interface ResultadoPaginadoViagens {
+  items: TransporteViagem[]
+  page: number
+  perPage: number
+  totalItems: number
+  totalPages: number
+}
+
+export async function listarViagensPaginado(filtros?: {
+  status?: string
+  dataInicio?: string
+  dataFim?: string
+  veiculoId?: string
+  motoristaId?: string
+  busca?: string
+  pagina?: number
+  porPagina?: number
+}): Promise<ResultadoPaginadoViagens> {
+  try {
+    const condicoes: string[] = []
+
+    if (filtros?.status && filtros.status !== 'todos') {
+      condicoes.push(`status = "${filtros.status}"`)
+    }
+    if (filtros?.veiculoId && filtros.veiculoId !== 'todos') {
+      condicoes.push(`veiculo = "${filtros.veiculoId}"`)
+    }
+    if (filtros?.motoristaId && filtros.motoristaId !== 'todos') {
+      condicoes.push(`motorista = "${filtros.motoristaId}"`)
+    }
+    if (filtros?.dataInicio) {
+      condicoes.push(`data_saida >= "${filtros.dataInicio}"`)
+    }
+    if (filtros?.dataFim) {
+      condicoes.push(`data_saida <= "${filtros.dataFim} 23:59:59"`)
+    }
+    if (filtros?.busca && filtros.busca.trim().length > 0) {
+      const b = filtros.busca.trim().replace(/["\\]/g, '')
+      condicoes.push(
+        `(codigo_viagem ~ "${b}" || cidade_destino ~ "${b}" || local_destino ~ "${b}")`,
+      )
+    }
+
+    const filter = condicoes.length > 0 ? condicoes.join(' && ') : ''
+    const page = Math.max(1, filtros?.pagina || 1)
+    const perPage = Math.min(50, Math.max(1, filtros?.porPagina || 10))
+
+    const res = await pb.collection('transporte_viagens').getList<TransporteViagem>(page, perPage, {
+      filter,
+      sort: '-data_saida',
+      expand: 'motorista,veiculo,rota,destino,usuario_autor_id,cancelado_por_id',
+    })
+
+    return {
+      items: res.items,
+      page: res.page,
+      perPage: res.perPage,
+      totalItems: res.totalItems,
+      totalPages: res.totalPages,
+    }
+  } catch (err) {
+    console.warn('Erro ao listar viagens paginadas:', err)
+    return {
+      items: [],
+      page: 1,
+      perPage: 10,
+      totalItems: 0,
+      totalPages: 1,
+    }
+  }
+}
 
 export async function listarViagens(filtros?: {
   status?: string
@@ -478,6 +571,20 @@ export async function registrarRetornoViagemKm(
   return record
 }
 
+export async function finalizarViagem(params: {
+  viagemId: string
+  km_final: number
+  data_retorno_real?: string
+  observacoes?: string
+}): Promise<TransporteViagem> {
+  return registrarRetornoViagemKm({
+    viagem_id: params.viagemId,
+    km_final: params.km_final,
+    data_retorno_real: params.data_retorno_real,
+    observacoes: params.observacoes,
+  })
+}
+
 export async function cancelarViagem(params: CancelarViagemParams): Promise<TransporteViagem> {
   if (!params.motivo_cancelamento || params.motivo_cancelamento.trim().length < 5) {
     throw new Error(
@@ -507,6 +614,56 @@ export async function cancelarViagem(params: CancelarViagemParams): Promise<Tran
 // Gestão de Passageiros e Reserva Atômica de Vagas
 // ----------------------------------------------------------------------------
 
+export interface ResultadoPaginadoPassageiros {
+  items: TransportePassageiro[]
+  page: number
+  perPage: number
+  totalItems: number
+  totalPages: number
+}
+
+export async function listarPassageirosViagemPaginado(
+  viagemId: string,
+  pagina = 1,
+  porPagina = 10,
+  apenasAtivos = false,
+): Promise<ResultadoPaginadoPassageiros> {
+  try {
+    const condicoes = [`viagem = "${viagemId}"`]
+    if (apenasAtivos) {
+      condicoes.push('status != "cancelado"')
+    }
+    const filter = condicoes.join(' && ')
+    const page = Math.max(1, pagina)
+    const perPage = Math.min(50, Math.max(1, porPagina))
+
+    const res = await pb
+      .collection('transporte_passageiros')
+      .getList<TransportePassageiro>(page, perPage, {
+        filter,
+        sort: 'created',
+        expand: 'paciente,paciente_vinculado,usuario_autor_id,cancelado_por_id',
+      })
+
+    return {
+      items: res.items,
+      page: res.page,
+      perPage: res.perPage,
+      totalItems: res.totalItems,
+      totalPages: res.totalPages,
+    }
+  } catch (err) {
+    console.warn(`Erro ao listar passageiros paginados da viagem ${viagemId}:`, err)
+    return {
+      items: [],
+      page: 1,
+      perPage: 10,
+      totalItems: 0,
+      totalPages: 1,
+    }
+  }
+}
+
 export async function listarPassageirosViagem(viagemId: string): Promise<TransportePassageiro[]> {
   try {
     const records = await pb
@@ -529,6 +686,12 @@ export async function listarPassageirosViagem(viagemId: string): Promise<Transpo
  * - Vagas de acompanhantes contadas individualmente e explicitamente (grupo não consome vaga invisível)
  * - Garante transação atômica e bloqueio contra sobrecapacidade no trecho de ida e de volta
  */
+export async function reservarVagasComIdempotencia(
+  params: ReservarVagasParams,
+): Promise<ResultadoReservaVagas> {
+  return reservarVagasTransacional(params)
+}
+
 export async function reservarVagasTransacional(
   params: ReservarVagasParams,
 ): Promise<ResultadoReservaVagas> {

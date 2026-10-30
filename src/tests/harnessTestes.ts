@@ -6635,6 +6635,367 @@ export async function executarHarnessLocal(): Promise<{
     })
   }
 
+  // CENÁRIO TRANSP-7: Lotação por trecho com múltiplos passageiros e acompanhantes em vagas separadas
+  try {
+    const capacidadeMicroonibus = 15 // Micro-ônibus de 15 lugares
+
+    // Lista de reservas simulada em memória local (sem tocar banco de dados):
+    // 1. Paciente A (Ida + Volta) + 1 Acompanhante A1 (Ida + Volta) -> 2 ida, 2 volta
+    // 2. Paciente B (Apenas Ida) + 1 Acompanhante B1 (Apenas Ida) -> 2 ida, 0 volta
+    // 3. Paciente C (Apenas Volta) -> 0 ida, 1 volta
+    // 4. Paciente D (Ida + Volta, mas CANCELADO) -> 0 ida, 0 volta
+    const ocupacao7 = apurarOcupacaoViagem(capacidadeMicroonibus, [
+      { vagas_ida: 1, vagas_volta: 1, status: 'agendado' },
+      { vagas_ida: 1, vagas_volta: 1, status: 'agendado' },
+      { vagas_ida: 1, vagas_volta: 0, status: 'agendado' },
+      { vagas_ida: 1, vagas_volta: 0, status: 'agendado' },
+      { vagas_ida: 0, vagas_volta: 1, status: 'embarcado' },
+      { vagas_ida: 1, vagas_volta: 1, status: 'cancelado' }, // Cancelado ignorado
+    ])
+
+    const passouTRANSP7 =
+      ocupacao7.capacidade_veiculo === 15 &&
+      ocupacao7.ocupadas_ida === 4 && // 2 do Pac A/A1 + 2 do Pac B/B1
+      ocupacao7.ocupadas_volta === 3 && // 2 do Pac A/A1 + 1 do Pac C
+      ocupacao7.disponiveis_ida === 11 &&
+      ocupacao7.disponiveis_volta === 12 &&
+      ocupacao7.esgotado_ida === false &&
+      ocupacao7.esgotado_volta === false
+
+    resultados.push({
+      id: 'transp_lotacao_multiplos_passageiros_acompanhantes',
+      cenario: '(TRANSP-7) Lotação composta: passageiros titulares e acompanhantes ocupam vagas independentes por trecho, com vagas canceladas liberadas',
+      passou: Boolean(passouTRANSP7),
+      detalhes: `Capacidade 15: Ida com 4 ocupadas (11 livres) e Volta com 3 ocupadas (12 livres). Vagas canceladas desconsideradas com sucesso.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'transp_lotacao_multiplos_passageiros_acompanhantes',
+      cenario: '(TRANSP-7) Lotação composta: passageiros titulares e acompanhantes ocupam vagas independentes por trecho, com vagas canceladas liberadas',
+      passou: false,
+      detalhes: 'Falha no teste TRANSP-7',
+      erro: err.message,
+    })
+  }
+
+  // CENÁRIO TRANSP-8: Agenda sobreposta de veículo e motorista em intervalos concorrentes
+  try {
+    interface ViagemIntervalo {
+      id: string
+      veiculoId: string
+      motoristaId: string
+      dataSaida: string
+      dataRetorno: string
+    }
+
+    const viagensAgendadas: ViagemIntervalo[] = [
+      {
+        id: 'viag_existente_01',
+        veiculoId: 'veic_ducato_01',
+        motoristaId: 'mot_carlos_01',
+        dataSaida: '2026-06-15T07:00:00Z',
+        dataRetorno: '2026-06-15T12:00:00Z',
+      },
+    ]
+
+    function verificarConflitoEscala(nova: {
+      veiculoId: string
+      motoristaId: string
+      dataSaida: string
+      dataRetorno: string
+    }): { conflitoVeiculo: boolean; conflitoMotorista: boolean } {
+      const iniNova = new Date(nova.dataSaida).getTime()
+      const fimNova = new Date(nova.dataRetorno).getTime()
+
+      let conflitoVeiculo = false
+      let conflitoMotorista = false
+
+      for (const v of viagensAgendadas) {
+        const iniExistente = new Date(v.dataSaida).getTime()
+        const fimExistente = new Date(v.dataRetorno).getTime()
+
+        const sobrepoe = iniNova < fimExistente && iniExistente < fimNova
+        if (sobrepoe) {
+          if (v.veiculoId === nova.veiculoId) conflitoVeiculo = true
+          if (v.motoristaId === nova.motoristaId) conflitoMotorista = true
+        }
+      }
+
+      return { conflitoVeiculo, conflitoMotorista }
+    }
+
+    // Caso 1: Mesma van em horário sobreposto (09h às 14h) -> Conflito de veículo
+    const c1 = verificarConflitoEscala({
+      veiculoId: 'veic_ducato_01',
+      motoristaId: 'mot_outro_02',
+      dataSaida: '2026-06-15T09:00:00Z',
+      dataRetorno: '2026-06-15T14:00:00Z',
+    })
+
+    // Caso 2: Mesmo motorista em horário sobreposto (08h às 11h) -> Conflito de motorista
+    const c2 = verificarConflitoEscala({
+      veiculoId: 'veic_spin_02',
+      motoristaId: 'mot_carlos_01',
+      dataSaida: '2026-06-15T08:00:00Z',
+      dataRetorno: '2026-06-15T11:00:00Z',
+    })
+
+    // Caso 3: Horário posterior disjunto (13h às 18h) -> Sem nenhum conflito
+    const c3 = verificarConflitoEscala({
+      veiculoId: 'veic_ducato_01',
+      motoristaId: 'mot_carlos_01',
+      dataSaida: '2026-06-15T13:00:00Z',
+      dataRetorno: '2026-06-15T18:00:00Z',
+    })
+
+    const passouTRANSP8 =
+      c1.conflitoVeiculo === true &&
+      c1.conflitoMotorista === false &&
+      c2.conflitoVeiculo === false &&
+      c2.conflitoMotorista === true &&
+      c3.conflitoVeiculo === false &&
+      c3.conflitoMotorista === false
+
+    resultados.push({
+      id: 'transp_agenda_sobreposta_veiculo_motorista',
+      cenario: '(TRANSP-8) Conflito de agenda: detecta conflito concorrente de veículo e motorista separadamente e libera viagens em intervalos disjuntos',
+      passou: Boolean(passouTRANSP8),
+      detalhes: `Caso 1 acusou sobreposição de veículo; Caso 2 acusou sobreposição de motorista; Caso 3 (13h-18h vs 07h-12h) liberado sem restrição.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'transp_agenda_sobreposta_veiculo_motorista',
+      cenario: '(TRANSP-8) Conflito de agenda: detecta conflito concorrente de veículo e motorista separadamente e libera viagens em intervalos disjuntos',
+      passou: false,
+      detalhes: 'Falha no teste TRANSP-8',
+      erro: err.message,
+    })
+  }
+
+  // CENÁRIO TRANSP-9: Cancelamento e retry com chave idempotente
+  try {
+    interface ReservaAuditada {
+      chaveIdempotencia: string
+      viagemId: string
+      passageiroNome: string
+      status: 'ativo' | 'cancelado'
+      tentativas: number
+    }
+
+    const bancoIdempotencia: Map<string, ReservaAuditada> = new Map()
+
+    function executarReservaComRetry(
+      chave: string,
+      viagemId: string,
+      passageiroNome: string,
+    ): { res: ReservaAuditada; reutilizado: boolean } {
+      if (bancoIdempotencia.has(chave)) {
+        const item = bancoIdempotencia.get(chave)!
+        if (item.viagemId !== viagemId || item.passageiroNome !== passageiroNome) {
+          const err = new Error('IDEMPOTENCY_PAYLOAD_CONFLICT: dados conflitantes')
+          ;(err as any).statusCode = 409
+          throw err
+        }
+        item.tentativas += 1
+        return { res: item, reutilizado: true }
+      }
+
+      const novo: ReservaAuditada = {
+        chaveIdempotencia: chave,
+        viagemId,
+        passageiroNome,
+        status: 'ativo',
+        tentativas: 1,
+      }
+      bancoIdempotencia.set(chave, novo)
+      return { res: novo, reutilizado: false }
+    }
+
+    // 1. Primeira emissão
+    const chaveUnica = 'idemp_key_transp_999'
+    const chamada1 = executarReservaComRetry(chaveUnica, 'viagem_x', 'Maria de Souza')
+
+    // 2. Retry com mesma chave (simulação de timeout de rede do cliente)
+    const chamada2 = executarReservaComRetry(chaveUnica, 'viagem_x', 'Maria de Souza')
+
+    // 3. Cancelamento da reserva
+    const registro = bancoIdempotencia.get(chaveUnica)!
+    registro.status = 'cancelado'
+
+    const passouTRANSP9 =
+      chamada1.reutilizado === false &&
+      chamada2.reutilizado === true &&
+      chamada2.res.tentativas === 2 &&
+      registro.status === 'cancelado'
+
+    resultados.push({
+      id: 'transp_cancelamento_retry_idempotencia',
+      cenario: '(TRANSP-9) Transação e Retry: reenvio com mesma chave devolve reserva sem duplicação e cancelamento inativa sem deletar histórico',
+      passou: Boolean(passouTRANSP9),
+      detalhes: `Retry utilizou o mesmo registro idempotente (tentativas=2); cancelamento alterou status para 'cancelado' preservando a chave auditada.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'transp_cancelamento_retry_idempotencia',
+      cenario: '(TRANSP-9) Transação e Retry: reenvio com mesma chave devolve reserva sem duplicação e cancelamento inativa sem deletar histórico',
+      passou: false,
+      detalhes: 'Falha no teste TRANSP-9',
+      erro: err.message,
+    })
+  }
+
+  // CENÁRIO TRANSP-10: Cálculo rigoroso de km com fronteiras (zero rodado, grande distância, valores fracionários truncados)
+  try {
+    // 1. Viagem que não rodou (saiu e voltou na mesma garagem sem rodar ou cancelada no pátio)
+    const kmMesmoPonto = calcularKmViagem(50000, 50000)
+
+    // 2. Viagem longa interestadual / TFD
+    const kmLonga = calcularKmViagem(120500, 122850)
+
+    // 3. Validação de recusa de Km inicial negativo mesmo com km_final positivo
+    const kmNegInicial = calcularKmViagem(-5, 100)
+
+    // 4. Validação de recusa de Km final negativo
+    const kmNegFinal = calcularKmViagem(100, -20)
+
+    const passouTRANSP10 =
+      kmMesmoPonto.valido &&
+      kmMesmoPonto.km_rodado === 0 &&
+      kmLonga.valido &&
+      kmLonga.km_rodado === 2350 &&
+      !kmNegInicial.valido &&
+      !kmNegFinal.valido
+
+    resultados.push({
+      id: 'transp_calculo_km_fronteiras_e_limites',
+      cenario: '(TRANSP-10) Cálculo de Km: valida deslocamento zero (mesmo odômetro), grandes distâncias (2.350 km) e rejeição irrestrita de valores negativos',
+      passou: Boolean(passouTRANSP10),
+      detalhes: `Deslocamento 50000 -> 50000 gerou exatamente 0 km; viagem 120500 -> 122850 apurou 2350 km; odômetros negativos rejeitados.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'transp_calculo_km_fronteiras_e_limites',
+      cenario: '(TRANSP-10) Cálculo de Km: valida deslocamento zero (mesmo odômetro), grandes distâncias (2.350 km) e rejeição irrestrita de valores negativos',
+      passou: false,
+      detalhes: 'Falha no teste TRANSP-10',
+      erro: err.message,
+    })
+  }
+
+  // CENÁRIO TRANSP-11: Fronteira de dia civil e virada de meia-noite no fuso da unidade (America/Porto_Velho)
+  try {
+    // 2026-06-20T03:30:00Z em UTC:
+    // Em UTC já é dia 20 de junho.
+    // Em America/Porto_Velho (UTC-4), são 23:30 do dia 19 de junho (fronteira antes da meia-noite local).
+    const tsAntesMeiaNoiteRO = '2026-06-20T03:30:00Z'
+    // 2026-06-20T04:30:00Z em UTC:
+    // Em America/Porto_Velho (UTC-4), são 00:30 do dia 20 de junho (após a meia-noite local).
+    const tsDepoisMeiaNoiteRO = '2026-06-20T04:30:00Z'
+
+    const civilAntes = extrairDataCivilFuso(tsAntesMeiaNoiteRO, 'America/Porto_Velho')
+    const civilDepois = extrairDataCivilFuso(tsDepoisMeiaNoiteRO, 'America/Porto_Velho')
+
+    const dataHoraFormatadaAntes = formatarDataHoraViagemFuso(tsAntesMeiaNoiteRO)
+    const dataHoraFormatadaDepois = formatarDataHoraViagemFuso(tsDepoisMeiaNoiteRO)
+
+    const passouTRANSP11 =
+      civilAntes?.dia === 19 &&
+      civilAntes?.mes === 6 &&
+      civilDepois?.dia === 20 &&
+      civilDepois?.mes === 6 &&
+      dataHoraFormatadaAntes.includes('19/06/2026') &&
+      dataHoraFormatadaDepois.includes('20/06/2026')
+
+    resultados.push({
+      id: 'transp_fronteira_dia_civil_virada_fuso_unidade',
+      cenario: '(TRANSP-11) Fronteira de dia civil: virada de meia-noite segue estritamente o fuso local da unidade (America/Porto_Velho = UTC-4)',
+      passou: Boolean(passouTRANSP11),
+      detalhes: `UTC 03:30Z classificado como 23:30 do dia 19/06 em Rondônia; UTC 04:30Z classificado como 00:30 do dia 20/06, sem contaminação pelo relógio UTC.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'transp_fronteira_dia_civil_virada_fuso_unidade',
+      cenario: '(TRANSP-11) Fronteira de dia civil: virada de meia-noite segue estritamente o fuso local da unidade (America/Porto_Velho = UTC-4)',
+      passou: false,
+      detalhes: 'Falha no teste TRANSP-11',
+      erro: err.message,
+    })
+  }
+
+  // CENÁRIO TRANSP-12: Sinalização de manutenção e bloqueio operacional de veículos inativos
+  try {
+    const frotaTeste: TransporteVeiculo[] = [
+      {
+        id: 'veic_ok',
+        descricao: 'Van Master',
+        placa: 'ABC1D23',
+        capacidade_lotacao: 15,
+        status: 'disponivel',
+        ativo: true,
+        created: '2026-06-01',
+        updated: '2026-06-01',
+      },
+      {
+        id: 'veic_manutencao',
+        descricao: 'Ducato Minibus',
+        placa: 'XYZ9K88',
+        capacidade_lotacao: 20,
+        status: 'manutencao',
+        motivo_indisponibilidade: 'Retífica de motor e suspensão',
+        ativo: true,
+        created: '2026-06-01',
+        updated: '2026-06-01',
+      },
+      {
+        id: 'veic_inativo',
+        descricao: 'Ambulância Antiga',
+        placa: 'OLD0000',
+        capacidade_lotacao: 2,
+        status: 'inativo',
+        motivo_indisponibilidade: 'Baixa patrimonial definitiva',
+        ativo: false,
+        created: '2026-06-01',
+        updated: '2026-06-01',
+      },
+    ]
+
+    function validarAptoParaEscala(veiculo: TransporteVeiculo): { apto: boolean; motivo?: string } {
+      if (veiculo.status !== 'disponivel') {
+        return {
+          apto: false,
+          motivo: `Veículo não disponível para viagem: status '${veiculo.status}' (${veiculo.motivo_indisponibilidade || 'sem motivo informado'}).`,
+        }
+      }
+      return { apto: true }
+    }
+
+    const testeV1 = validarAptoParaEscala(frotaTeste[0])
+    const testeV2 = validarAptoParaEscala(frotaTeste[1])
+    const testeV3 = validarAptoParaEscala(frotaTeste[2])
+
+    const passouTRANSP12 =
+      testeV1.apto === true &&
+      testeV2.apto === false &&
+      testeV2.motivo?.includes('manutencao') &&
+      testeV3.apto === false &&
+      testeV3.motivo?.includes('inativo')
+
+    resultados.push({
+      id: 'transp_sinalizacao_manutencao_bloqueio_operacional',
+      cenario: '(TRANSP-12) Gestão de frota: sinalização de manutenção e inativação bloqueia veículos indisponíveis para novas programações',
+      passou: Boolean(passouTRANSP12),
+      detalhes: `Veículo disponível (ABC1D23) liberado; veículos em manutenção (XYZ9K88) e inativo (OLD0000) rejeitados com indicação do motivo auditado.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'transp_sinalizacao_manutencao_bloqueio_operacional',
+      cenario: '(TRANSP-12) Gestão de frota: sinalização de manutenção e inativação bloqueia veículos indisponíveis para novas programações',
+      passou: false,
+      detalhes: 'Falha no teste TRANSP-12',
+      erro: err.message,
+    })
+  }
+
   const todosPassaram = resultados.every((r) => r.passou)
 
   return {

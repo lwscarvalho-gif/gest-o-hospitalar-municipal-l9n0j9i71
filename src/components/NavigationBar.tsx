@@ -27,12 +27,14 @@ import {
   HeartPulse,
   Share2,
   Mail,
+  Bus,
 } from 'lucide-react'
 
 export type ActiveTab =
   | 'painel_gestao'
   | 'dashboard'
   | 'pronto_atendimento'
+  | 'transporte'
   | 'mensageria'
   | 'regulacao'
   | 'apac'
@@ -77,6 +79,12 @@ const NAV_ITEMS: NavItem[] = [
     id: 'pronto_atendimento',
     label: 'Pronto Atendimento (PA)',
     icon: Flame,
+    allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
+  },
+  {
+    id: 'transporte',
+    label: 'Transporte Sanitário',
+    icon: Bus,
     allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
   },
   {

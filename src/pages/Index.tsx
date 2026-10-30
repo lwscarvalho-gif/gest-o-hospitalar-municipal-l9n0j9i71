@@ -24,6 +24,7 @@ import { VigilanciaSaudeView } from '@/components/VigilanciaSaudeView'
 import { RegulacaoView } from '@/components/RegulacaoView'
 import { MensageriaInternaView } from '@/components/MensageriaInternaView'
 import { ApacView } from '@/components/ApacView'
+import { TransporteView } from '@/components/TransporteView'
 import { verificarInvariantesFuncionais } from '@/tests'
 import { Loader2 } from 'lucide-react'
 
@@ -101,6 +102,8 @@ const Index: React.FC = () => {
             onNavegarAgendamento={() => setActiveTab('agendamentos')}
           />
         )}
+        {activeTab === 'transporte' &&
+          temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && <TransporteView />}
         {activeTab === 'mensageria' &&
           temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && (
             <MensageriaInternaView />
