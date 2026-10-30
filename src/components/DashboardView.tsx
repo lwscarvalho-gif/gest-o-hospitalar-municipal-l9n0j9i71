@@ -96,19 +96,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
           <div className="flex items-center gap-2">
             <Button
-              onClick={() => onNavigate('internacao')}
-              className="bg-blue-500 hover:bg-blue-400 text-white font-medium shadow-md shadow-blue-500/20 text-xs sm:text-sm"
+              onClick={() => onNavigate('painel_gestao')}
+              className="bg-emerald-500 hover:bg-emerald-400 text-white font-medium shadow-md shadow-emerald-500/20 text-xs sm:text-sm"
             >
-              <Bed className="w-4 h-4 mr-2" />
-              Ver Mapa de Leitos
+              <Activity className="w-4 h-4 mr-2" />
+              Painel em Tempo Real
             </Button>
             <Button
-              onClick={() => onNavigate('agendamentos')}
+              onClick={() => onNavigate('internacao')}
               variant="outline"
               className="bg-white/10 hover:bg-white/20 border-white/20 text-white text-xs sm:text-sm"
             >
-              <Calendar className="w-4 h-4 mr-2" />
-              Agenda do Dia
+              <Bed className="w-4 h-4 mr-2" />
+              Ver Mapa de Leitos
             </Button>
           </div>
         </div>

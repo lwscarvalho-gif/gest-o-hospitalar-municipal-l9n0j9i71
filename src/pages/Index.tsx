@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { LoginView } from '@/components/LoginView'
 import { NavigationBar, ActiveTab } from '@/components/NavigationBar'
+import { PainelGestaoView } from '@/components/PainelGestaoView'
 import { DashboardView } from '@/components/DashboardView'
 import { ProntoAtendimentoView } from '@/components/ProntoAtendimentoView'
 import { PacientesView } from '@/components/PacientesView'
@@ -24,9 +25,9 @@ import { Loader2 } from 'lucide-react'
 const getDefaultTabForRole = (role?: string): ActiveTab => {
   switch (role) {
     case 'admin':
-      return 'auditoria' // administrador -> painel administrativo/auditoria
+      return 'painel_gestao' // administrador -> painel de gestão em tempo real
     case 'gestor':
-      return 'relatorios' // gestor -> painel de gestão/relatórios
+      return 'painel_gestao' // gestor -> painel de gestão em tempo real
     case 'profissional':
       return 'assistencial' // profissional -> registro assistencial/mapa de leitos
     case 'recepcao':
@@ -84,6 +85,10 @@ const Index: React.FC = () => {
       <NavigationBar activeTab={activeTab} onSelectTab={setActiveTab} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
+        {activeTab === 'painel_gestao' &&
+          temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && (
+            <PainelGestaoView onNavegar={setActiveTab} />
+          )}
         {activeTab === 'pronto_atendimento' && (
           <ProntoAtendimentoView
             onNavegarInternacao={() => setActiveTab('internacao')}
@@ -132,9 +137,9 @@ const Index: React.FC = () => {
       <footer className="border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
           <span>
-            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar v0.0.11
-            (Módulo Faturamento SUS AIH/BPA, Centro Cirúrgico, Exames, SAME Unificado, Prescrição &
-            Farmácia)
+            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar v0.0.12
+            (Painel de Gestão em Tempo Real, Faturamento SUS AIH/BPA, Centro Cirúrgico, Exames,
+            SAME, Prescrição & Farmácia)
           </span>
           <span className="text-slate-400">
             Acesso em nuvem seguro • Usuário: {user?.name} ({user?.role})

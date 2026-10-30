@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T03:49:08.572Z",
+  "generatedAt": "2026-10-30T04:24:59.225Z",
   "collections": [
     {
       "name": "users",
@@ -2581,6 +2581,684 @@
         "CREATE INDEX idx_srpa_cirurgia ON recuperacao_pos_anestesica (cirurgia)",
         "CREATE INDEX idx_srpa_paciente ON recuperacao_pos_anestesica (paciente)",
         "CREATE INDEX idx_srpa_destino ON recuperacao_pos_anestesica (destino_pos_alta)"
+      ]
+    },
+    {
+      "name": "procedimentos_sigtap",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "codigo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "valor_sh",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_sa",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_sp",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "complexidade",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["basica", "media", "alta", "nao_se_aplica"]
+        },
+        {
+          "name": "modalidade",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["ambulatorial", "hospitalar", "ambulatorial_e_hospitalar"]
+        },
+        {
+          "name": "instrumento_registro",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_sigtap_codigo ON procedimentos_sigtap (codigo)",
+        "CREATE INDEX idx_sigtap_nome ON procedimentos_sigtap (nome)"
+      ]
+    },
+    {
+      "name": "cid10",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "codigo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "capitulo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_cid10_codigo ON cid10 (codigo)",
+        "CREATE INDEX idx_cid10_descricao ON cid10 (descricao)"
+      ]
+    },
+    {
+      "name": "competencias_faturamento",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "competencia",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "ano",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "mes",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["aberta", "fechada", "homologada"]
+        },
+        {
+          "name": "data_fechamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "fechado_por",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "total_contas_aih",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "total_itens_bpa",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_total_sh",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_total_sa",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_total_sp",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_total_geral",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_competencia_ano_mes ON competencias_faturamento (competencia)"
+      ]
+    },
+    {
+      "name": "contas_faturamento",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "numero_conta",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "numero_aih",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "internacao",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "internacoes"
+        },
+        {
+          "name": "profissional_solicitante",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "profissional_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_internacao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_alta",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "carater_atendimento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "motivo_saida_alta",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cid_principal",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cid_secundario",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "procedimento_principal_codigo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "procedimento_principal_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "competencia",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["aberta", "conciliada", "glosada", "enviada"]
+        },
+        {
+          "name": "motivo_glosa",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_glosa",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "responsavel_glosa",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_sh",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_sa",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_sp",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_total",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_contas_numero ON contas_faturamento (numero_conta)",
+        "CREATE INDEX idx_contas_paciente ON contas_faturamento (paciente)",
+        "CREATE INDEX idx_contas_competencia ON contas_faturamento (competencia)",
+        "CREATE INDEX idx_contas_status ON contas_faturamento (status)"
+      ]
+    },
+    {
+      "name": "itens_conta",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "conta",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "contas_faturamento"
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["procedimento_secundario", "diaria", "material", "sessao", "exame"]
+        },
+        {
+          "name": "procedimento_codigo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "procedimento_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "quantidade",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "valor_unitario_sh",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_unitario_sa",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_unitario_sp",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_total_item",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_execucao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "profissional_executante",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_itens_conta ON itens_conta (conta)",
+        "CREATE INDEX idx_itens_procedimento ON itens_conta (procedimento_codigo)"
+      ]
+    },
+    {
+      "name": "producao_bpa",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "profissional",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "profissional_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "origem_atendimento",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pronto_atendimento", "ambulatorio_agendamento", "avulso"]
+        },
+        {
+          "name": "atendimento_pa",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "pronto_atendimento"
+        },
+        {
+          "name": "agendamento",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "agendamentos"
+        },
+        {
+          "name": "procedimento_codigo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "procedimento_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "quantidade",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_atendimento",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "competencia",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "cid10",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_unitario_sa",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_total",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pendente", "apurado", "glosado", "fechado"]
+        },
+        {
+          "name": "motivo_glosa",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_bpa_paciente ON producao_bpa (paciente)",
+        "CREATE INDEX idx_bpa_competencia ON producao_bpa (competencia)",
+        "CREATE INDEX idx_bpa_procedimento ON producao_bpa (procedimento_codigo)",
+        "CREATE INDEX idx_bpa_status ON producao_bpa (status)"
       ]
     }
   ]
