@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T20:26:02.823Z",
+  "generatedAt": "2026-10-30T20:36:37.654Z",
   "collections": [
     {
       "name": "users",
@@ -8888,6 +8888,447 @@
         }
       ],
       "indexes": []
+    },
+    {
+      "name": "samu_ocorrencias",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "numero_ocorrencia",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo_ocorrencia",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["clinica", "trauma", "obstetrica", "psiquiatrica", "pediatrica", "outro"]
+        },
+        {
+          "name": "relacao_solicitante_vitima",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "propria_vitima",
+            "familiar",
+            "transeunte",
+            "policial_bombeiro",
+            "profissional_saude",
+            "outro"
+          ]
+        },
+        {
+          "name": "nome_solicitante",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "telefone_solicitante",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "vitima_desconhecida",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "vitima_nome_informado",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "vitima_sexo_informado",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["M", "F", "Outro", "desconhecido"]
+        },
+        {
+          "name": "vitima_idade_informada",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "vitima_paciente_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "vitima_confirmada_humano",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "vitima_confirmacao_data",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "vitima_confirmacao_autor_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "endereco_textual",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "numero_complemento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "bairro",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ponto_referencia",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "municipio",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "classificacao_risco",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["vermelho", "laranja", "amarelo", "verde", "azul", "nao_classificado"]
+        },
+        {
+          "name": "risco_classificado_por_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "risco_classificado_por_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "risco_classificado_por_cargo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "risco_data_hora",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "risco_justificativa",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "unidade_saude_destino_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "setores"
+        },
+        {
+          "name": "unidade_saude_destino_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "unidade_saude_destino_externa",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "unidade_movel_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "transporte_veiculos"
+        },
+        {
+          "name": "unidade_movel_placa",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "unidade_movel_descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status_fluxo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "aberta",
+            "em_deslocamento",
+            "no_local",
+            "em_transporte",
+            "concluida",
+            "cancelada"
+          ]
+        },
+        {
+          "name": "motivo_cancelamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_cancelamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cancelado_por_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "data_hora_abertura",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_hora_conclusao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes_iniciais",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "desfecho_encaminhamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "usuario_abertura_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "usuario_abertura_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ultimo_alterador_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "hash_payload",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_samu_oco_numero ON samu_ocorrencias (numero_ocorrencia)",
+        "CREATE INDEX idx_samu_oco_status ON samu_ocorrencias (status_fluxo)",
+        "CREATE INDEX idx_samu_oco_tipo ON samu_ocorrencias (tipo_ocorrencia)",
+        "CREATE INDEX idx_samu_oco_data_abertura ON samu_ocorrencias (data_hora_abertura)",
+        "CREATE INDEX idx_samu_oco_municipio ON samu_ocorrencias (municipio)",
+        "CREATE INDEX idx_samu_oco_unid_movel ON samu_ocorrencias (unidade_movel_id)",
+        "CREATE INDEX idx_samu_oco_paciente ON samu_ocorrencias (vitima_paciente_id)",
+        "CREATE INDEX idx_samu_oco_idemp ON samu_ocorrencias (idempotency_key)"
+      ]
+    },
+    {
+      "name": "samu_historico_estados",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "ocorrencia",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "samu_ocorrencias"
+        },
+        {
+          "name": "status_anterior",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status_novo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "motivo_transicao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "unidade_movel_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "transporte_veiculos"
+        },
+        {
+          "name": "unidade_destino_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "autor_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "autor_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "autor_cargo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "autor_perfil",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_utc",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "detalhes",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "evento_anterior_ref",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "motivo_correcao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_samu_hist_oco ON samu_historico_estados (ocorrencia)",
+        "CREATE INDEX idx_samu_hist_data ON samu_historico_estados (data_hora_utc)",
+        "CREATE INDEX idx_samu_hist_autor ON samu_historico_estados (autor_id)"
+      ]
     }
   ]
 }

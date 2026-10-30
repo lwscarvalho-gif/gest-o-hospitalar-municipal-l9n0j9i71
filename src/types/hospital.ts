@@ -26,6 +26,176 @@ export interface TransporteTipoVeiculo {
 }
 
 // ============================================================================
+// TIPOS DO MÓDULO SAMU (Itens 407–417 do ANEXO I e Seção 7.4.5.1.e.i)
+// ============================================================================
+
+export type TipoOcorrenciaSAMU =
+  | 'clinica'
+  | 'trauma'
+  | 'obstetrica'
+  | 'psiquiatrica'
+  | 'pediatrica'
+  | 'outro'
+
+export type RelacaoSolicitanteVitimaSAMU =
+  | 'propria_vitima'
+  | 'familiar'
+  | 'transeunte'
+  | 'policial_bombeiro'
+  | 'profissional_saude'
+  | 'outro'
+
+export type StatusFluxoSAMU =
+  | 'aberta'
+  | 'em_deslocamento'
+  | 'no_local'
+  | 'em_transporte'
+  | 'concluida'
+  | 'cancelada'
+
+export type ClassificacaoRiscoSAMU =
+  | 'vermelho'
+  | 'laranja'
+  | 'amarelo'
+  | 'verde'
+  | 'azul'
+  | 'nao_classificado'
+
+export interface SamuOcorrencia {
+  id: string
+  numero_ocorrencia: string
+  tipo_ocorrencia: TipoOcorrenciaSAMU
+  relacao_solicitante_vitima: RelacaoSolicitanteVitimaSAMU
+  nome_solicitante?: string
+  telefone_solicitante?: string
+  vitima_desconhecida: boolean
+  vitima_nome_informado: string
+  vitima_sexo_informado: 'M' | 'F' | 'Outro' | 'desconhecido'
+  vitima_idade_informada?: string
+  vitima_paciente_id?: string
+  vitima_confirmada_humano: boolean
+  vitima_confirmacao_data?: string
+  vitima_confirmacao_autor_id?: string
+  endereco_textual: string
+  numero_complemento?: string
+  bairro?: string
+  ponto_referencia?: string
+  municipio: string
+  classificacao_risco: ClassificacaoRiscoSAMU
+  risco_classificado_por_id?: string
+  risco_classificado_por_nome?: string
+  risco_classificado_por_cargo?: string
+  risco_data_hora?: string
+  risco_justificativa?: string
+  unidade_saude_destino_id?: string
+  unidade_saude_destino_nome?: string
+  unidade_saude_destino_externa?: string
+  unidade_movel_id?: string
+  unidade_movel_placa?: string
+  unidade_movel_descricao?: string
+  status_fluxo: StatusFluxoSAMU
+  motivo_cancelamento?: string
+  data_cancelamento?: string
+  cancelado_por_id?: string
+  data_hora_abertura: string
+  data_hora_conclusao?: string
+  observacoes_iniciais?: string
+  desfecho_encaminhamento?: string
+  usuario_abertura_id?: string
+  usuario_abertura_nome?: string
+  ultimo_alterador_id?: string
+  idempotency_key?: string
+  hash_payload?: string
+  created: string
+  updated: string
+  historico?: SamuHistoricoEstado[]
+}
+
+export interface SamuHistoricoEstado {
+  id: string
+  ocorrencia?: string
+  status_anterior?: string
+  status_novo: string
+  motivo_transicao?: string
+  unidade_movel_id?: string
+  unidade_destino_nome?: string
+  autor_id?: string
+  autor_nome?: string
+  autor_cargo?: string
+  autor_perfil?: string
+  data_hora_utc: string
+  detalhes?: Record<string, unknown> | null
+  evento_anterior_ref?: string
+  motivo_correcao?: string
+  created?: string
+}
+
+export interface AbrirOcorrenciaSAMUParams {
+  tipo_ocorrencia: TipoOcorrenciaSAMU
+  relacao_solicitante_vitima: RelacaoSolicitanteVitimaSAMU
+  nome_solicitante?: string
+  telefone_solicitante?: string
+  vitima_desconhecida?: boolean
+  vitima_nome_informado?: string
+  vitima_sexo_informado?: 'M' | 'F' | 'Outro' | 'desconhecido'
+  vitima_idade_informada?: string
+  endereco_textual: string
+  numero_complemento?: string
+  bairro?: string
+  ponto_referencia?: string
+  municipio: string
+  classificacao_risco?: ClassificacaoRiscoSAMU
+  risco_justificativa?: string
+  observacoes_iniciais?: string
+  idempotency_key?: string
+}
+
+export interface ClassificarRiscoSAMUParams {
+  classificacao_risco: 'vermelho' | 'laranja' | 'amarelo' | 'verde' | 'azul'
+  justificativa?: string
+}
+
+export interface AtribuirUnidadeMovelSAMUParams {
+  unidade_movel_id: string
+  unidade_saude_destino_id?: string
+  unidade_saude_destino_nome?: string
+  unidade_saude_destino_externa?: string
+}
+
+export interface TransitarStatusSAMUParams {
+  status_novo: StatusFluxoSAMU
+  motivo?: string
+  desfecho_encaminhamento?: string
+  unidade_saude_destino_nome?: string
+  idempotency_key?: string
+}
+
+export interface VincularPacienteSAMUParams {
+  paciente_id: string
+  confirmacao_humana: boolean
+  justificativa?: string
+}
+
+export interface FiltrosListagemSAMU {
+  status?: StatusFluxoSAMU | 'todos'
+  tipo?: TipoOcorrenciaSAMU | 'todos'
+  municipio?: string
+  unidade_movel_id?: string
+  data_inicio?: string
+  data_fim?: string
+  page?: number
+  perPage?: number
+}
+
+export interface RespostaListagemSAMU {
+  items: SamuOcorrencia[]
+  page: number
+  perPage: number
+  totalItems: number
+  totalPages: number
+}
+
+// ============================================================================
 // Módulo SND - Serviço de Nutrição e Dietética (Requisitos 7.4.3.5.a.i–ii e 7.4.3.5.b.i)
 // ============================================================================
 
