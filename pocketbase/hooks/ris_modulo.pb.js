@@ -9,179 +9,6 @@
  */
 
 // ----------------------------------------------------------------------------
-// SANITIZADOR DE HTML SERVER-SIDE RIGOROSO COM ALLOWLIST (Seção 7.4.3.4.b.i)
-// Bloqueia script, atributos on*, javascript:, vbscript:, data:, iframes,
-// tags perigosas e links/imagens externos.
-// Apenas imagens internas (/api/files/ris_imagens_anexas/...) são permitidas.
-// ----------------------------------------------------------------------------
-function sanitizarHtmlServidorRIS(inputHtml) {
-  if (!inputHtml) return ''
-  var str = String(inputHtml)
-
-  // 1. Remoção de blocos perigosos inteiros
-  str = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-  str = str.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-  str = str.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
-  str = str.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
-  str = str.replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
-  str = str.replace(/<applet\b[^<]*(?:(?!<\/applet>)<[^<]*)*<\/applet>/gi, '')
-  str = str.replace(/<!--[\s\S]*?-->/g, '')
-
-  // 2. Remoção de handlers de eventos (on* ex: onload, onclick, onerror, onmouseover, etc.)
-  str = str.replace(/\son[a-zA-Z_]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-
-  // 3. Bloqueio de protocolos executáveis em href e src
-  str = str.replace(/href\s*=\s*["']?\s*(?:javascript|vbscript|data):[^"'>\s]*/gi, 'href="#"')
-
-  // 4. Sanitização estrita de imagens (src): permitir SOMENTE imagens internas do Skip/PocketBase
-  str = str.replace(/<img\b([^>]*?)>/gi, function (match, attrs) {
-    var srcMatch = attrs.match(/src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
-    var srcVal = srcMatch ? srcMatch[1] || srcMatch[2] || srcMatch[3] || '' : ''
-    srcVal = srcVal.trim()
-
-    var isInternoValido =
-      srcVal.indexOf('/api/files/ris_imagens_anexas/') !== -1 ||
-      srcVal.indexOf('/api/files/exames/') !== -1 ||
-      srcVal.indexOf('/assets/') === 0 ||
-      srcVal.indexOf('/ris-internal-image/') === 0
-
-    if (!isInternoValido) {
-      return '<span class="ris-img-bloqueada text-slate-400 italic text-xs">[Imagem externa bloqueada por segurança do RIS]</span>'
-    }
-
-    var altMatch = attrs.match(/alt\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
-    var altVal = altMatch ? altMatch[1] || altMatch[2] || 'Imagem do Exame' : 'Imagem do Exame'
-    var widthMatch = attrs.match(/width\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
-    var heightMatch = attrs.match(/height\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
-    var idMatch = attrs.match(/data-imagem-id\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
-
-    var safeAttrs =
-      'src="' + srcVal.replace(/"/g, '&quot;') + '" alt="' + altVal.replace(/"/g, '&quot;') + '"'
-    if (widthMatch)
-      safeAttrs +=
-        ' width="' + (widthMatch[1] || widthMatch[2] || widthMatch[3]).replace(/"/g, '&quot;') + '"'
-    if (heightMatch)
-      safeAttrs +=
-        ' height="' +
-        (heightMatch[1] || heightMatch[2] || heightMatch[3]).replace(/"/g, '&quot;') +
-        '"'
-    if (idMatch)
-      safeAttrs += ' data-imagem-id="' + (idMatch[1] || idMatch[2]).replace(/"/g, '&quot;') + '"'
-    safeAttrs += ' class="ris-imagem-laudo-interna max-w-full rounded border border-slate-300 my-2"'
-
-    return '<img ' + safeAttrs + ' />'
-  })
-
-  // 5. Allowlist de tags e atributos permitidos (Seção 7.4.3.4.b.i-iii)
-  var allowlistTags = [
-    'p',
-    'br',
-    'hr',
-    'strong',
-    'b',
-    'em',
-    'i',
-    'u',
-    's',
-    'mark',
-    'span',
-    'div',
-    'ul',
-    'ol',
-    'li',
-    'a',
-    'table',
-    'thead',
-    'tbody',
-    'tfoot',
-    'tr',
-    'th',
-    'td',
-    'h1',
-    'h2',
-    'h3',
-    'h4',
-    'h5',
-    'h6',
-    'blockquote',
-    'input',
-    'label',
-  ]
-
-  str = str.replace(
-    /<(\/?)([a-zA-Z0-9_-]+)([^>]*)>/gi,
-    function (fullMatch, closingSlash, tagName, restAttrs) {
-      var tagLower = tagName.toLowerCase()
-      if (tagLower === 'img') {
-        return fullMatch
-      }
-      if (allowlistTags.indexOf(tagLower) === -1) {
-        return ''
-      }
-
-      if (tagLower === 'input') {
-        if (!restAttrs.match(/type\s*=\s*["']?checkbox["']?/i)) {
-          return ''
-        }
-        var isChecked = !!restAttrs.match(/\bchecked\b/i)
-        return (
-          '<input type="checkbox"' +
-          (isChecked ? ' checked' : '') +
-          ' disabled class="ris-checklist-item" />'
-        )
-      }
-
-      var safeTagAttrs = ''
-      if (tagLower === 'a') {
-        var hrefMatch = restAttrs.match(/href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
-        var hVal = hrefMatch ? hrefMatch[1] || hrefMatch[2] || hrefMatch[3] || '#' : '#'
-        if (
-          hVal.toLowerCase().indexOf('javascript:') !== -1 ||
-          hVal.toLowerCase().indexOf('data:') !== -1
-        ) {
-          hVal = '#'
-        }
-        safeTagAttrs +=
-          ' href="' + hVal.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer"'
-      }
-
-      if (tagLower === 'td' || tagLower === 'th') {
-        var colMatch = restAttrs.match(/colspan\s*=\s*["']?(\d+)["']?/i)
-        var rowMatch = restAttrs.match(/rowspan\s*=\s*["']?(\d+)["']?/i)
-        if (colMatch) safeTagAttrs += ' colspan="' + colMatch[1] + '"'
-        if (rowMatch) safeTagAttrs += ' rowspan="' + rowMatch[1] + '"'
-      }
-
-      var classMatch = restAttrs.match(/class\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
-      if (classMatch) {
-        var clsVal = (classMatch[1] || classMatch[2] || '').trim()
-        safeTagAttrs += ' class="' + clsVal.replace(/["<>]/g, '') + '"'
-      }
-
-      var styleMatch = restAttrs.match(/style\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
-      if (styleMatch) {
-        var rawStyle = (styleMatch[1] || styleMatch[2] || '').trim()
-        rawStyle = rawStyle.replace(/url\s*\([^)]*\)/gi, '')
-        rawStyle = rawStyle.replace(/expression\s*\([^)]*\)/gi, '')
-        rawStyle = rawStyle.replace(/javascript\s*:/gi, '')
-        safeTagAttrs += ' style="' + rawStyle.replace(/"/g, '&quot;') + '"'
-      }
-
-      var dataMatches = restAttrs.match(/data-[a-zA-Z0-9_-]+\s*=\s*(?:"[^"]*"|'[^']*')/gi)
-      if (dataMatches && dataMatches.length > 0) {
-        for (var d = 0; d < dataMatches.length; d++) {
-          safeTagAttrs += ' ' + dataMatches[d]
-        }
-      }
-
-      return '<' + closingSlash + tagLower + safeTagAttrs + '>'
-    },
-  )
-
-  return str
-}
-
-// ----------------------------------------------------------------------------
 // 1. POST /backend/v1/ris/requisicao-pep
 // Requisição de RX/TC/ECG/US a partir da solicitação do PEP sem duplicar
 // ----------------------------------------------------------------------------
@@ -1242,6 +1069,147 @@ routerAdd('POST', '/backend/v1/ris/modelos', (c) => {
     })
   }
 
+  // Sanitizador de HTML interno ao callback para isolamento JSVM do PocketBase
+  function sanitizarHtmlServidorRIS(inputHtml) {
+    if (!inputHtml) return ''
+    var str = String(inputHtml)
+    str = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    str = str.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+    str = str.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    str = str.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+    str = str.replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
+    str = str.replace(/<applet\b[^<]*(?:(?!<\/applet>)<[^<]*)*<\/applet>/gi, '')
+    str = str.replace(/<!--[\s\S]*?-->/g, '')
+    str = str.replace(/\son[a-zA-Z_]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    str = str.replace(/href\s*=\s*["']?\s*(?:javascript|vbscript|data):[^"'>\s]*/gi, 'href="#"')
+    str = str.replace(/<img\b([^>]*?)>/gi, function (match, attrs) {
+      var srcMatch = attrs.match(/src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+      var srcVal = srcMatch ? srcMatch[1] || srcMatch[2] || srcMatch[3] || '' : ''
+      srcVal = srcVal.trim()
+      var isInternoValido =
+        srcVal.indexOf('/api/files/ris_imagens_anexas/') !== -1 ||
+        srcVal.indexOf('/api/files/exames/') !== -1 ||
+        srcVal.indexOf('/assets/') === 0 ||
+        srcVal.indexOf('/ris-internal-image/') === 0
+      if (!isInternoValido) {
+        return '<span class="ris-img-bloqueada text-slate-400 italic text-xs">[Imagem externa bloqueada por segurança do RIS]</span>'
+      }
+      var altMatch = attrs.match(/alt\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+      var altVal = altMatch ? altMatch[1] || altMatch[2] || 'Imagem do Exame' : 'Imagem do Exame'
+      var widthMatch = attrs.match(/width\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+      var heightMatch = attrs.match(/height\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+      var idMatch = attrs.match(/data-imagem-id\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+      var safeAttrs =
+        'src="' + srcVal.replace(/"/g, '&quot;') + '" alt="' + altVal.replace(/"/g, '&quot;') + '"'
+      if (widthMatch)
+        safeAttrs +=
+          ' width="' +
+          (widthMatch[1] || widthMatch[2] || widthMatch[3]).replace(/"/g, '&quot;') +
+          '"'
+      if (heightMatch)
+        safeAttrs +=
+          ' height="' +
+          (heightMatch[1] || heightMatch[2] || heightMatch[3]).replace(/"/g, '&quot;') +
+          '"'
+      if (idMatch)
+        safeAttrs += ' data-imagem-id="' + (idMatch[1] || idMatch[2]).replace(/"/g, '&quot;') + '"'
+      safeAttrs +=
+        ' class="ris-imagem-laudo-interna max-w-full rounded border border-slate-300 my-2"'
+      return '<img ' + safeAttrs + ' />'
+    })
+    var allowlistTags = [
+      'p',
+      'br',
+      'hr',
+      'strong',
+      'b',
+      'em',
+      'i',
+      'u',
+      's',
+      'mark',
+      'span',
+      'div',
+      'ul',
+      'ol',
+      'li',
+      'a',
+      'table',
+      'thead',
+      'tbody',
+      'tfoot',
+      'tr',
+      'th',
+      'td',
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'h5',
+      'h6',
+      'blockquote',
+      'input',
+      'label',
+    ]
+    str = str.replace(
+      /<(\/?)([a-zA-Z0-9_-]+)([^>]*)>/gi,
+      function (fullMatch, closingSlash, tagName, restAttrs) {
+        var tagLower = tagName.toLowerCase()
+        if (tagLower === 'img') return fullMatch
+        if (allowlistTags.indexOf(tagLower) === -1) return ''
+        if (tagLower === 'input') {
+          if (!restAttrs.match(/type\s*=\s*["']?checkbox["']?/i)) return ''
+          var isChecked = !!restAttrs.match(/\bchecked\b/i)
+          return (
+            '<input type="checkbox"' +
+            (isChecked ? ' checked' : '') +
+            ' disabled class="ris-checklist-item" />'
+          )
+        }
+        var safeTagAttrs = ''
+        if (tagLower === 'a') {
+          var hrefMatch = restAttrs.match(/href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+          var hVal = hrefMatch ? hrefMatch[1] || hrefMatch[2] || hrefMatch[3] || '#' : '#'
+          if (
+            hVal.toLowerCase().indexOf('javascript:') !== -1 ||
+            hVal.toLowerCase().indexOf('data:') !== -1
+          ) {
+            hVal = '#'
+          }
+          safeTagAttrs +=
+            ' href="' + hVal.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer"'
+        }
+        if (tagLower === 'td' || tagLower === 'th') {
+          var colMatch = restAttrs.match(/colspan\s*=\s*["']?(\d+)["']?/i)
+          var rowMatch = restAttrs.match(/rowspan\s*=\s*["']?(\d+)["']?/i)
+          if (colMatch) safeTagAttrs += ' colspan="' + colMatch[1] + '"'
+          if (rowMatch) safeTagAttrs += ' rowspan="' + rowMatch[1] + '"'
+        }
+        var classMatch = restAttrs.match(/class\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+        if (classMatch) {
+          var clsVal = (classMatch[1] || classMatch[2] || '').trim()
+          safeTagAttrs += ' class="' + clsVal.replace(/["<>]/g, '') + '"'
+        }
+        var styleMatch = restAttrs.match(/style\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+        if (styleMatch) {
+          var rawStyle = (styleMatch[1] || styleMatch[2] || '').trim()
+          rawStyle = rawStyle.replace(/url\s*\([^)]*\)/gi, '')
+          rawStyle = rawStyle.replace(/expression\s*\([^)]*\)/gi, '')
+          rawStyle = rawStyle.replace(/javascript\s*:/gi, '')
+          safeTagAttrs += ' style="' + rawStyle.replace(/"/g, '&quot;') + '"'
+        }
+        var dataMatches = restAttrs.match(/data-[a-zA-Z0-9_-]+\s*=\s*(?:"[^"]*"|'[^']*')/gi)
+        if (dataMatches && dataMatches.length > 0) {
+          for (var d = 0; d < dataMatches.length; d++) {
+            safeTagAttrs += ' ' + dataMatches[d]
+          }
+        }
+        return '<' + closingSlash + tagLower + safeTagAttrs + '>'
+      },
+    )
+    return str
+  }
+
   try {
     var versao = 1
     if (modeloAnteriorId) {
@@ -1397,198 +1365,6 @@ routerAdd('POST', '/backend/v1/ris/exames/{id}/aplicar-modelo', (c) => {
     return c.json(400, { erro: err.message || String(err) })
   }
 })
-
-// ----------------------------------------------------------------------------
-// SANITIZADOR DE HTML SERVER-SIDE RIGOROSO COM ALLOWLIST (Seção 7.4.3.4.b.i)
-// Bloqueia script, atributos on*, javascript:, vbscript:, data:, iframes,
-// tags perigosas e links/imagens externos.
-// Apenas imagens internas (/api/files/ris_imagens_anexas/...) são permitidas.
-// ----------------------------------------------------------------------------
-function sanitizarHtmlServidorRIS(inputHtml) {
-  if (!inputHtml) return ''
-  var str = String(inputHtml)
-
-  // 1. Remoção de blocos perigosos inteiros: <script>...</script>, <style>...</style>, <iframe>...</iframe>, <object>, <embed>, <applet>
-  str = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-  str = str.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-  str = str.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
-  str = str.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
-  str = str.replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
-  str = str.replace(/<applet\b[^<]*(?:(?!<\/applet>)<[^<]*)*<\/applet>/gi, '')
-  str = str.replace(/<!--[\s\S]*?-->/g, '')
-
-  // 2. Remoção de handlers de eventos (on* ex: onload, onclick, onerror, onmouseover, etc.)
-  str = str.replace(/\son[a-zA-Z_]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-
-  // 3. Bloqueio de protocolos executáveis em href e src (javascript:, vbscript:, data: exceto texto puro)
-  str = str.replace(/href\s*=\s*["']?\s*(?:javascript|vbscript|data):[^"'>\s]*/gi, 'href="#"')
-
-  // 4. Sanitização estrita de imagens (src): permitir SOMENTE imagens internas do Skip/PocketBase
-  // Rejeita rastreadores externos, http://, https:// de terceiros e data: image externas não autorizadas
-  str = str.replace(/<img\b([^>]*?)>/gi, function (match, attrs) {
-    var srcMatch = attrs.match(/src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
-    var srcVal = srcMatch ? srcMatch[1] || srcMatch[2] || srcMatch[3] || '' : ''
-    srcVal = srcVal.trim()
-
-    // Permite apenas caminhos internos de arquivos do backend local ou caminhos relativos internos
-    // ex: /api/files/ris_imagens_anexas/... ou /api/files/exames/...
-    var isInternoValido =
-      srcVal.indexOf('/api/files/ris_imagens_anexas/') !== -1 ||
-      srcVal.indexOf('/api/files/exames/') !== -1 ||
-      srcVal.indexOf('/assets/') === 0 ||
-      srcVal.indexOf('/ris-internal-image/') === 0
-
-    if (!isInternoValido) {
-      // Bloqueia imagem externa/rastreador e substitui por aviso seguro
-      return '<span class="ris-img-bloqueada text-slate-400 italic text-xs">[Imagem externa bloqueada por segurança do RIS]</span>'
-    }
-
-    // Preserva atributos seguros permitidos na tag interna: src, alt, title, width, height, class, data-imagem-id
-    var altMatch = attrs.match(/alt\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
-    var altVal = altMatch ? altMatch[1] || altMatch[2] || 'Imagem do Exame' : 'Imagem do Exame'
-    var widthMatch = attrs.match(/width\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
-    var heightMatch = attrs.match(/height\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
-    var idMatch = attrs.match(/data-imagem-id\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
-
-    var safeAttrs =
-      'src="' + srcVal.replace(/"/g, '&quot;') + '" alt="' + altVal.replace(/"/g, '&quot;') + '"'
-    if (widthMatch)
-      safeAttrs +=
-        ' width="' + (widthMatch[1] || widthMatch[2] || widthMatch[3]).replace(/"/g, '&quot;') + '"'
-    if (heightMatch)
-      safeAttrs +=
-        ' height="' +
-        (heightMatch[1] || heightMatch[2] || heightMatch[3]).replace(/"/g, '&quot;') +
-        '"'
-    if (idMatch)
-      safeAttrs += ' data-imagem-id="' + (idMatch[1] || idMatch[2]).replace(/"/g, '&quot;') + '"'
-    safeAttrs += ' class="ris-imagem-laudo-interna max-w-full rounded border border-slate-300 my-2"'
-
-    return '<img ' + safeAttrs + ' />'
-  })
-
-  // 5. Allowlist de tags e atributos permitidos:
-  // Tags obrigatórias do 7.4.3.4.b.i:
-  // p, br, hr, strong, b, em, i, u, s, mark, span, div,
-  // ul, ol, li, a, table, thead, tbody, tfoot, tr, th, td,
-  // h1, h2, h3, h4, h5, h6, blockquote, input (checkbox disabled)
-  // Tags e classes especiais para 'box', 'lista', 'flutuante', 'quebra-pagina'
-  var allowlistTags = [
-    'p',
-    'br',
-    'hr',
-    'strong',
-    'b',
-    'em',
-    'i',
-    'u',
-    's',
-    'mark',
-    'span',
-    'div',
-    'ul',
-    'ol',
-    'li',
-    'a',
-    'table',
-    'thead',
-    'tbody',
-    'tfoot',
-    'tr',
-    'th',
-    'td',
-    'h1',
-    'h2',
-    'h3',
-    'h4',
-    'h5',
-    'h6',
-    'blockquote',
-    'input',
-    'label',
-  ]
-
-  // Filtra tags fechadas e abertas não permitidas (transforma em texto neutro ou descarta)
-  // Preserva inputs apenas se forem checkbox (para checklists clínicos)
-  str = str.replace(
-    /<(\/?)([a-zA-Z0-9_-]+)([^>]*)>/gi,
-    function (fullMatch, closingSlash, tagName, restAttrs) {
-      var tagLower = tagName.toLowerCase()
-      if (tagLower === 'img') {
-        return fullMatch // já foi processado
-      }
-      if (allowlistTags.indexOf(tagLower) === -1) {
-        return '' // Descarta tags fora da allowlist (ex: <form>, <button>, <select>, <textarea>, <link>, <meta>)
-      }
-
-      // Se for <input>, permitir APENAS se type="checkbox"
-      if (tagLower === 'input') {
-        if (!restAttrs.match(/type\s*=\s*["']?checkbox["']?/i)) {
-          return ''
-        }
-        var isChecked = !!restAttrs.match(/\bchecked\b/i)
-        return (
-          '<input type="checkbox"' +
-          (isChecked ? ' checked' : '') +
-          ' disabled class="ris-checklist-item" />'
-        )
-      }
-
-      // Sanitiza atributos da tag permitida (class, style, href, title, colspan, rowspan, data-*)
-      var safeTagAttrs = ''
-      if (tagLower === 'a') {
-        var hrefMatch = restAttrs.match(/href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
-        var hVal = hrefMatch ? hrefMatch[1] || hrefMatch[2] || hrefMatch[3] || '#' : '#'
-        if (
-          hVal.toLowerCase().indexOf('javascript:') !== -1 ||
-          hVal.toLowerCase().indexOf('data:') !== -1
-        ) {
-          hVal = '#'
-        }
-        safeTagAttrs +=
-          ' href="' + hVal.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer"'
-      }
-
-      if (tagLower === 'td' || tagLower === 'th') {
-        var colMatch = restAttrs.match(/colspan\s*=\s*["']?(\d+)["']?/i)
-        var rowMatch = restAttrs.match(/rowspan\s*=\s*["']?(\d+)["']?/i)
-        if (colMatch) safeTagAttrs += ' colspan="' + colMatch[1] + '"'
-        if (rowMatch) safeTagAttrs += ' rowspan="' + rowMatch[1] + '"'
-      }
-
-      // Preserva classes css permitidas (para estilos, caixas, cores, alinhamentos e quebra de página)
-      var classMatch = restAttrs.match(/class\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
-      if (classMatch) {
-        var clsVal = (classMatch[1] || classMatch[2] || '').trim()
-        // Filtra classes potencialmente maliciosas ou irrelevantes
-        safeTagAttrs += ' class="' + clsVal.replace(/["<>]/g, '') + '"'
-      }
-
-      // Preserva inline styles controlados para cores de texto, caixa, tamanho de fonte e recuos
-      var styleMatch = restAttrs.match(/style\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
-      if (styleMatch) {
-        var rawStyle = (styleMatch[1] || styleMatch[2] || '').trim()
-        // Remove qualquer url(), expression(), javascript:, behavior
-        rawStyle = rawStyle.replace(/url\s*\([^)]*\)/gi, '')
-        rawStyle = rawStyle.replace(/expression\s*\([^)]*\)/gi, '')
-        rawStyle = rawStyle.replace(/javascript\s*:/gi, '')
-        safeTagAttrs += ' style="' + rawStyle.replace(/"/g, '&quot;') + '"'
-      }
-
-      // Preserva atributos de dados controlados (data-campo-tipo, data-box, data-flutuante, data-lista)
-      var dataMatches = restAttrs.match(/data-[a-zA-Z0-9_-]+\s*=\s*(?:"[^"]*"|'[^']*')/gi)
-      if (dataMatches && dataMatches.length > 0) {
-        for (var d = 0; d < dataMatches.length; d++) {
-          safeTagAttrs += ' ' + dataMatches[d]
-        }
-      }
-
-      return '<' + closingSlash + tagLower + safeTagAttrs + '>'
-    },
-  )
-
-  return str
-}
 
 // ----------------------------------------------------------------------------
 // 10. POST /backend/v1/ris/exames/{id}/salvar-rascunho
