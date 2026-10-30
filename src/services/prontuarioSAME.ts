@@ -52,6 +52,7 @@ export async function carregarProntuarioUnificado(
     obstetricaPartos,
     obstetricaRecemNascidos,
     obstetricaDesfechosAltas,
+    solicitacoesRegulacao,
   ] = await Promise.all([
     pb
       .collection('pronto_atendimento')
@@ -194,6 +195,17 @@ export async function carregarProntuarioUnificado(
         filter: `paciente_mae = "${pacienteId}"`,
         sort: '-data_hora_desfecho,-created',
         expand: 'profissional_alta,admissao_obstetrica',
+      })
+      .catch(() => [] as any[]),
+
+    // Central de Regulação Interna: Solicitações vinculadas ao paciente
+    pb
+      .collection('regulacao_solicitacoes')
+      .getFullList<any>({
+        filter: `paciente = "${pacienteId}"`,
+        sort: '-data_hora_solicitacao,-created',
+        expand:
+          'setor_origem,setor_destino,leito_destino,profissional_solicitante,profissional_regulador',
       })
       .catch(() => [] as any[]),
   ])
@@ -1121,6 +1133,131 @@ export async function carregarProntuarioUnificado(
       badgeCor: 'bg-emerald-800 text-white',
       icone: 'CheckCircle2',
       registroOriginal: desf,
+    })
+  })
+
+  // M. CENTRAL DE REGULAÇÃO INTERNA MUNICIPAL (Encaminhamentos e Transferências)
+  solicitacoesRegulacao.forEach((reg) => {
+    const rotuloRecurso: Record<string, string> = {
+      leito_enfermaria_clinica: 'Leito Enfermaria Clínica',
+      leito_uti_adulto: 'Leito UTI Adulto',
+      leito_isolamento: 'Leito Isolamento',
+      leito_cirurgico: 'Leito Cirúrgico',
+      avaliacao_especializada: 'Avaliação Especializada',
+      procedimento_urgencia: 'Procedimento de Urgência',
+      suporte_ventilatorio: 'Suporte Ventilatório',
+      outro: 'Outro Recurso',
+    }
+
+    const rotuloPrioridade: Record<string, string> = {
+      emergencia_vermelha: 'Emergência (Vermelho)',
+      urgencia_amarela: 'Urgência (Amarelo)',
+      prioritario_verde: 'Prioritário (Verde)',
+      eletivo_azul: 'Eletivo (Azul)',
+    }
+
+    const corPrioridade: Record<string, string> = {
+      emergencia_vermelha: 'bg-red-600 text-white',
+      urgencia_amarela: 'bg-amber-600 text-white',
+      prioritario_verde: 'bg-emerald-600 text-white',
+      eletivo_azul: 'bg-blue-600 text-white',
+    }
+
+    const rotuloSituacao: Record<string, string> = {
+      solicitada: 'Solicitada (Aguardando Avaliação)',
+      em_avaliacao: 'Em Avaliação Técnica',
+      aceita: 'Aceita pelo Regulador',
+      negada: 'Negada pelo Regulador',
+      efetivada: 'Transferência Efetivada',
+      cancelada: 'Cancelada',
+    }
+
+    // 1. Evento de Efetivação da Transferência Real (se concluída)
+    if (reg.situacao === 'efetivada' && reg.data_hora_efetivacao) {
+      eventos.push({
+        id: `reg-efetivada-${reg.id}`,
+        tipo: 'regulacao_efetivacao',
+        dataHora: reg.data_hora_efetivacao,
+        titulo: `Central de Regulação — Transferência Real Efetivada (${reg.numero_solicitacao})`,
+        subtitulo: `Confirmada por: ${reg.responsavel_efetivacao_nome || 'Equipe de Regulação'} • Destino: ${reg.setor_destino_nome || reg.unidade_externa_destino || 'Destino'}`,
+        descricao: `Transferência física do paciente confirmada. Leito de destino ativado no mapa de leitos.${
+          reg.observacoes_efetivacao ? `\nObservações: ${reg.observacoes_efetivacao}` : ''
+        }\n[Controle interno municipal — sem comunicação SISREG/externa alegada]`,
+        detalhes: {
+          numero_solicitacao: reg.numero_solicitacao,
+          origem: reg.setor_origem_nome,
+          destino: reg.setor_destino_nome || reg.unidade_externa_destino,
+          leito_destino: reg.leito_destino_codigo,
+          data_hora_efetivacao: reg.data_hora_efetivacao,
+          responsavel: reg.responsavel_efetivacao_nome,
+        },
+        profissionalNome: reg.responsavel_efetivacao_nome,
+        setorOuLeito: reg.leito_destino_codigo || reg.setor_destino_nome,
+        badgeTexto: 'Regulação • Efetivada',
+        badgeCor: 'bg-emerald-700 text-white',
+        icone: 'ArrowRightLeft',
+        registroOriginal: reg,
+      })
+    }
+
+    // 2. Evento da Decisão do Regulador (se avaliado)
+    if (
+      reg.data_hora_avaliacao &&
+      (reg.decisao_regulador === 'aceita' || reg.decisao_regulador === 'negada')
+    ) {
+      eventos.push({
+        id: `reg-decisao-${reg.id}`,
+        tipo: 'regulacao_avaliacao',
+        dataHora: reg.data_hora_avaliacao,
+        titulo: `Decisão de Regulação: ${reg.decisao_regulador === 'aceita' ? 'ACEITA' : 'NEGADA'} (${reg.numero_solicitacao})`,
+        subtitulo: `Regulador: ${reg.profissional_regulador_nome || 'Médico Regulador'} (Decisão humana)`,
+        descricao: `Motivo da decisão: ${reg.motivo_decisao_regulador || 'Avaliação técnica assistencial'}${
+          reg.setor_destino_nome ? ` • Destino autorizado: ${reg.setor_destino_nome}` : ''
+        }${reg.unidade_externa_destino ? ` • Destino externo: ${reg.unidade_externa_destino}` : ''}`,
+        detalhes: {
+          decisao: reg.decisao_regulador,
+          motivo: reg.motivo_decisao_regulador,
+          regulador: reg.profissional_regulador_nome,
+          setor_destino: reg.setor_destino_nome,
+          unidade_externa: reg.unidade_externa_destino,
+        },
+        profissionalNome: reg.profissional_regulador_nome,
+        badgeTexto: `Regulador • ${reg.decisao_regulador.toUpperCase()}`,
+        badgeCor:
+          reg.decisao_regulador === 'aceita'
+            ? 'bg-emerald-600 text-white'
+            : 'bg-rose-700 text-white',
+        icone: 'ShieldCheck',
+        registroOriginal: reg,
+      })
+    }
+
+    // 3. Evento da Solicitação Inicial de Regulação
+    eventos.push({
+      id: `reg-solic-${reg.id}`,
+      tipo: 'regulacao_solicitacao',
+      dataHora: reg.data_hora_solicitacao || reg.created,
+      titulo: `Solicitação de Regulação: ${reg.numero_solicitacao} — ${rotuloRecurso[reg.recurso_solicitado] || reg.recurso_solicitado}`,
+      subtitulo: `Solicitante: ${reg.profissional_solicitante_nome} • Origem: ${reg.setor_origem_nome}`,
+      descricao: `Diagnóstico principal: ${reg.diagnostico_principal}${reg.cid10_codigo ? ` (${reg.cid10_codigo})` : ''}\nPrioridade informada pelo profissional: ${rotuloPrioridade[reg.prioridade] || reg.prioridade}\nJustificativa clínica: ${reg.justificativa_clinica}${
+        reg.sinais_vitais_sumario ? `\nSinais vitais: ${reg.sinais_vitais_sumario}` : ''
+      }${reg.condicoes_transporte ? ` • Transporte: ${reg.condicoes_transporte}` : ''}\nSituação atual: ${rotuloSituacao[reg.situacao] || reg.situacao}\n[Controle interno municipal]`,
+      detalhes: {
+        numero_solicitacao: reg.numero_solicitacao,
+        tipo: reg.tipo,
+        origem: reg.setor_origem_nome,
+        recurso: reg.recurso_solicitado,
+        prioridade: reg.prioridade,
+        justificativa: reg.justificativa_clinica,
+        diagnostico: reg.diagnostico_principal,
+        cid10: reg.cid10_codigo,
+        situacao: reg.situacao,
+      },
+      profissionalNome: reg.profissional_solicitante_nome,
+      badgeTexto: `Regulação • ${rotuloPrioridade[reg.prioridade] || 'Prioritário'}`,
+      badgeCor: corPrioridade[reg.prioridade] || 'bg-amber-600 text-white',
+      icone: 'Share2',
+      registroOriginal: reg,
     })
   })
 

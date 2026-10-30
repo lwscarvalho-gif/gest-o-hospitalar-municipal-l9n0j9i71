@@ -287,6 +287,7 @@ export const PainelGestaoView: React.FC<PainelGestaoViewProps> = ({ onNavegar })
           farmacia={dados.farmacia}
           faturamento={dados.faturamento}
           cirurgico={dados.cirurgico}
+          regulacao={dados.regulacao}
           onNavegar={onNavegar}
           isGestorOuAdmin={isGestorOuAdmin}
         />

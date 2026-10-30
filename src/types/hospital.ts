@@ -567,6 +567,9 @@ export type TipoEventoProntuario =
   | 'obstetrica_parto'
   | 'obstetrica_recem_nascido'
   | 'obstetrica_desfecho_alta'
+  | 'regulacao_solicitacao'
+  | 'regulacao_avaliacao'
+  | 'regulacao_efetivacao'
 
 export interface EventoProntuarioUnificado {
   id: string
@@ -1124,6 +1127,129 @@ export interface CompetenciaFaturamento {
   valor_total_sp?: number
   valor_total_geral?: number
   observacoes?: string
+  created: string
+  updated: string
+}
+
+// -------------------------------------------------------------
+// CENTRAL DE REGULAÇÃO INTERNA MUNICIPAL
+// -------------------------------------------------------------
+export type TipoSolicitacaoRegulacao =
+  | 'transferencia_interna'
+  | 'transferencia_externa'
+  | 'encaminhamento_especialidade'
+
+export type AtendimentoOrigemRegulacao = 'pronto_atendimento' | 'internacao' | 'ambulatorial'
+
+export type RecursoSolicitadoRegulacao =
+  | 'leito_enfermaria_clinica'
+  | 'leito_uti_adulto'
+  | 'leito_isolamento'
+  | 'leito_cirurgico'
+  | 'avaliacao_especializada'
+  | 'procedimento_urgencia'
+  | 'suporte_ventilatorio'
+  | 'outro'
+
+export type PrioridadeRegulacao =
+  | 'emergencia_vermelha'
+  | 'urgencia_amarela'
+  | 'prioritario_verde'
+  | 'eletivo_azul'
+
+export type SituacaoRegulacao =
+  | 'solicitada'
+  | 'em_avaliacao'
+  | 'aceita'
+  | 'negada'
+  | 'efetivada'
+  | 'cancelada'
+
+export type DecisaoRegulador = 'pendente' | 'aceita' | 'negada'
+
+export interface ItemTransicaoRegulacao {
+  data_hora: string
+  de: SituacaoRegulacao
+  para: SituacaoRegulacao
+  responsavel_nome: string
+  responsavel_role?: string
+  motivo?: string
+  detalhes?: string
+}
+
+export interface SolicitacaoRegulacao {
+  id: string
+  numero_solicitacao: string
+  tipo: TipoSolicitacaoRegulacao
+  paciente: string
+  paciente_nome: string
+  atendimento_origem_tipo: AtendimentoOrigemRegulacao
+  atendimento_pa?: string
+  internacao?: string
+  setor_origem?: string
+  setor_origem_nome: string
+  leito_origem?: string
+  leito_origem_codigo?: string
+  setor_destino?: string
+  setor_destino_nome?: string
+  leito_destino?: string
+  leito_destino_codigo?: string
+  unidade_externa_destino?: string
+  recurso_solicitado: RecursoSolicitadoRegulacao
+  descricao_recurso?: string
+  prioridade: PrioridadeRegulacao
+  justificativa_clinica: string
+  diagnostico_principal: string
+  cid10_codigo?: string
+  sinais_vitais_sumario?: string
+  condicoes_transporte?: string
+  situacao: SituacaoRegulacao
+  profissional_solicitante?: string
+  profissional_solicitante_nome: string
+  profissional_solicitante_registro?: string
+  data_hora_solicitacao: string
+  profissional_regulador?: string
+  profissional_regulador_nome?: string
+  data_hora_avaliacao?: string
+  decisao_regulador?: DecisaoRegulador
+  motivo_decisao_regulador?: string
+  data_hora_efetivacao?: string
+  responsavel_efetivacao_nome?: string
+  observacoes_efetivacao?: string
+  motivo_cancelamento?: string
+  data_hora_cancelamento?: string
+  historico_transicoes?: ItemTransicaoRegulacao[] | string
+  expand?: {
+    paciente?: Paciente
+    atendimento_pa?: FichaProntoAtendimento
+    internacao?: Internacao
+    setor_origem?: Setor
+    leito_origem?: Leito
+    setor_destino?: Setor
+    leito_destino?: Leito
+    profissional_solicitante?: Profissional
+    profissional_regulador?: Profissional
+  }
+  created: string
+  updated: string
+}
+
+export interface SolicitacaoRegulacaoResumoAdmin {
+  id: string
+  numero_solicitacao: string
+  tipo: TipoSolicitacaoRegulacao
+  paciente_nome: string
+  atendimento_origem_tipo: AtendimentoOrigemRegulacao
+  setor_origem_nome: string
+  setor_destino_nome?: string
+  unidade_externa_destino?: string
+  recurso_solicitado: RecursoSolicitadoRegulacao
+  prioridade: PrioridadeRegulacao
+  situacao: SituacaoRegulacao
+  decisao_regulador?: DecisaoRegulador
+  data_hora_solicitacao: string
+  data_hora_avaliacao?: string
+  data_hora_efetivacao?: string
   created: string
   updated: string
 }

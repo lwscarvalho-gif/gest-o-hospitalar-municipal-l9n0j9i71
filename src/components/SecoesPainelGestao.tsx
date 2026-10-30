@@ -12,6 +12,7 @@ import {
   Receipt,
   Scissors,
   HelpCircle,
+  Share2,
 } from 'lucide-react'
 import {
   IndicadoresFilaPA,
@@ -21,6 +22,7 @@ import {
   IndicadoresFarmaciaPrescricoes,
   IndicadoresFaturamento,
   IndicadoresCirurgias,
+  IndicadoresRegulacaoPainel,
   CRITERIOS_INDICADORES,
 } from '@/services/painelGestao'
 import {
@@ -41,6 +43,7 @@ interface SecoesPainelGestaoProps {
   farmacia: IndicadoresFarmaciaPrescricoes
   faturamento: IndicadoresFaturamento
   cirurgico: IndicadoresCirurgias
+  regulacao?: IndicadoresRegulacaoPainel
   onNavegar?: (aba: ActiveTab) => void
   isGestorOuAdmin: boolean
 }
@@ -53,6 +56,7 @@ export const SecoesPainelGestao: React.FC<SecoesPainelGestaoProps> = ({
   farmacia,
   faturamento,
   cirurgico,
+  regulacao,
   onNavegar,
   isGestorOuAdmin,
 }) => {
@@ -784,6 +788,100 @@ export const SecoesPainelGestao: React.FC<SecoesPainelGestaoProps> = ({
                 <div>
                   <span className="text-[10px] text-emerald-600 block">Enviadas</span>
                   <strong className="text-emerald-700">{faturamento.totalContasEnviadas}</strong>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Bloco: Central de Regulação Interna Municipal */}
+        {regulacao && (
+          <Card className="border-slate-200 shadow-sm bg-white">
+            <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                  <Share2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-bold text-slate-900">
+                    Central de Regulação Interna
+                  </CardTitle>
+                  <p className="text-xs text-slate-500">
+                    Transferências e encaminhamentos (decisão humana)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => abrirCriterio('regulacao_interna')}
+                  className="text-xs text-slate-500 hover:text-blue-600 flex items-center gap-1 p-1 rounded"
+                  title="Critério da regulação interna"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-blue-500" />
+                </button>
+                {onNavegar && (
+                  <button
+                    onClick={() => onNavegar('regulacao' as ActiveTab)}
+                    className="text-xs text-blue-600 hover:underline font-medium"
+                  >
+                    Fila →
+                  </button>
+                )}
+              </div>
+            </CardHeader>
+
+            <CardContent className="pt-4 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100 text-center">
+                  <span className="text-[11px] font-semibold text-indigo-800 uppercase block">
+                    Fila Ativa Agora
+                  </span>
+                  <span className="text-2xl font-bold text-indigo-900 mt-1 block">
+                    {regulacao.filaAtivaAgora}
+                  </span>
+                  <span className="text-[10px] text-indigo-600">
+                    {regulacao.solicitadas} solicitadas • {regulacao.emAvaliacao} em análise
+                  </span>
+                </div>
+
+                <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100 text-center">
+                  <span className="text-[11px] font-semibold text-emerald-800 uppercase block">
+                    Efetivadas no Período
+                  </span>
+                  <span className="text-2xl font-bold text-emerald-900 mt-1 block">
+                    {regulacao.efetivadasPeriodo}
+                  </span>
+                  <span className="text-[10px] text-emerald-700">Com movimentação de leito</span>
+                </div>
+              </div>
+
+              {regulacao.emergenciasCriticasPendentes > 0 && (
+                <div className="p-2.5 bg-red-50 text-red-900 rounded border border-red-200 flex items-center justify-between text-xs">
+                  <span className="font-semibold flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-red-600" />
+                    Emergências vermelhas pendentes:
+                  </span>
+                  <Badge className="bg-red-600 text-white font-bold text-xs">
+                    {regulacao.emergenciasCriticasPendentes} caso(s)
+                  </Badge>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-slate-100 grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                  <span className="text-[10px] text-slate-500 block">Autorizadas/Aceitas</span>
+                  <strong className="text-slate-800 text-sm">
+                    {regulacao.aceitasAguardandoEfetivacao}
+                  </strong>
+                </div>
+                <div className="p-2 bg-rose-50 rounded border border-rose-100">
+                  <span className="text-[10px] text-rose-700 block">Negadas</span>
+                  <strong className="text-rose-800 text-sm">{regulacao.negadasPeriodo}</strong>
+                </div>
+                <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                  <span className="text-[10px] text-slate-500 block">Canceladas</span>
+                  <strong className="text-slate-700 text-sm">{regulacao.canceladasPeriodo}</strong>
                 </div>
               </div>
             </CardContent>

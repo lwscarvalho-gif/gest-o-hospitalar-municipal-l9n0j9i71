@@ -126,6 +126,23 @@ export interface IndicadoresCirurgias {
   canceladasPeriodo: number
 }
 
+export interface IndicadoresRegulacaoPainel {
+  totalSolicitacoesPeriodo: number
+  filaAtivaAgora: number
+  solicitadas: number
+  emAvaliacao: number
+  aceitasAguardandoEfetivacao: number
+  negadasPeriodo: number
+  efetivadasPeriodo: number
+  canceladasPeriodo: number
+  emergenciasCriticasPendentes: number
+  porTipo: {
+    transferencia_interna: number
+    transferencia_externa: number
+    encaminhamento_especialidade: number
+  }
+}
+
 export interface PainelGestaoDados {
   dataHoraAtualizacao: string
   periodoApuracao: PeriodoApuracao
@@ -136,9 +153,19 @@ export interface PainelGestaoDados {
   farmacia: IndicadoresFarmaciaPrescricoes
   faturamento: IndicadoresFaturamento
   cirurgico: IndicadoresCirurgias
+  regulacao: IndicadoresRegulacaoPainel
 }
 
 export const CRITERIOS_INDICADORES: Record<string, CriterioIndicador> = {
+  regulacao_interna: {
+    titulo: 'Central de Regulação Interna Municipal',
+    descricao:
+      'Monitoramento de solicitações de encaminhamento e transferências assistenciais internas vinculadas a pacientes reais e decisões humanas, com garantia de integridade de leitos.',
+    formula:
+      'Fila Ativa = soma(solicitada + em_avaliacao + aceita); Efetivadas = confirmadas com movimentação física de leito; Emergências = prioridade vermelha pendente',
+    fonteDados: 'Coleção "regulacao_solicitacoes" (sem dados pessoais)',
+    metaRecomendada: 'Regulação técnica com decisão humana em tempo oportuno',
+  },
   pa_fila: {
     titulo: 'Fila de Espera e Tempos do Pronto Atendimento',
     descricao:
@@ -301,6 +328,7 @@ export async function carregarDadosPainelGestao(
     competencias,
     producoesBPA,
     cirurgias,
+    solicitacoesRegulacao,
   ] = await Promise.all([
     pb.collection('pronto_atendimento').getFullList<FichaProntoAtendimento>({
       sort: '-created',
@@ -340,6 +368,12 @@ export async function carregarDadosPainelGestao(
     pb.collection('cirurgias').getFullList<Cirurgia>({
       sort: '-created',
     }),
+    pb
+      .collection('regulacao_solicitacoes')
+      .getFullList<any>({
+        sort: '-created',
+      })
+      .catch(() => [] as any[]),
   ])
 
   // 1. INDICADORES DO PRONTO ATENDIMENTO (PA)
@@ -768,6 +802,63 @@ export async function carregarDadosPainelGestao(
     second: '2-digit',
   })
 
+  // 8. INDICADORES DA CENTRAL DE REGULAÇÃO INTERNA MUNICIPAL
+  const regFiltradosPeriodo = solicitacoesRegulacao.filter((r) =>
+    dentroDoPeriodo(r.data_hora_solicitacao, r.created, periodo),
+  )
+
+  let filaAtivaRegulacao = 0
+  let solicitadasReg = 0
+  let emAvaliacaoReg = 0
+  let aceitasAguardandoEfetivacao = 0
+  let emergenciasCriticasPendentes = 0
+
+  solicitacoesRegulacao.forEach((r) => {
+    if (r.situacao === 'solicitada') {
+      solicitadasReg++
+      filaAtivaRegulacao++
+      if (r.prioridade === 'emergencia_vermelha') emergenciasCriticasPendentes++
+    } else if (r.situacao === 'em_avaliacao') {
+      emAvaliacaoReg++
+      filaAtivaRegulacao++
+      if (r.prioridade === 'emergencia_vermelha') emergenciasCriticasPendentes++
+    } else if (r.situacao === 'aceita') {
+      aceitasAguardandoEfetivacao++
+      filaAtivaRegulacao++
+    }
+  })
+
+  let regNegadasPeriodo = 0
+  let regEfetivadasPeriodo = 0
+  let regCanceladasPeriodo = 0
+  const porTipoReg = {
+    transferencia_interna: 0,
+    transferencia_externa: 0,
+    encaminhamento_especialidade: 0,
+  }
+
+  regFiltradosPeriodo.forEach((r) => {
+    if (r.situacao === 'negada') regNegadasPeriodo++
+    if (r.situacao === 'efetivada') regEfetivadasPeriodo++
+    if (r.situacao === 'cancelada') regCanceladasPeriodo++
+    if (r.tipo && porTipoReg[r.tipo as keyof typeof porTipoReg] !== undefined) {
+      porTipoReg[r.tipo as keyof typeof porTipoReg]++
+    }
+  })
+
+  const indicadoresRegulacao: IndicadoresRegulacaoPainel = {
+    totalSolicitacoesPeriodo: regFiltradosPeriodo.length,
+    filaAtivaAgora: filaAtivaRegulacao,
+    solicitadas: solicitadasReg,
+    emAvaliacao: emAvaliacaoReg,
+    aceitasAguardandoEfetivacao,
+    negadasPeriodo: regNegadasPeriodo,
+    efetivadasPeriodo: regEfetivadasPeriodo,
+    canceladasPeriodo: regCanceladasPeriodo,
+    emergenciasCriticasPendentes,
+    porTipo: porTipoReg,
+  }
+
   return {
     dataHoraAtualizacao: agoraDataHora,
     periodoApuracao: periodo,
@@ -778,6 +869,7 @@ export async function carregarDadosPainelGestao(
     farmacia: indicadoresFarmacia,
     faturamento: indicadoresFaturamento,
     cirurgico: indicadoresCirurgico,
+    regulacao: indicadoresRegulacao,
   }
 }
 

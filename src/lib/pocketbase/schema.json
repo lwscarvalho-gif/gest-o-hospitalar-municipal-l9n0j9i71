@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T05:30:42.957Z",
+  "generatedAt": "2026-10-30T06:00:38.135Z",
   "collections": [
     {
       "name": "users",
@@ -4517,6 +4517,464 @@
         "CREATE INDEX idx_obs_desfecho_mae ON obstetrica_desfechos_altas (paciente_mae)",
         "CREATE INDEX idx_obs_desfecho_data ON obstetrica_desfechos_altas (data_hora_desfecho)"
       ]
+    },
+    {
+      "name": "regulacao_solicitacoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "delete": "@request.auth.id != '' && @request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "numero_solicitacao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "transferencia_interna",
+            "transferencia_externa",
+            "encaminhamento_especialidade"
+          ]
+        },
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "paciente_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "atendimento_origem_tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pronto_atendimento", "internacao", "ambulatorial"]
+        },
+        {
+          "name": "atendimento_pa",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "pronto_atendimento"
+        },
+        {
+          "name": "internacao",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "internacoes"
+        },
+        {
+          "name": "setor_origem",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "setores"
+        },
+        {
+          "name": "setor_origem_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "leito_origem",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "leitos"
+        },
+        {
+          "name": "leito_origem_codigo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "setor_destino",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "setores"
+        },
+        {
+          "name": "setor_destino_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "leito_destino",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "leitos"
+        },
+        {
+          "name": "leito_destino_codigo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "unidade_externa_destino",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "recurso_solicitado",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "leito_enfermaria_clinica",
+            "leito_uti_adulto",
+            "leito_isolamento",
+            "leito_cirurgico",
+            "avaliacao_especializada",
+            "procedimento_urgencia",
+            "suporte_ventilatorio",
+            "outro"
+          ]
+        },
+        {
+          "name": "descricao_recurso",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "prioridade",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "emergencia_vermelha",
+            "urgencia_amarela",
+            "prioritario_verde",
+            "eletivo_azul"
+          ]
+        },
+        {
+          "name": "justificativa_clinica",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "diagnostico_principal",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "cid10_codigo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sinais_vitais_sumario",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "condicoes_transporte",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "situacao",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "solicitada",
+            "em_avaliacao",
+            "aceita",
+            "negada",
+            "efetivada",
+            "cancelada"
+          ]
+        },
+        {
+          "name": "profissional_solicitante",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "profissional_solicitante_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "profissional_solicitante_registro",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_solicitacao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "profissional_regulador",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "profissional_regulador_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_avaliacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "decisao_regulador",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["pendente", "aceita", "negada"]
+        },
+        {
+          "name": "motivo_decisao_regulador",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_efetivacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "responsavel_efetivacao_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes_efetivacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "motivo_cancelamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_cancelamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "historico_transicoes",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_reg_num ON regulacao_solicitacoes (numero_solicitacao)",
+        "CREATE INDEX idx_reg_paciente ON regulacao_solicitacoes (paciente)",
+        "CREATE INDEX idx_reg_situacao ON regulacao_solicitacoes (situacao)",
+        "CREATE INDEX idx_reg_data ON regulacao_solicitacoes (data_hora_solicitacao)",
+        "CREATE INDEX idx_reg_recurso ON regulacao_solicitacoes (recurso_solicitado)",
+        "CREATE INDEX idx_reg_prioridade ON regulacao_solicitacoes (prioridade)"
+      ]
+    },
+    {
+      "name": "regulacao_fila_administrativa",
+      "type": "view",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "numero_solicitacao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "transferencia_interna",
+            "transferencia_externa",
+            "encaminhamento_especialidade"
+          ]
+        },
+        {
+          "name": "paciente_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "atendimento_origem_tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pronto_atendimento", "internacao", "ambulatorial"]
+        },
+        {
+          "name": "setor_origem_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "setor_destino_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "unidade_externa_destino",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "recurso_solicitado",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "leito_enfermaria_clinica",
+            "leito_uti_adulto",
+            "leito_isolamento",
+            "leito_cirurgico",
+            "avaliacao_especializada",
+            "procedimento_urgencia",
+            "suporte_ventilatorio",
+            "outro"
+          ]
+        },
+        {
+          "name": "prioridade",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "emergencia_vermelha",
+            "urgencia_amarela",
+            "prioritario_verde",
+            "eletivo_azul"
+          ]
+        },
+        {
+          "name": "situacao",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "solicitada",
+            "em_avaliacao",
+            "aceita",
+            "negada",
+            "efetivada",
+            "cancelada"
+          ]
+        },
+        {
+          "name": "decisao_regulador",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["pendente", "aceita", "negada"]
+        },
+        {
+          "name": "data_hora_solicitacao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_hora_avaliacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_efetivacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": []
     }
   ]
 }
