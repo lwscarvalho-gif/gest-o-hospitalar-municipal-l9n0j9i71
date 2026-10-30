@@ -26,12 +26,14 @@ import {
   ShieldAlert,
   HeartPulse,
   Share2,
+  Mail,
 } from 'lucide-react'
 
 export type ActiveTab =
   | 'painel_gestao'
   | 'dashboard'
   | 'pronto_atendimento'
+  | 'mensageria'
   | 'regulacao'
   | 'centro_cirurgico'
   | 'centro_obstetrico'
@@ -74,6 +76,12 @@ const NAV_ITEMS: NavItem[] = [
     id: 'pronto_atendimento',
     label: 'Pronto Atendimento (PA)',
     icon: Flame,
+    allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
+  },
+  {
+    id: 'mensageria',
+    label: 'Mensageria Interna',
+    icon: Mail,
     allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
   },
   {

@@ -22,6 +22,7 @@ import { CentroObstetricoView } from '@/components/CentroObstetricoView'
 import { FaturamentoView } from '@/components/FaturamentoView'
 import { VigilanciaSaudeView } from '@/components/VigilanciaSaudeView'
 import { RegulacaoView } from '@/components/RegulacaoView'
+import { MensageriaInternaView } from '@/components/MensageriaInternaView'
 import { verificarInvariantesFuncionais } from '@/tests'
 import { Loader2 } from 'lucide-react'
 
@@ -99,6 +100,10 @@ const Index: React.FC = () => {
             onNavegarAgendamento={() => setActiveTab('agendamentos')}
           />
         )}
+        {activeTab === 'mensageria' &&
+          temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && (
+            <MensageriaInternaView />
+          )}
         {activeTab === 'regulacao' &&
           temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && (
             <RegulacaoView
