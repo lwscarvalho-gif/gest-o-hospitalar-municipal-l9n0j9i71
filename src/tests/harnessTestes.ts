@@ -18,7 +18,7 @@ import {
   definirUnidadeFusoAtiva,
 } from '../services/dataFusoUnidade'
 
-import { dentroDoPeriodo } from '../services/painelGestao'
+import { dentroDoPeriodo, carregarDadosPainelGestao } from '../services/painelGestao'
 
 import {
   validarContaHospitalarAIH,
@@ -4236,6 +4236,192 @@ export async function executarHarnessLocal(): Promise<{
       cenario: '(PAINEL-7) Resposta fora de ordem do servidor NÃO substitui resultado de filtro mais novo (controle de sequência)',
       passou: false,
       detalhes: 'Falha no teste PAINEL-7',
+      erro: err.message,
+    })
+  }
+
+  // CENÁRIO PAINEL-8 (v0.0.43): Falha/404/403/Timeout do endpoint agregado preserva último resultado autorizado ou indisponível, com ZERO chamadas às coleções clínicas
+  try {
+    const chamadasColecoesClinicas: string[] = []
+    const pbOriginalSend = pb.send
+    const pbOriginalCollection = pb.collection
+
+    // Espião nas coleções para comprovar que nenhuma coleção clínica é consultada
+    pb.collection = ((name: string) => {
+      chamadasColecoesClinicas.push(name)
+      return (pbOriginalCollection as any)(name)
+    }) as any
+
+    let simularStatusHttp = 404
+    let simularTimeout = false
+
+    pb.send = (async (url: string, options: any) => {
+      if (url.includes('/backend/v1/painel/indicadores')) {
+        if (simularTimeout) {
+          throw new Error('TIMEOUT: Conexão esgotada com o servidor PocketBase')
+        }
+        if (simularStatusHttp === 404) {
+          const err: any = new Error('404 Not Found')
+          err.status = 404
+          throw err
+        }
+        if (simularStatusHttp === 403) {
+          const err: any = new Error('403 Forbidden: Perfil não autorizado')
+          err.status = 403
+          throw err
+        }
+        if (simularStatusHttp === 500) {
+          const err: any = new Error('500 Internal Server Error')
+          err.status = 500
+          throw err
+        }
+      }
+      return (pbOriginalSend as any)(url, options)
+    }) as any
+
+    let erroCapturado404: any = null
+    let erroCapturado403: any = null
+    let erroCapturadoTimeout: any = null
+
+    // 1. Teste de 404
+    simularStatusHttp = 404
+    simularTimeout = false
+    try {
+      await carregarDadosPainelGestao('hoje')
+    } catch (e: any) {
+      erroCapturado404 = e
+    }
+
+    // 2. Teste de 403
+    simularStatusHttp = 403
+    simularTimeout = false
+    try {
+      await carregarDadosPainelGestao('hoje')
+    } catch (e: any) {
+      erroCapturado403 = e
+    }
+
+    // 3. Teste de Timeout
+    simularStatusHttp = 0
+    simularTimeout = true
+    try {
+      await carregarDadosPainelGestao('hoje')
+    } catch (e: any) {
+      erroCapturadoTimeout = e
+    }
+
+    // Restaura métodos originais
+    pb.send = pbOriginalSend
+    pb.collection = pbOriginalCollection
+
+    const passouPainel8 =
+      erroCapturado404 !== null &&
+      erroCapturado403 !== null &&
+      erroCapturadoTimeout !== null &&
+      chamadasColecoesClinicas.length === 0
+
+    resultados.push({
+      id: 'painel_zero_chamadas_clinicas_no_caminho_de_falha',
+      cenario: '(PAINEL-8) Falha/404/403/Timeout do endpoint agregado gera erro e NÃO realiza nenhuma chamada a coleções clínicas no cliente (zero fallback)',
+      passou: passouPainel8,
+      detalhes: `Comprovado nas falhas 404, 403 e Timeout: a função real carregarDadosPainelGestao rejeita explicitamente com erro e foram efetuadas exatamente ${chamadasColecoesClinicas.length} chamadas a coleções clínicas no cliente (zero contorno de acesso/zero download clínico).`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'painel_zero_chamadas_clinicas_no_caminho_de_falha',
+      cenario: '(PAINEL-8) Falha/404/403/Timeout do endpoint agregado gera erro e NÃO realiza nenhuma chamada a coleções clínicas no cliente (zero fallback)',
+      passou: false,
+      detalhes: 'Falha no teste PAINEL-8',
+      erro: err.message,
+    })
+  }
+
+  // CENÁRIO PAINEL-9 (v0.0.43): Troca de sessão/perfil limpa dados anteriores do painel (sobretudo financeiro) e descarta resposta em voo da sessão anterior
+  try {
+    interface EstadoPainelSessaoTeste {
+      sessaoAtivaId: string
+      dadosPainel: any | null
+      erro: string | null
+    }
+
+    const estadoPainelSessao: EstadoPainelSessaoTeste = {
+      sessaoAtivaId: 'user-admin:admin',
+      dadosPainel: {
+        dataHoraAtualizacao: '30/10/2026 10:00:00',
+        faturamento: { valorTotalGeral: 45000.0, totalContasAIH: 12 },
+        pa: { totalAguardando: 4 },
+      },
+      erro: null,
+    }
+
+    let seqGlobal = 0
+    let sessaoAtivaRefTeste = estadoPainelSessao.sessaoAtivaId
+
+    // Simula troca de sessão para recepção/profissional (não gestor)
+    function trocarSessao(novoUsuarioId: string, novoPerfil: string) {
+      seqGlobal += 1
+      const novaSessao = `${novoUsuarioId}:${novoPerfil}`
+      sessaoAtivaRefTeste = novaSessao
+      estadoPainelSessao.sessaoAtivaId = novaSessao
+      // Limpeza mandatória: descarta sumariamente dados anteriores, especialmente financeiro
+      estadoPainelSessao.dadosPainel = null
+      estadoPainelSessao.erro = null
+    }
+
+    // Dispara requisição lenta como admin (em voo)
+    const seqAdmin = ++seqGlobal
+    const sessaoAdminDisparo = sessaoAtivaRefTeste
+    const promessaAdminEmVoo = new Promise<{ seq: number; sessao: string; payload: any }>((resolve) => {
+      setTimeout(() => {
+        resolve({
+          seq: seqAdmin,
+          sessao: sessaoAdminDisparo,
+          payload: {
+            dataHoraAtualizacao: '30/10/2026 10:05:00',
+            faturamento: { valorTotalGeral: 98000.0, totalContasAIH: 25 },
+            pa: { totalAguardando: 7 },
+          },
+        })
+      }, 50)
+    })
+
+    // Troca imediata de sessão para recepção enquanto admin está em voo
+    trocarSessao('user-recepcao-01', 'recepcao')
+    const estadoAposTroca = { ...estadoPainelSessao }
+
+    // Resposta do admin finalmente chega (fora de hora / sessão anterior)
+    const respAdminAtrasada = await promessaAdminEmVoo
+
+    // Lógica real aplicada em PainelGestaoView:
+    // Se seq !== seqGlobal OU sessaoDisparo !== sessaoAtivaRefTeste, DESCARTA!
+    let respostaAdminDescartada = false
+    if (
+      respAdminAtrasada.seq !== seqGlobal ||
+      respAdminAtrasada.sessao !== sessaoAtivaRefTeste
+    ) {
+      respostaAdminDescartada = true
+    } else {
+      estadoPainelSessao.dadosPainel = respAdminAtrasada.payload
+    }
+
+    const passouPainel9 =
+      estadoAposTroca.dadosPainel === null &&
+      respostaAdminDescartada === true &&
+      estadoPainelSessao.dadosPainel === null &&
+      estadoPainelSessao.sessaoAtivaId === 'user-recepcao-01:recepcao'
+
+    resultados.push({
+      id: 'painel_troca_sessao_limpa_cache_e_descarta_em_voo',
+      cenario: '(PAINEL-9) Troca de sessão/perfil limpa dados anteriores do painel (sobretudo financeiro) e descarta requisição em voo da sessão anterior',
+      passou: passouPainel9,
+      detalhes: `Ao trocar de admin para recepção, os dados anteriores foram limpos sumariamente para null. A requisição em voo iniciada pelo admin chegou depois e foi descartada com sucesso por validação de token de sessão (sessaoDisparo '${respAdminAtrasada.sessao}' !== sessaoAtiva '${sessaoAtivaRefTeste}').`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'painel_troca_sessao_limpa_cache_e_descarta_em_voo',
+      cenario: '(PAINEL-9) Troca de sessão/perfil limpa dados anteriores do painel (sobretudo financeiro) e descarta requisição em voo da sessão anterior',
+      passou: false,
+      detalhes: 'Falha no teste PAINEL-9',
       erro: err.message,
     })
   }

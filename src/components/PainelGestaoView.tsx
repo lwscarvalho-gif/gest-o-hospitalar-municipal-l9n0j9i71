@@ -46,19 +46,32 @@ export const PainelGestaoView: React.FC<PainelGestaoViewProps> = ({ onNavegar })
   const [tempoRestante, setTempoRestante] = useState<number>(30)
   const [autoRefreshAtivo, setAutoRefreshAtivo] = useState(true)
 
-  // Controle de sequência de requisições para evitar que resposta fora de ordem substitua filtro mais novo
+  // Identificador da sessão atual: combinação única de id do usuário e papel (role)
+  const idSessaoAtual = user ? `${user.id}:${user.role}` : 'anonimo'
+
+  // Controle de sequência e sessão para evitar vazamento entre perfis ou inversão assíncrona
   const sequenciaCarregamentoRef = useRef<number>(0)
+  const sessaoAtivaRef = useRef<string>(idSessaoAtual)
 
   const isGestorOuAdmin = temPermissao(['admin', 'gestor'])
 
-  // Auditoria de acesso ao painel (apenas na montagem)
+  // Limpeza estrita e descarte de requisições em voo na troca de usuário/perfil
   useEffect(() => {
+    // Incrementa sequência para invalidar imediatamente qualquer requisição em voo da sessão anterior
+    sequenciaCarregamentoRef.current += 1
+    sessaoAtivaRef.current = idSessaoAtual
+
+    // Limpa sumariamente os dados anteriores do painel (sobretudo indicadores financeiros)
+    setDados(null)
+    setErroAtualizacao(null)
+    setLoading(true)
+
     if (user?.name) {
       registrarAcessoPainelGestao(user.name, user.role || 'desconhecido')
     }
-  }, [user?.name, user?.role])
+  }, [idSessaoAtual, user?.name, user?.role])
 
-  // Função de carregamento com tratamento de erro resiliente
+  // Função de carregamento com tratamento de erro resiliente e isolamento por sessão
   const carregar = useCallback(
     async (silencioso = false) => {
       if (silencioso) {
@@ -68,16 +81,28 @@ export const PainelGestaoView: React.FC<PainelGestaoViewProps> = ({ onNavegar })
       }
 
       const seqMomento = ++sequenciaCarregamentoRef.current
+      const sessaoDesteDisparo = sessaoAtivaRef.current
+
       try {
         const resultado = await carregarDadosPainelGestao(periodo)
-        // Controle de sequência: se outra requisição mais nova foi iniciada (ex: troca de filtro de período), descarta resposta fora de ordem
-        if (seqMomento !== sequenciaCarregamentoRef.current) {
+
+        // Controle de sequência e sessão:
+        // 1. Se a sessão/perfil mudou durante a requisição em voo, descarta sumariamente
+        // 2. Se outra requisição mais nova foi disparada (troca de período ou auto-refresh), descarta
+        if (
+          seqMomento !== sequenciaCarregamentoRef.current ||
+          sessaoDesteDisparo !== sessaoAtivaRef.current
+        ) {
           return
         }
+
         setDados(resultado)
         setErroAtualizacao(null)
       } catch (err: any) {
-        if (seqMomento !== sequenciaCarregamentoRef.current) {
+        if (
+          seqMomento !== sequenciaCarregamentoRef.current ||
+          sessaoDesteDisparo !== sessaoAtivaRef.current
+        ) {
           return
         }
         console.error('Falha ao atualizar painel de gestão:', err)
@@ -94,18 +119,23 @@ export const PainelGestaoView: React.FC<PainelGestaoViewProps> = ({ onNavegar })
           })
         }
       } finally {
-        setLoading(false)
-        setAtualizandoSilencioso(false)
-        setTempoRestante(intervaloSegundos)
+        if (
+          seqMomento === sequenciaCarregamentoRef.current &&
+          sessaoDesteDisparo === sessaoAtivaRef.current
+        ) {
+          setLoading(false)
+          setAtualizandoSilencioso(false)
+          setTempoRestante(intervaloSegundos)
+        }
       }
     },
     [periodo, intervaloSegundos, toast],
   )
 
-  // Carga inicial e quando muda o período
+  // Carga inicial e quando muda o período ou a sessão
   useEffect(() => {
     carregar(false)
-  }, [carregar])
+  }, [carregar, idSessaoAtual])
 
   // Temporizador de atualização automática em intervalos de 30-60s
   useEffect(() => {
@@ -278,33 +308,66 @@ export const PainelGestaoView: React.FC<PainelGestaoViewProps> = ({ onNavegar })
         </div>
       </div>
 
-      {/* BANNER RESILIENTE DE ERRO (PRESERVA DADOS ÍNTEGROS, SINALIZA ESTADO DESATUALIZADO SEM SUCESSO FALSO) */}
+      {/* BANNER RESILIENTE DE ERRO / ESTADO DESATUALIZADO OU INDISPONÍVEL */}
       {erroAtualizacao && (
-        <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-3 text-amber-900 text-xs shadow-sm">
-          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+        <div
+          className={`p-3.5 rounded-xl flex items-start gap-3 text-xs shadow-sm border ${
+            dados
+              ? 'bg-amber-50 border-amber-300 text-amber-900'
+              : 'bg-rose-50 border-rose-300 text-rose-900'
+          }`}
+        >
+          <AlertCircle
+            className={`w-5 h-5 flex-shrink-0 mt-0.5 ${dados ? 'text-amber-600' : 'text-rose-600'}`}
+          />
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <strong className="text-amber-950">Aviso: Falha parcial de atualização</strong>
+              <strong className={dados ? 'text-amber-950' : 'text-rose-950'}>
+                {dados
+                  ? 'Aviso: Falha parcial de atualização do painel'
+                  : 'Indicadores Indisponíveis'}
+              </strong>
               <Badge
                 variant="outline"
-                className="text-[10px] border-amber-400 text-amber-800 bg-amber-100/60"
+                className={`text-[10px] ${
+                  dados
+                    ? 'border-amber-400 text-amber-800 bg-amber-100/60'
+                    : 'border-rose-400 text-rose-800 bg-rose-100/60'
+                }`}
               >
-                Estado Desatualizado
+                {dados ? 'Estado Desatualizado' : 'Sem Dados Prévios'}
               </Badge>
             </div>
-            <p className="text-amber-900 mt-1">{erroAtualizacao}</p>
-            <p className="text-[11px] text-amber-800 mt-1">
-              Os dados válidos anteriores <strong>NÃO foram apagados</strong> (última fotografia
-              válida mantida às <strong>{dados?.dataHoraAtualizacao || 'indisponível'}</strong>).
-              Nenhum sucesso falso é exibido. Nova tentativa automática ocorrerá no ciclo
-              programado.
+            <p className={dados ? 'text-amber-900 mt-1' : 'text-rose-900 mt-1'}>
+              {erroAtualizacao}
+            </p>
+            <p className={`text-[11px] mt-1 ${dados ? 'text-amber-800' : 'text-rose-800'}`}>
+              {dados ? (
+                <>
+                  Os dados autorizados anteriores <strong>foram preservados</strong> (última
+                  fotografia válida mantida às{' '}
+                  <strong>{dados.dataHoraAtualizacao || 'indisponível'}</strong>). Nenhum fallback
+                  baixa registros clínicos no navegador e nenhum falso sucesso é exibido.
+                </>
+              ) : (
+                <>
+                  Nenhum indicador prévio autorizado está em cache para esta sessão. Conforme a
+                  política de privacidade da LGPD, o painel{' '}
+                  <strong>não baixa dados clínicos detalhados</strong> como contorno de acesso.
+                  Aguardando restabelecimento do endpoint agregado.
+                </>
+              )}
             </p>
           </div>
           <Button
             size="sm"
             variant="outline"
             onClick={() => carregar(false)}
-            className="h-7 text-xs border-amber-400 bg-white hover:bg-amber-100 text-amber-900"
+            className={`h-7 text-xs bg-white ${
+              dados
+                ? 'border-amber-400 hover:bg-amber-100 text-amber-900'
+                : 'border-rose-400 hover:bg-rose-100 text-rose-900'
+            }`}
           >
             Tentar Novamente
           </Button>
@@ -317,8 +380,28 @@ export const PainelGestaoView: React.FC<PainelGestaoViewProps> = ({ onNavegar })
           <RefreshCw className="w-8 h-8 animate-spin mx-auto text-blue-600" />
           <p className="text-sm font-medium">Carregando indicadores em tempo real...</p>
           <p className="text-xs text-slate-400">
-            Consultando PA, mapa de leitos, exames, farmácia e faturamento SUS
+            Consultando agregação no servidor (PocketBase pb_hook)
           </p>
+        </div>
+      ) : !dados && erroAtualizacao ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-500 space-y-3">
+          <AlertCircle className="w-10 h-10 mx-auto text-slate-400" />
+          <p className="text-base font-semibold text-slate-800">
+            Painel temporariamente indisponível
+          </p>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            Não foi possível obter os indicadores agregados do servidor e não há resultado
+            autorizado prévio para esta sessão.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => carregar(false)}
+            className="text-xs mt-2"
+          >
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+            Tentar Novamente
+          </Button>
         </div>
       ) : dados ? (
         <SecoesPainelGestao
