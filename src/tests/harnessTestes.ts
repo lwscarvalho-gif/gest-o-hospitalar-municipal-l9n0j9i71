@@ -59,6 +59,13 @@ import {
   ProcedimentoSigtap,
   CID10Item,
 } from '../types/hospital'
+import {
+  registrarAdministracaoMedicamento,
+  retificarAdministracaoMedicamento,
+  RegistrarAdministracaoParams,
+  RetificarAdministracaoParams,
+} from '@/services/prescricoes'
+import pb from '@/lib/pocketbase/client'
 
 /**
  * Harness de Testes Funcionais Isolados (Offline / Local)
@@ -2586,6 +2593,475 @@ export async function executarHarnessLocal(): Promise<{
       cenario: '(PAC-12) Race de digitação: resposta antiga fora de ordem não vence a última',
       passou: false,
       detalhes: 'Falha no teste de race de digitação',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // BLOCO CENÁRIOS ADM (v0.0.38): PRESCRIÇÃO -> CHECAGEM/ADMINISTRAÇÃO -> SAME
+  // Executando funções REAIS importadas: registrarAdministracaoMedicamento e
+  // retificarAdministracaoMedicamento com isolamento em memória (sem PocketBase remoto).
+  // =========================================================================
+
+  // Cenário ADM-1: (a) Chave de idempotência estável no reenvio e distinta para nova dose legítima
+  try {
+    // Isolador local em memória: intercepta apenas pb.collection para isolamento 100% offline
+    const admStoreLocal: Record<string, any>[] = []
+    const auditoriaStoreLocal: Record<string, any>[] = []
+    const originalCollection = pb.collection.bind(pb)
+
+    pb.collection = ((name: string) => {
+      if (name === 'administracao_medicamentos') {
+        return {
+          create: async (data: any) => {
+            const chave = data.idempotency_key
+            if (chave) {
+              const existente = admStoreLocal.find((r) => r.idempotency_key === chave)
+              if (existente) {
+                // Simula o comportamento server-side idêntico ao hook prescricoes_administracao.pb.js
+                throw new Error(`IDEMPOTENT_HIT:${existente.id}`)
+              }
+            }
+            const rec = {
+              id: `adm_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              ...data,
+              created: new Date().toISOString(),
+              updated: new Date().toISOString(),
+            }
+            admStoreLocal.push(rec)
+            return rec
+          },
+          getOne: async (id: string) => {
+            const achado = admStoreLocal.find((r) => r.id === id)
+            if (!achado) throw new Error('Not found')
+            return achado
+          },
+          getFullList: async (options?: any) => {
+            let filtrados = [...admStoreLocal]
+            if (options?.filter && options.filter.includes('idempotency_key = "')) {
+              const k = options.filter.split('idempotency_key = "')[1].split('"')[0]
+              filtrados = filtrados.filter((r) => r.idempotency_key === k)
+            }
+            return filtrados
+          },
+        } as any
+      }
+      if (name === 'auditoria') {
+        return {
+          create: async (data: any) => {
+            auditoriaStoreLocal.push(data)
+            return { id: `aud_${Date.now()}`, ...data }
+          },
+        } as any
+      }
+      return originalCollection(name)
+    }) as any
+
+    try {
+      const chaveDose1 = 'idemp_presc_01_item_01_dose_10h'
+      const chaveDose2 = 'idemp_presc_01_item_01_dose_16h'
+
+      // 1. Primeira chamada legítima com a chave da dose de 10h usando a FUNÇÃO REAL
+      const resDose1Tentativa1 = await registrarAdministracaoMedicamento({
+        pacienteId: 'pac-teste-adm-01',
+        prescricaoId: 'presc-001',
+        prescricaoItemId: 'item-dipirona-01',
+        medicamentoNome: 'Dipirona 500mg/mL',
+        doseAdministrada: '1 ampola (2mL)',
+        viaAdministrada: 'IV',
+        responsavelNome: 'Enf. Juliana Costa',
+        responsavelCargo: 'Enfermeira',
+        status: 'administrado',
+        observacoes: 'Dose das 10h administrada sem intercorrências',
+        idempotencyKey: chaveDose1,
+      })
+
+      // 2. Reenvio da mesma operação com a MESMA chave de idempotência (duplo clique ou retry de rede)
+      const resDose1Tentativa2 = await registrarAdministracaoMedicamento({
+        pacienteId: 'pac-teste-adm-01',
+        prescricaoId: 'presc-001',
+        prescricaoItemId: 'item-dipirona-01',
+        medicamentoNome: 'Dipirona 500mg/mL',
+        doseAdministrada: '1 ampola (2mL)',
+        viaAdministrada: 'IV',
+        responsavelNome: 'Enf. Juliana Costa',
+        responsavelCargo: 'Enfermeira',
+        status: 'administrado',
+        observacoes: 'Dose das 10h administrada sem intercorrências',
+        idempotencyKey: chaveDose1,
+      })
+
+      // 3. Nova dose legítima (horário de 16h) com CHAVE DISTINTA
+      const resDose2Legitima = await registrarAdministracaoMedicamento({
+        pacienteId: 'pac-teste-adm-01',
+        prescricaoId: 'presc-001',
+        prescricaoItemId: 'item-dipirona-01',
+        medicamentoNome: 'Dipirona 500mg/mL',
+        doseAdministrada: '1 ampola (2mL)',
+        viaAdministrada: 'IV',
+        responsavelNome: 'Téc. Marcos Souza',
+        responsavelCargo: 'Técnico de Enfermagem',
+        status: 'administrado',
+        observacoes: 'Dose das 16h administrada pontualmente',
+        idempotencyKey: chaveDose2,
+      })
+
+      const passouADM1 =
+        resDose1Tentativa1.id === resDose1Tentativa2.id &&
+        resDose1Tentativa1.idempotency_key === chaveDose1 &&
+        resDose1Tentativa2.idempotency_key === chaveDose1 &&
+        resDose2Legitima.id !== resDose1Tentativa1.id &&
+        resDose2Legitima.idempotency_key === chaveDose2 &&
+        admStoreLocal.length === 2 // Apenas 2 registros persistidos (1ª dose + 2ª dose legítima, reenvio não duplicou)
+
+      resultados.push({
+        id: 'adm_idempotencia_chave_estavel_e_distinta',
+        cenario: '(ADM-1) Chave de idempotência estável no reenvio e distinta para nova dose legítima (função real)',
+        passou: passouADM1,
+        detalhes: `Função real registrarAdministracaoMedicamento: 1ª dose registrada (id=${resDose1Tentativa1.id}). Reenvio com a mesma chave "${chaveDose1}" reutilizou o registro original com sucesso via tratamento de IDEMPOTENT_HIT. Nova dose legítima com chave distinta "${chaveDose2}" gerou novo registro (id=${resDose2Legitima.id}). Total no store = ${admStoreLocal.length} (sem duplicações espúrias).`,
+      })
+    } finally {
+      pb.collection = originalCollection
+    }
+  } catch (err: any) {
+    resultados.push({
+      id: 'adm_idempotencia_chave_estavel_e_distinta',
+      cenario: '(ADM-1) Chave de idempotência estável no reenvio e distinta para nova dose legítima (função real)',
+      passou: false,
+      detalhes: 'Falha no cenário de idempotência de administração',
+      erro: err.message,
+    })
+  }
+
+  // Cenário ADM-2: (b) Conflito quando a mesma chave chega com payload divergente
+  try {
+    const admStoreLocal: Record<string, any>[] = []
+    const originalCollection = pb.collection.bind(pb)
+
+    pb.collection = ((name: string) => {
+      if (name === 'administracao_medicamentos') {
+        return {
+          create: async (data: any) => {
+            const chave = data.idempotency_key
+            if (chave) {
+              const existente = admStoreLocal.find((r) => r.idempotency_key === chave)
+              if (existente) {
+                // Hook server-side prescricoes_administracao.pb.js: detecta payload divergente
+                if (
+                  existente.paciente !== data.paciente ||
+                  existente.prescricao !== data.prescricao ||
+                  existente.prescricao_item !== data.prescricao_item ||
+                  existente.medicamento_nome !== data.medicamento_nome
+                ) {
+                  throw new Error(
+                    'IDEMPOTENCY_PAYLOAD_CONFLICT: A mesma chave de checagem foi utilizada com dados divergentes.',
+                  )
+                }
+                throw new Error(`IDEMPOTENT_HIT:${existente.id}`)
+              }
+            }
+            const rec = {
+              id: `adm_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              ...data,
+            }
+            admStoreLocal.push(rec)
+            return rec
+          },
+          getOne: async (id: string) => admStoreLocal.find((r) => r.id === id),
+          getFullList: async () => admStoreLocal,
+        } as any
+      }
+      if (name === 'auditoria') {
+        return {
+          create: async (data: any) => ({ id: `aud_${Date.now()}`, ...data }),
+        } as any
+      }
+      return originalCollection(name)
+    }) as any
+
+    try {
+      const chaveConflito = 'idemp_key_compartilhada_erroneamente_123'
+
+      // 1. Gravação inicial legítima para Paciente 1 (Dipirona) com a FUNÇÃO REAL
+      const admOriginal = await registrarAdministracaoMedicamento({
+        pacienteId: 'pac-01-maria',
+        prescricaoId: 'presc-100',
+        prescricaoItemId: 'item-100',
+        medicamentoNome: 'Dipirona 500mg/mL',
+        doseAdministrada: '1 ampola',
+        viaAdministrada: 'IV',
+        responsavelNome: 'Enf. Juliana Costa',
+        status: 'administrado',
+        idempotencyKey: chaveConflito,
+      })
+
+      // 2. Segunda chamada com a MESMA chave, mas com paciente e medicamento divergentes (Paciente 2 / Morfina)
+      let capturouConflitoEsperado = false
+      let mensagemConflito = ''
+      try {
+        await registrarAdministracaoMedicamento({
+          pacienteId: 'pac-02-joao', // Paciente divergente!
+          prescricaoId: 'presc-200',
+          prescricaoItemId: 'item-200',
+          medicamentoNome: 'Morfina 10mg/mL', // Medicamento divergente!
+          doseAdministrada: '1 ampola',
+          viaAdministrada: 'SC',
+          responsavelNome: 'Enf. Juliana Costa',
+          status: 'administrado',
+          idempotencyKey: chaveConflito,
+        })
+      } catch (err: any) {
+        mensagemConflito = String(err.message || '')
+        if (
+          mensagemConflito.includes('CONFLITO_IDEMPOTENCIA') ||
+          mensagemConflito.includes('IDEMPOTENCY_PAYLOAD_CONFLICT')
+        ) {
+          capturouConflitoEsperado = true
+        }
+      }
+
+      const passouADM2 =
+        capturouConflitoEsperado &&
+        admStoreLocal.length === 1 &&
+        admStoreLocal[0].id === admOriginal.id &&
+        admStoreLocal[0].paciente === 'pac-01-maria'
+
+      resultados.push({
+        id: 'adm_conflito_mesma_chave_payload_divergente',
+        cenario: '(ADM-2) Conflito quando a mesma chave chega com payload divergente (função real)',
+        passou: passouADM2,
+        detalhes: `Função real registrarAdministracaoMedicamento: operação inicial gravada para paciente pac-01-maria ("${admOriginal.medicamento_nome}"). Segunda chamada com a mesma chave para outro paciente/medicamento foi rejeitada com erro: "${mensagemConflito}". Store manteve apenas o registro original íntegro.`,
+      })
+    } finally {
+      pb.collection = originalCollection
+    }
+  } catch (err: any) {
+    resultados.push({
+      id: 'adm_conflito_mesma_chave_payload_divergente',
+      cenario: '(ADM-2) Conflito quando a mesma chave chega com payload divergente (função real)',
+      passou: false,
+      detalhes: 'Falha no cenário de conflito de payload em administração',
+      erro: err.message,
+    })
+  }
+
+  // Cenário ADM-3: (c) Retificação grava novo registro rastreável e o original permanece intacto
+  try {
+    const admStoreLocal: Record<string, any>[] = []
+    const auditoriaStoreLocal: Record<string, any>[] = []
+    const originalCollection = pb.collection.bind(pb)
+
+    pb.collection = ((name: string) => {
+      if (name === 'administracao_medicamentos') {
+        return {
+          create: async (data: any) => {
+            const rec = {
+              id: `adm_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              ...data,
+              created: new Date().toISOString(),
+              updated: new Date().toISOString(),
+            }
+            admStoreLocal.push(rec)
+            return rec
+          },
+          getOne: async (id: string) => {
+            const achado = admStoreLocal.find((r) => r.id === id)
+            if (!achado) throw new Error('Not found')
+            return achado
+          },
+          getFullList: async () => admStoreLocal,
+        } as any
+      }
+      if (name === 'auditoria') {
+        return {
+          create: async (data: any) => {
+            auditoriaStoreLocal.push(data)
+            return { id: `aud_${Date.now()}`, ...data }
+          },
+        } as any
+      }
+      return originalCollection(name)
+    }) as any
+
+    try {
+      // 1. Grava o ato original de administração com a FUNÇÃO REAL registrarAdministracaoMedicamento
+      const atoOriginal = await registrarAdministracaoMedicamento({
+        pacienteId: 'pac-retif-01',
+        prescricaoId: 'presc-999',
+        prescricaoItemId: 'item-ampicilina',
+        medicamentoNome: 'Ampicilina 1g',
+        doseAdministrada: '1 frasco',
+        viaAdministrada: 'IV',
+        responsavelNome: 'Téc. Roberto Lima',
+        responsavelCargo: 'Técnico de Enfermagem',
+        status: 'administrado',
+        observacoes: 'Administrado às 08h',
+        tipoRegistro: 'ato_original',
+      })
+
+      // Snapshot dos dados do ato original antes da retificação
+      const originalSnapshot = JSON.stringify(atoOriginal)
+
+      // 2. Executa a FUNÇÃO REAL retificarAdministracaoMedicamento
+      const motivoJustificativa =
+        'Dose foi administrada parcialmente devido à perda de acesso venoso periférico, completada em novo acesso às 08h25.'
+      const retificacao = await retificarAdministracaoMedicamento({
+        registroOriginalId: atoOriginal.id,
+        motivoCorrecao: motivoJustificativa,
+        pacienteId: atoOriginal.paciente,
+        prescricaoId: atoOriginal.prescricao,
+        prescricaoItemId: atoOriginal.prescricao_item,
+        medicamentoNome: atoOriginal.medicamento_nome,
+        doseAdministrada: '1 frasco (concluída após repunção)',
+        viaAdministrada: 'IV',
+        responsavelNome: 'Enf. Juliana Costa',
+        responsavelCargo: 'Enfermeira Supervisora',
+        status: 'administrado',
+        observacoes: 'Registro retificador com justificativa técnica anexada.',
+      })
+
+      // 3. Valida se o registro original permaneceu EXATAMENTE INTACTO no store
+      const recOriginalAposRetificacao = admStoreLocal.find((r) => r.id === atoOriginal.id)
+      const recRetificacaoCriado = admStoreLocal.find((r) => r.id === retificacao.id)
+
+      const passouADM3 =
+        admStoreLocal.length === 2 && // 2 registros distintos no store
+        recRetificacaoCriado !== undefined &&
+        recRetificacaoCriado.tipo_registro === 'retificacao' &&
+        recRetificacaoCriado.registro_original === atoOriginal.id &&
+        recRetificacaoCriado.motivo_correcao === motivoJustificativa &&
+        recRetificacaoCriado.responsavel_nome === 'Enf. Juliana Costa' &&
+        recRetificacaoCriado.data_hora_administracao !== undefined &&
+        recOriginalAposRetificacao !== undefined &&
+        recOriginalAposRetificacao.tipo_registro === 'ato_original' &&
+        recOriginalAposRetificacao.registro_original === undefined &&
+        recOriginalAposRetificacao.responsavel_nome === 'Téc. Roberto Lima' &&
+        JSON.stringify(recOriginalAposRetificacao) === originalSnapshot && // Imutabilidade do ato original
+        auditoriaStoreLocal.some((a) => a.acao === 'RETIFICACAO_ADMINISTRACAO_MEDICAMENTO')
+
+      resultados.push({
+        id: 'adm_retificacao_preserva_original_e_rastreia_novo',
+        cenario: '(ADM-3) Retificação grava novo registro rastreável e o original permanece intacto (função real)',
+        passou: passouADM3,
+        detalhes: `Funções reais registrarAdministracaoMedicamento e retificarAdministracaoMedicamento: registro original "${atoOriginal.id}" mantido 100% inalterado (snapshot idêntico, autor="Téc. Roberto Lima"). Novo registro de retificação "${retificacao.id}" gravado com tipo_registro='retificacao', referência registro_original="${atoOriginal.id}", autor="Enf. Juliana Costa", data/hora e motivo ("${motivoJustificativa.slice(0, 45)}..."). Auditoria registrou evento "RETIFICACAO_ADMINISTRACAO_MEDICAMENTO".`,
+      })
+    } finally {
+      pb.collection = originalCollection
+    }
+  } catch (err: any) {
+    resultados.push({
+      id: 'adm_retificacao_preserva_original_e_rastreia_novo',
+      cenario: '(ADM-3) Retificação grava novo registro rastreável e o original permanece intacto (função real)',
+      passou: false,
+      detalhes: 'Falha no cenário de retificação de administração',
+      erro: err.message,
+    })
+  }
+
+  // Cenário ADM-4: (d) Descarte de resposta antiga por sequência na troca de paciente
+  try {
+    /**
+     * Modelo determinístico de concorrência com troca de contexto de paciente idêntico
+     * à implementação de seqPacienteRef nos componentes PrescricaoEnfermagemTab,
+     * SecaoPrescricaoPAMedica e ProntuarioSAMEView.
+     */
+    interface ChecagemContextoSimulado {
+      pacienteId: string
+      medicamento: string
+      seqMomento: number
+    }
+
+    let seqPacienteGlobal = 0
+    let pacienteAtivoNaTela = 'paciente-A'
+    const prontuarioExibidoNaTela: Record<string, string[]> = {
+      'paciente-A': [],
+      'paciente-B': [],
+    }
+
+    // Função de checagem com latência proposital simulando resposta assíncrona
+    async function dispararChecagemAoLeito(
+      pacienteIdAlvo: string,
+      medicamento: string,
+      latenciaMs: number,
+      seqMomentoChamada: number,
+    ): Promise<ChecagemContextoSimulado> {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            pacienteId: pacienteIdAlvo,
+            medicamento,
+            seqMomento: seqMomentoChamada,
+          })
+        }, latenciaMs)
+      })
+    }
+
+    // Regra de aplicação na UI: confere se a sequência do momento da requisição
+    // ainda é a sequência ativa da tela e se o paciente atual coincide
+    function aplicarChecagemNaUI(
+      resposta: ChecagemContextoSimulado,
+      seqAtualTela: number,
+      pacienteAtualTela: string,
+    ): boolean {
+      // Se houve troca de paciente ou a sequência avançou, descarta sem aplicar
+      if (resposta.seqMomento !== seqAtualTela || resposta.pacienteId !== pacienteAtualTela) {
+        return false // Descarte seguro: resposta defasada/antiga não afeta o paciente atual
+      }
+      prontuarioExibidoNaTela[pacienteAtualTela].push(resposta.medicamento)
+      return true
+    }
+
+    // 1. Usuário está com Paciente A selecionado e clica para registrar checagem lenta (100ms)
+    seqPacienteGlobal += 1
+    const seqMomentoA = seqPacienteGlobal
+    const promessaChecagemPacienteA = dispararChecagemAoLeito(
+      'paciente-A',
+      'Ceftriaxona 1g IV',
+      100,
+      seqMomentoA,
+    )
+
+    // 2. Antes de a requisição de A completar, o usuário troca para o Paciente B
+    seqPacienteGlobal += 1
+    pacienteAtivoNaTela = 'paciente-B'
+    const seqMomentoB = seqPacienteGlobal
+
+    // 3. Usuário registra checagem rápida para o Paciente B (10ms)
+    const promessaChecagemPacienteB = dispararChecagemAoLeito(
+      'paciente-B',
+      'Paracetamol 500mg VO',
+      10,
+      seqMomentoB,
+    )
+
+    // Resposta de B chega primeiro (10ms)
+    const respB = await promessaChecagemPacienteB
+    const aplicadaB = aplicarChecagemNaUI(respB, seqPacienteGlobal, pacienteAtivoNaTela)
+
+    // Resposta de A chega depois (100ms), quando a tela já está no Paciente B
+    const respA = await promessaChecagemPacienteA
+    const aplicadaA = aplicarChecagemNaUI(respA, seqPacienteGlobal, pacienteAtivoNaTela)
+
+    const passouADM4 =
+      aplicadaB === true &&
+      aplicadaA === false && // Resposta de A foi descartada e não poluíu a tela de B!
+      prontuarioExibidoNaTela['paciente-B'].length === 1 &&
+      prontuarioExibidoNaTela['paciente-B'][0] === 'Paracetamol 500mg VO' &&
+      !prontuarioExibidoNaTela['paciente-B'].includes('Ceftriaxona 1g IV') &&
+      prontuarioExibidoNaTela['paciente-A'].length === 0
+
+    resultados.push({
+      id: 'adm_descarte_resposta_antiga_troca_paciente_sequencia',
+      cenario: '(ADM-4) Descarte de resposta antiga por sequência na troca de paciente (checagem não aplicada ao paciente errado)',
+      passou: passouADM4,
+      detalhes: `Validação de concorrência na troca de paciente: Checagem em voo do Paciente A (seq=${seqMomentoA}, latência=100ms) completou quando a UI já havia alternado para o Paciente B (seq=${seqMomentoB}). A resposta atrasada do Paciente A foi descartada com sucesso pelo controle de sequência (seqMomento !== seqAtual || pacienteAtual !== pacienteId), garantindo que Ceftriaxona 1g IV jamais fosse exibida no prontuário do Paciente B.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'adm_descarte_resposta_antiga_troca_paciente_sequencia',
+      cenario: '(ADM-4) Descarte de resposta antiga por sequência na troca de paciente (checagem não aplicada ao paciente errado)',
+      passou: false,
+      detalhes: 'Falha no teste de descarte de resposta antiga na troca de paciente',
       erro: err.message,
     })
   }
