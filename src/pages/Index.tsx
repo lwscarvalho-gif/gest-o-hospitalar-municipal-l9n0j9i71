@@ -25,6 +25,7 @@ import { RegulacaoView } from '@/components/RegulacaoView'
 import { MensageriaInternaView } from '@/components/MensageriaInternaView'
 import { ApacView } from '@/components/ApacView'
 import { TransporteView } from '@/components/TransporteView'
+import { TfdView } from '@/components/TfdView'
 import { verificarInvariantesFuncionais } from '@/tests'
 import { Loader2 } from 'lucide-react'
 
@@ -104,6 +105,15 @@ const Index: React.FC = () => {
         )}
         {activeTab === 'transporte' &&
           temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && <TransporteView />}
+        {activeTab === 'tfd' && temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && (
+          <TfdView
+            onNavegarTransporte={() => setActiveTab('transporte')}
+            onNavegarSAME={(pacienteId) => {
+              if (pacienteId) setFocoPacienteId(pacienteId)
+              setActiveTab('prontuario_same')
+            }}
+          />
+        )}
         {activeTab === 'mensageria' &&
           temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && (
             <MensageriaInternaView />

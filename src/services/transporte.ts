@@ -518,6 +518,7 @@ export async function programarViagem(params: CriarViagemParams): Promise<Transp
     dotacao_orcamentaria: params.dotacao_orcamentaria?.trim() || '',
     recurso_financeiro: params.recurso_financeiro?.trim() || '',
     observacoes: params.observacoes || '',
+    tfd_processo: params.tfd_processo || null,
   })
 
   await registrarAuditoria({

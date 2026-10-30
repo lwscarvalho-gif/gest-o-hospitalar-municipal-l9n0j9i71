@@ -284,6 +284,9 @@ routerAdd('GET', '/backend/v1/tfd/processos', (c) => {
   var page = Math.max(1, parseInt(query.page, 10) || 1)
   var perPage = Math.min(100, Math.max(1, parseInt(query.perPage, 10) || 20))
 
+  var dataInicioFiltro = sanitizar(query.data_inicio)
+  var dataFimFiltro = sanitizar(query.data_fim)
+
   var filterParts = []
   var filterParams = {}
 
@@ -302,6 +305,16 @@ routerAdd('GET', '/backend/v1/tfd/processos', (c) => {
       '(numero_processo ~ {:busca} || tratamento_solicitado ~ {:busca} || municipio_destino ~ {:busca})',
     )
     filterParams['busca'] = busca
+  }
+
+  if (dataInicioFiltro) {
+    filterParts.push('data_abertura >= {:dtIni}')
+    filterParams['dtIni'] = dataInicioFiltro
+  }
+
+  if (dataFimFiltro) {
+    filterParts.push('data_abertura <= {:dtFim}')
+    filterParams['dtFim'] = dataFimFiltro
   }
 
   var filterStr = filterParts.join(' && ')

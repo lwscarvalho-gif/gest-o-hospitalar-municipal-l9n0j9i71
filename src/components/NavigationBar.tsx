@@ -35,6 +35,7 @@ export type ActiveTab =
   | 'dashboard'
   | 'pronto_atendimento'
   | 'transporte'
+  | 'tfd'
   | 'mensageria'
   | 'regulacao'
   | 'apac'
@@ -84,6 +85,12 @@ const NAV_ITEMS: NavItem[] = [
   {
     id: 'transporte',
     label: 'Transporte Sanitário',
+    icon: Bus,
+    allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
+  },
+  {
+    id: 'tfd',
+    label: 'Processos TFD',
     icon: Bus,
     allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
   },

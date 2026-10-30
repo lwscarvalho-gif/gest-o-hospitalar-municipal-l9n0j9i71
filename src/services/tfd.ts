@@ -160,6 +160,8 @@ export async function listarProcessosTfd(
   if (filtros.status && filtros.status !== 'todos') queryParams.set('status', filtros.status)
   if (filtros.paciente) queryParams.set('paciente', filtros.paciente)
   if (filtros.busca) queryParams.set('busca', filtros.busca)
+  if (filtros.dataInicio) queryParams.set('data_inicio', filtros.dataInicio)
+  if (filtros.dataFim) queryParams.set('data_fim', filtros.dataFim)
   if (filtros.page) queryParams.set('page', String(filtros.page))
   if (filtros.perPage) queryParams.set('perPage', String(filtros.perPage))
 
@@ -327,4 +329,90 @@ export async function listarHistoricoEstadosTfd(processoId: string): Promise<Tfd
     expand: 'usuario_autor_id',
   })
   return records
+}
+
+/**
+ * Consulta de viagens vinculadas a um processo específico de TFD
+ */
+export async function listarViagensDoProcessoTfd(processoId: string): Promise<any[]> {
+  try {
+    const records = await pb.collection('transporte_viagens').getFullList({
+      filter: pb.filter('tfd_processo = {:id}', { id: processoId }),
+      sort: '-data_saida',
+      expand: 'motorista,veiculo,rota,destino',
+    })
+    return records
+  } catch (err) {
+    console.warn(`Erro ao listar viagens do processo TFD ${processoId}:`, err)
+    return []
+  }
+}
+
+/**
+ * Totais e contagens agregadas internas por localidade/município de destino
+ * Sem mapas, sem georreferenciamento, sem dados pessoais desnecessários
+ */
+export interface AgregadoLocalidadeTfd {
+  municipio: string
+  totalProcessos: number
+  totalAutorizados: number
+  totalEnviadosEstado: number
+  totalInconclusos: number
+  totalViagensVinculadas: number
+}
+
+export async function obterTotaisAgregadosPorLocalidade(): Promise<AgregadoLocalidadeTfd[]> {
+  try {
+    const [processosRes, viagensRes] = await Promise.all([
+      pb.collection('tfd_processos').getFullList<TfdProcesso>({
+        fields: 'id,municipio_destino,status',
+      }),
+      pb.collection('transporte_viagens').getFullList({
+        fields: 'id,cidade_destino,tfd_processo,status',
+        filter: 'status != "cancelada"',
+      }),
+    ])
+
+    const mapa = new Map<string, AgregadoLocalidadeTfd>()
+
+    for (const proc of processosRes) {
+      const muni = proc.municipio_destino?.trim() || 'Município não informado'
+      if (!mapa.has(muni)) {
+        mapa.set(muni, {
+          municipio: muni,
+          totalProcessos: 0,
+          totalAutorizados: 0,
+          totalEnviadosEstado: 0,
+          totalInconclusos: 0,
+          totalViagensVinculadas: 0,
+        })
+      }
+      const item = mapa.get(muni)!
+      item.totalProcessos++
+      if (proc.status === 'autorizado') item.totalAutorizados++
+      else if (proc.status === 'enviado_para_estado') item.totalEnviadosEstado++
+      else if (proc.status === 'inconcluso') item.totalInconclusos++
+    }
+
+    for (const viagem of viagensRes) {
+      const muni = (viagem as any).cidade_destino?.trim() || 'Município não informado'
+      if (!mapa.has(muni)) {
+        mapa.set(muni, {
+          municipio: muni,
+          totalProcessos: 0,
+          totalAutorizados: 0,
+          totalEnviadosEstado: 0,
+          totalInconclusos: 0,
+          totalViagensVinculadas: 0,
+        })
+      }
+      const item = mapa.get(muni)!
+      item.totalViagensVinculadas++
+    }
+
+    return Array.from(mapa.values()).sort((a, b) => b.totalProcessos - a.totalProcessos)
+  } catch (err) {
+    console.warn('Erro ao obter totais agregados por localidade:', err)
+    return []
+  }
 }

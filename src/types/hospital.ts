@@ -221,6 +221,8 @@ export interface ListarProcessosTfdFiltros {
   paciente?: string
   status?: StatusProcessoTFD | 'todos'
   busca?: string
+  dataInicio?: string
+  dataFim?: string
   page?: number
   perPage?: number
 }
@@ -332,6 +334,7 @@ export interface TransporteViagem {
   cancelado_por_id?: string
   motivo_cancelamento?: string
   data_cancelamento?: string
+  tfd_processo?: string
   expand?: {
     motorista?: TransporteMotorista
     veiculo?: TransporteVeiculo
@@ -339,6 +342,7 @@ export interface TransporteViagem {
     destino?: TransporteDestino
     usuario_autor_id?: AppUser
     cancelado_por_id?: AppUser
+    tfd_processo?: TfdProcesso
   }
   created: string
   updated: string
@@ -454,6 +458,7 @@ export interface CriarViagemParams {
   dotacao_orcamentaria?: string
   recurso_financeiro?: string
   observacoes?: string
+  tfd_processo?: string
 }
 
 export interface RegistrarRetornoViagemKmParams {
