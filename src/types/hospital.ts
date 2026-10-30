@@ -170,6 +170,8 @@ export type TipoEventoProntuario =
   | 'cirurgia_ato_operatorio'
   | 'cirurgia_recuperacao_srpa'
   | 'cirurgia_cancelada'
+  | 'faturamento_conta_hospitalar'
+  | 'faturamento_producao_bpa'
 
 export interface EventoProntuarioUnificado {
   id: string
@@ -586,6 +588,147 @@ export type StatusPA =
   | 'finalizado'
 
 export type CondutaPA = 'alta' | 'internacao' | 'ambulatorio' | 'observacao'
+
+// -------------------------------------------------------------
+// FASE 6: MÓDULO FATURAMENTO SUS (SIH AIH & SIA BPA)
+// -------------------------------------------------------------
+export type ComplexidadeProcedimento = 'basica' | 'media' | 'alta' | 'nao_se_aplica'
+export type ModalidadeProcedimento = 'ambulatorial' | 'hospitalar' | 'ambulatorial_e_hospitalar'
+
+export interface ProcedimentoSigtap {
+  id: string
+  codigo: string
+  nome: string
+  valor_sh: number
+  valor_sa: number
+  valor_sp: number
+  complexidade?: ComplexidadeProcedimento
+  modalidade?: ModalidadeProcedimento
+  instrumento_registro?: string
+  ativo?: boolean
+  created: string
+  updated: string
+}
+
+export interface CID10Item {
+  id: string
+  codigo: string
+  descricao: string
+  capitulo?: string
+  ativo?: boolean
+  created: string
+  updated: string
+}
+
+export type StatusContaFaturamento = 'aberta' | 'conciliada' | 'glosada' | 'enviada'
+
+export interface ContaFaturamento {
+  id: string
+  numero_conta: string
+  numero_aih?: string
+  paciente: string
+  internacao?: string
+  profissional_solicitante?: string
+  profissional_nome?: string
+  data_internacao: string
+  data_alta?: string
+  carater_atendimento?: string
+  motivo_saida_alta?: string
+  cid_principal?: string
+  cid_secundario?: string
+  procedimento_principal_codigo: string
+  procedimento_principal_nome: string
+  competencia: string
+  status: StatusContaFaturamento
+  motivo_glosa?: string
+  data_glosa?: string
+  responsavel_glosa?: string
+  valor_sh?: number
+  valor_sa?: number
+  valor_sp?: number
+  valor_total?: number
+  observacoes?: string
+  expand?: {
+    paciente?: Paciente
+    internacao?: Internacao
+    profissional_solicitante?: Profissional
+  }
+  created: string
+  updated: string
+}
+
+export type TipoItemConta = 'procedimento_secundario' | 'diaria' | 'material' | 'sessao' | 'exame'
+
+export interface ItemContaFaturamento {
+  id: string
+  conta: string
+  tipo: TipoItemConta
+  procedimento_codigo: string
+  procedimento_nome: string
+  quantidade: number
+  valor_unitario_sh?: number
+  valor_unitario_sa?: number
+  valor_unitario_sp?: number
+  valor_total_item?: number
+  data_execucao?: string
+  profissional_executante?: string
+  observacoes?: string
+  created: string
+  updated: string
+}
+
+export type OrigemProducaoBPA = 'pronto_atendimento' | 'ambulatorio_agendamento' | 'avulso'
+export type StatusProducaoBPA = 'pendente' | 'apurado' | 'glosado' | 'fechado'
+
+export interface ProducaoBPAItem {
+  id: string
+  paciente: string
+  profissional?: string
+  profissional_nome?: string
+  origem_atendimento: OrigemProducaoBPA
+  atendimento_pa?: string
+  agendamento?: string
+  procedimento_codigo: string
+  procedimento_nome: string
+  quantidade: number
+  data_atendimento: string
+  competencia: string
+  cid10?: string
+  valor_unitario_sa?: number
+  valor_total?: number
+  status: StatusProducaoBPA
+  motivo_glosa?: string
+  observacoes?: string
+  expand?: {
+    paciente?: Paciente
+    profissional?: Profissional
+    atendimento_pa?: FichaProntoAtendimento
+    agendamento?: Agendamento
+  }
+  created: string
+  updated: string
+}
+
+export type StatusCompetencia = 'aberta' | 'fechada' | 'homologada'
+
+export interface CompetenciaFaturamento {
+  id: string
+  competencia: string
+  ano: number
+  mes: number
+  status: StatusCompetencia
+  data_fechamento?: string
+  fechado_por?: string
+  total_contas_aih?: number
+  total_itens_bpa?: number
+  valor_total_sh?: number
+  valor_total_sa?: number
+  valor_total_sp?: number
+  valor_total_geral?: number
+  observacoes?: string
+  created: string
+  updated: string
+}
 
 export interface FichaProntoAtendimento {
   id: string

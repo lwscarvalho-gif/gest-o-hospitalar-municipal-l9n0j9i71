@@ -17,6 +17,7 @@ import { FarmaciaView } from '@/components/FarmaciaView'
 import { ProntuarioSAMEView } from '@/components/ProntuarioSAMEView'
 import { ExamesLaudosView } from '@/components/ExamesLaudosView'
 import { CentroCirurgicoView } from '@/components/CentroCirurgicoView'
+import { FaturamentoView } from '@/components/FaturamentoView'
 import { Loader2 } from 'lucide-react'
 
 // Mapeamento de tela inicial padrão conforme o perfil do operador
@@ -94,6 +95,8 @@ const Index: React.FC = () => {
         {activeTab === 'prontuario_same' && temPermissao(['admin', 'gestor', 'profissional']) && (
           <ProntuarioSAMEView />
         )}
+        {activeTab === 'faturamento_sus' &&
+          temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && <FaturamentoView />}
         {activeTab === 'exames_laudos' &&
           temPermissao(['admin', 'gestor', 'profissional', 'recepcao']) && <ExamesLaudosView />}
         {activeTab === 'farmacia' && temPermissao(['admin', 'gestor', 'recepcao']) && (
@@ -129,8 +132,8 @@ const Index: React.FC = () => {
       <footer className="border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
           <span>
-            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar v0.0.10
-            (Módulo Centro Cirúrgico, Exames & Laudos, SAME Unificado, Prescrição Digital &
+            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar v0.0.11
+            (Módulo Faturamento SUS AIH/BPA, Centro Cirúrgico, Exames, SAME Unificado, Prescrição &
             Farmácia)
           </span>
           <span className="text-slate-400">

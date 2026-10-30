@@ -22,6 +22,7 @@ import {
   FolderOpen,
   FlaskConical,
   Scissors,
+  Receipt,
 } from 'lucide-react'
 
 export type ActiveTab =
@@ -29,6 +30,7 @@ export type ActiveTab =
   | 'pronto_atendimento'
   | 'centro_cirurgico'
   | 'prontuario_same'
+  | 'faturamento_sus'
   | 'exames_laudos'
   | 'farmacia'
   | 'pacientes'
@@ -72,6 +74,12 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Prontuário (SAME)',
     icon: FolderOpen,
     allowedRoles: ['admin', 'gestor', 'profissional'],
+  },
+  {
+    id: 'faturamento_sus',
+    label: 'Faturamento SUS',
+    icon: Receipt,
+    allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
   },
   {
     id: 'exames_laudos',
@@ -180,8 +188,8 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({ activeTab, onSelec
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-bold text-base tracking-tight text-white">SGH Municipal</span>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  v0.0.10
+                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  v0.0.11
                 </span>
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">
