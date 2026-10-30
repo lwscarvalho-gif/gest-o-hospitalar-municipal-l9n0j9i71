@@ -90,17 +90,27 @@ export async function excluirLeito(id: string, codigo: string): Promise<boolean>
 }
 
 // PACIENTES
-export async function listarPacientes(filtroTexto?: string): Promise<Paciente[]> {
+export async function listarPacientes(
+  filtroTexto?: string,
+  limite: number = 50,
+): Promise<Paciente[]> {
   let filterStr = ''
   if (filtroTexto && filtroTexto.trim()) {
     const q = filtroTexto.trim()
-    filterStr = `nome ~ "${q}" || cartao_sus ~ "${q}" || cpf ~ "${q}"`
+    const apenasDigitosComZeros = q.replace(/\D/g, '')
+    if (apenasDigitosComZeros) {
+      filterStr = `nome ~ "${q}" || cartao_sus ~ "${apenasDigitosComZeros}" || cpf ~ "${apenasDigitosComZeros}"`
+    } else {
+      filterStr = `nome ~ "${q}" || cartao_sus ~ "${q}" || cpf ~ "${q}"`
+    }
   }
-  const records = await pb.collection('pacientes').getFullList<Paciente>({
-    filter: filterStr,
+  // Proteção do cliente: limita listagens de seleção para evitar carregar toda a base em memória
+  const pageResult = await pb.collection('pacientes').getList<Paciente>(1, Math.min(limite, 100), {
+    filter: filterStr || undefined,
     sort: 'nome',
+    requestKey: null,
   })
-  return records
+  return pageResult.items
 }
 
 export async function criarPaciente(dados: Partial<Paciente>): Promise<Paciente> {

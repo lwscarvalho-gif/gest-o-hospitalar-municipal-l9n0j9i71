@@ -79,6 +79,8 @@ import {
   Check,
   Layers,
 } from 'lucide-react'
+import { SeletorPaciente } from '@/components/SeletorPaciente'
+import { CabecalhoPacienteAtivo } from '@/components/CabecalhoPacienteAtivo'
 
 interface RegulacaoViewProps {
   onNavegarSAME?: (pacienteId?: string) => void
@@ -1614,26 +1616,12 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
               </div>
 
               <div>
-                <Label
-                  htmlFor="reg_paciente_id"
-                  className="text-xs font-semibold text-slate-700 block mb-1 cursor-pointer"
-                >
-                  Paciente Real Cadastrado *
-                </Label>
-                <select
-                  id="reg_paciente_id"
-                  value={formPacienteId}
-                  onChange={(e) => setFormPacienteId(e.target.value)}
-                  className="w-full h-9 rounded-md border border-slate-200 px-3 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  required
-                >
-                  <option value="">Selecione o paciente...</option>
-                  {pacientes.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nome} (CPF: {p.cpf || 'S/N'})
-                    </option>
-                  ))}
-                </select>
+                <SeletorPaciente
+                  label="Paciente Real Cadastrado (Busca Paginada no Servidor)"
+                  obrigatorio
+                  pacienteInicial={pacientes.find((p) => p.id === formPacienteId) || null}
+                  onSelecionar={(p) => setFormPacienteId(p?.id || '')}
+                />
               </div>
             </div>
 
@@ -1913,10 +1901,12 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
               <ShieldCheck className="w-5 h-5 text-indigo-600" />
               Avaliação Técnica do Responsável Regulador
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              Protocolo: <strong>{solicitacaoSelecionada?.numero_solicitacao}</strong> • Paciente:{' '}
-              {solicitacaoSelecionada?.paciente_nome}
-            </DialogDescription>
+            <div className="pt-2">
+              <CabecalhoPacienteAtivo
+                paciente={pacientes.find((p) => p.id === solicitacaoSelecionada?.paciente) || null}
+                subtituloContexto={`Protocolo: ${solicitacaoSelecionada?.numero_solicitacao || 'S/N'}`}
+              />
+            </div>
           </DialogHeader>
 
           <form onSubmit={handleSalvarAvaliacao} className="space-y-4 pt-2">

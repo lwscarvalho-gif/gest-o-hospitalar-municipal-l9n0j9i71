@@ -329,6 +329,40 @@ O sistema atual atende como protótipo operacional municipal robusto, mas possui
 
 ---
 
+## 9. Identificação e Busca Segura de Pacientes (Especificações Oficiais e Limites)
+
+Em conformidade com a Missão do Codex (v0.0.33), foram estabelecidas as regras oficiais de identificação cadastral, privacidade e prevenção de duplicidade:
+
+### 9.1. URLs e Especificações Oficiais Adotadas
+
+1. **Validação Oficial de CPF (Módulo 11 da Receita Federal):**
+   - **Documento / Portaria ANS:** Sistema de Informações de Beneficiários (SIB-XML / Algoritmos Oficiais de Validação).
+   - **URL Oficial:** `https://www.gov.br/ans/pt-br/arquivos/assuntos/espaco-da-operadora-de-plano-de-saude/aplicativos-ans/sib/sibalgoritmosxml1002072026.pdf`
+   - **Algoritmo:** Módulo 11 com pesos decrescentes de 10 a 2 para o 1º DV e 11 a 2 para o 2º DV. Rejeição de sequências com 11 dígitos repetidos. Preservação estrita de zeros à esquerda (armazenamento e manipulação em string com 11 posições).
+
+2. **Validação Oficial de Cartão Nacional de Saúde (CNS - 15 dígitos):**
+   - **Manual do e-SUS Atenção Básica (Ministério da Saúde / DATASUS / UFSC):**
+   - **URL Oficial:** `https://integracao.esusab.ufsc.br/v211/docs/algoritmo_CNS.html`
+   - **Algoritmo Definitivo (Início 1 ou 2):** Base PIS/PASEP com pesos de 15 a 5 (11 dígitos). Cálculo de resto e tratamento de DVs com complementos 000 ou 001.
+   - **Algoritmo Provisório (Início 7, 8 ou 9):** Soma ponderada com pesos de 15 a 1. Validação por resto da divisão por 11 igual a 0.
+   - **Ausência Permitida de Documentos:** Não se rejeita ausência de CPF/CNS para Recém-Nascidos (RN) e casos de urgência/emergência sem identificador no acolhimento inicial; proibida a invenção de documentos fictícios.
+
+3. **Privacidade e LGPD:**
+   - Mascaramento mandatório de CPF (`123.***.***-01`) e Cartão SUS (`704.****.****.080`) em todas as listagens de busca, seletores rápidos e tabelas gerais.
+   - Exibição desmascarada restrita ao prontuário detalhado individualizado.
+
+4. **Tratamento de Homônimos e Concorrência:**
+   - **Homônimos por Nome:** Análise de desambiguação por Data de Nascimento e Nome da Mãe. Gera **apenas alerta visual humano**. É **terminantemente proibida** a mesclagem ou fusão automática de cadastros históricos.
+   - **Duplicidade Exata e Concorrência no Backend:** Implementado via hook seguro no PocketBase (`pocketbase/hooks/pacientes_identificacao.pb.js`). Em acessos simultâneos com mesmo CPF ou Cartão SUS, a primeira gravação é persistida atomicamente e a segunda recebe rejeição clara (código 400), prevenindo corrupção de concorrência.
+
+### 9.2. Limites Honestos da Solução Atual
+
+- **Ambiente PocketBase em Camada Única:** O lock de concorrência depende da unicidade transacional das operações de gravação e do hook no backend. Testes de estresse com centenas de requisições paralelas por segundo em clusters distribuídos não foram realizados.
+- **Normalização Fonética:** A busca atual suporta correspondência exata, substring com preservação de zeros e remoção de acentuação/diacríticos (`normalize('NFD')`). Algoritmos fonéticos avançados (como Soundex brasileiro ou Metaphone para nomes com grafias variantes tipo 'Luiz/Luís' ou 'Souza/Sousa') permanecem para etapas futuras.
+- **Validação com Base Federal ao Vivo:** A validação é algorítmica local (dígitos verificadores oficiais). O sistema não possui conexão direta com a base da Receita Federal ou do CADSUS em tempo real.
+
+---
+
 ## 8. Backlog Priorizado para Próximas Fases
 
 | Prioridade | Item / Demanda                                          | Descrição Técnica                                                                                                             | Pré-requisito           |

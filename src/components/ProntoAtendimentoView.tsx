@@ -22,6 +22,9 @@ import {
   listarLeitos,
   listarSetores,
 } from '@/services/cadastros'
+import { SeletorPaciente } from '@/components/SeletorPaciente'
+import { CabecalhoPacienteAtivo } from '@/components/CabecalhoPacienteAtivo'
+import { mascararCNS, mascararCPF } from '@/services/identificacaoPaciente'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/hooks/use-toast'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -109,7 +112,7 @@ export const ProntoAtendimentoView: React.FC<{
   const [fichaEmFoco, setFichaEmFoco] = useState<FichaProntoAtendimento | null>(null)
 
   // Form Entrada / Acolhimento
-  const [buscaPacienteEntrada, setBuscaPacienteEntrada] = useState('')
+  const [pacienteObjetoEntrada, setPacienteObjetoEntrada] = useState<Paciente | null>(null)
   const [pacienteSelecionadoId, setPacienteSelecionadoId] = useState('')
   const [queixaEntrada, setQueixaEntrada] = useState('')
 
@@ -196,7 +199,7 @@ export const ProntoAtendimentoView: React.FC<{
         p.cartao_sus.includes(termo) ||
         (p.cpf && p.cpf.includes(termo)),
     )
-  }, [pacientes, buscaPacienteEntrada])
+  }, [pacientes])
 
   // Fila de Atendimento Ordenada por Gravidade (Risco Manchester) e depois Horário de Chegada
   const filaAtiva = useMemo(() => {
@@ -240,8 +243,8 @@ export const ProntoAtendimentoView: React.FC<{
   // AÇÕES
   // 1. Abrir Modal de Entrada
   const abrirNovaEntrada = () => {
-    setBuscaPacienteEntrada('')
-    setPacienteSelecionadoId(pacientes[0]?.id || '')
+    setPacienteObjetoEntrada(null)
+    setPacienteSelecionadoId('')
     setQueixaEntrada('')
     setModalEntradaAberto(true)
   }
@@ -950,34 +953,15 @@ export const ProntoAtendimentoView: React.FC<{
 
           <form onSubmit={handleSalvarEntrada} className="space-y-4 pt-2">
             <div className="space-y-1.5">
-              <Label htmlFor="pa_busca_paciente" className="text-xs cursor-pointer">
-                Buscar Paciente (Nome ou Cartão SUS)
-              </Label>
-              <Input
-                id="pa_busca_paciente"
-                placeholder="Digite para filtrar..."
-                value={buscaPacienteEntrada}
-                onChange={(e) => setBuscaPacienteEntrada(e.target.value)}
-                className="text-xs"
+              <SeletorPaciente
+                label="Buscar Paciente no Servidor (Nome, CNS ou CPF com zeros)"
+                obrigatorio
+                pacienteInicial={pacienteObjetoEntrada}
+                onSelecionar={(p) => {
+                  setPacienteObjetoEntrada(p)
+                  setPacienteSelecionadoId(p?.id || '')
+                }}
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="pa_paciente_selecionado" className="text-xs cursor-pointer">
-                Paciente Selecionado *
-              </Label>
-              <Select value={pacienteSelecionadoId} onValueChange={setPacienteSelecionadoId}>
-                <SelectTrigger id="pa_paciente_selecionado" className="text-xs">
-                  <SelectValue placeholder="Selecione o paciente" />
-                </SelectTrigger>
-                <SelectContent className="max-h-56">
-                  {pacientesFiltrados.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.nome} • SUS: {p.cartao_sus}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
 
             <div className="space-y-1.5">
@@ -1024,13 +1008,12 @@ export const ProntoAtendimentoView: React.FC<{
               <Activity className="w-5 h-5 text-blue-600" />
               Triagem e Classificação de Risco (Manchester / SUS)
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              Paciente:{' '}
-              <strong className="text-slate-800">
-                {fichaEmFoco?.expand?.paciente?.nome || 'N/A'}
-              </strong>{' '}
-              • SUS: {fichaEmFoco?.expand?.paciente?.cartao_sus}
-            </DialogDescription>
+            <div className="pt-2">
+              <CabecalhoPacienteAtivo
+                paciente={fichaEmFoco?.expand?.paciente as Paciente}
+                subtituloContexto="Triagem do PA"
+              />
+            </div>
           </DialogHeader>
 
           <form onSubmit={handleSalvarTriagem} className="space-y-4 pt-2">
@@ -1237,21 +1220,17 @@ export const ProntoAtendimentoView: React.FC<{
         >
           <DialogHeader className="border-b border-slate-100 pb-2.5">
             <div className="flex items-start sm:items-center justify-between gap-2 pr-6">
-              <div className="space-y-0.5 min-w-0">
+              <div className="space-y-0.5 min-w-0 flex-1">
                 <DialogTitle className="flex items-center gap-2 text-base text-slate-900 font-bold truncate">
                   <Stethoscope className="w-5 h-5 text-emerald-600 shrink-0" />
                   <span>Atendimento Médico / Conduta do PA</span>
                 </DialogTitle>
-                <DialogDescription className="text-xs text-slate-600">
-                  Paciente:{' '}
-                  <strong className="text-slate-900 font-bold">
-                    {fichaEmFoco?.expand?.paciente?.nome || 'N/A'}
-                  </strong>{' '}
-                  • SUS: {fichaEmFoco?.expand?.paciente?.cartao_sus || 'N/A'} • Risco:{' '}
-                  <span className="font-bold text-slate-800">
-                    {fichaEmFoco?.classificacao_risco?.toUpperCase()}
-                  </span>
-                </DialogDescription>
+                <div className="pt-1.5">
+                  <CabecalhoPacienteAtivo
+                    paciente={fichaEmFoco?.expand?.paciente as Paciente}
+                    subtituloContexto={`Risco: ${fichaEmFoco?.classificacao_risco?.toUpperCase() || 'SEM CLASSIFICAÇÃO'}`}
+                  />
+                </div>
               </div>
 
               {/* Botão Maximizar / Restaurar Janela */}

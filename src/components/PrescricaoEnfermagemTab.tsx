@@ -56,6 +56,8 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/contexts/AuthContext'
+import { SeletorPaciente } from '@/components/SeletorPaciente'
+import { CabecalhoPacienteAtivo } from '@/components/CabecalhoPacienteAtivo'
 
 interface PrescricaoEnfermagemTabProps {
   pacienteSelecionadoId?: string
@@ -375,52 +377,53 @@ export const PrescricaoEnfermagemTab: React.FC<PrescricaoEnfermagemTabProps> = (
 
   return (
     <div className="space-y-5">
-      {/* SELETOR DE PACIENTE + ALERTA DE ALERGIA */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center bg-slate-50 p-4 rounded-xl border border-slate-200">
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold text-slate-700">
-            Paciente para Prescrição & Checagem
-          </Label>
-          <Select value={pacienteId} onValueChange={setPacienteId}>
-            <SelectTrigger className="text-xs bg-white h-9">
-              <SelectValue placeholder="Selecione o paciente" />
-            </SelectTrigger>
-            <SelectContent className="max-h-60">
-              {pacientes.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.nome} (CNS: {p.cartao_sus})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      {/* SELETOR DE PACIENTE COM BUSCA PAGINADA E CABEÇALHO DO ATIVO */}
+      <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+          <SeletorPaciente
+            label="Paciente para Prescrição & Checagem (Busca Paginada no Servidor)"
+            pacienteInicial={pacienteObj}
+            onSelecionar={(p) => setPacienteId(p?.id || '')}
+          />
+
+          {/* ALERTA DE ALERGIAS EM DESTAQUE */}
+          <div>
+            {pacienteObj ? (
+              <div className="rounded-lg border-2 border-red-500 bg-red-50 p-2.5 text-red-950 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <AlertOctagon className="w-5 h-5 text-red-600 shrink-0 animate-pulse" />
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-red-900 block">
+                      Alerta Clínico / Alergias Conhecidas:
+                    </span>
+                    <span className="text-xs font-bold text-red-800">
+                      {pacienteObj.alergias || 'Nenhuma alergia relatada'}
+                    </span>
+                    {pacienteObj.condicoes_cronicas && (
+                      <span className="text-[11px] text-slate-600 block">
+                        Condições: {pacienteObj.condicoes_cronicas}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <Badge className="bg-red-600 text-white text-[10px] uppercase font-bold shrink-0">
+                  Checar ao Prescrever
+                </Badge>
+              </div>
+            ) : (
+              <div className="p-2.5 text-xs text-slate-500 bg-white border border-slate-200 rounded-lg">
+                Selecione um paciente para carregar o histórico de prescrições hospitalares.
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* ALERTA DE ALERGIAS EM DESTAQUE */}
-        <div className="md:col-span-2">
-          {pacienteObj && (
-            <div className="rounded-lg border-2 border-red-500 bg-red-50 p-2.5 text-red-950 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <AlertOctagon className="w-5 h-5 text-red-600 shrink-0 animate-pulse" />
-                <div>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-red-900 block">
-                    Alerta Clínico / Alergias Conhecidas:
-                  </span>
-                  <span className="text-xs font-bold text-red-800">
-                    {pacienteObj.alergias || 'Nenhuma alergia relatada'}
-                  </span>
-                  {pacienteObj.condicoes_cronicas && (
-                    <span className="text-[11px] text-slate-600 block">
-                      Condições: {pacienteObj.condicoes_cronicas}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <Badge className="bg-red-600 text-white text-[10px] uppercase font-bold shrink-0">
-                Checar ao Prescrever
-              </Badge>
-            </div>
-          )}
-        </div>
+        {pacienteObj && (
+          <CabecalhoPacienteAtivo
+            paciente={pacienteObj}
+            subtituloContexto="Prescrição & Aprazamento Hospitalar"
+          />
+        )}
       </div>
 
       {/* CABEÇALHO DE AÇÃO */}

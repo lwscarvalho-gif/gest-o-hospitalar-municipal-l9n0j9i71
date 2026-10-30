@@ -19,7 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Pill, Plus, Trash2, CheckCircle, Clock, AlertCircle, Syringe } from 'lucide-react'
+import { Pill, Plus, Trash2, CheckCircle, Clock, AlertCircle, Syringe, User } from 'lucide-react'
+import { CabecalhoPacienteAtivo } from '@/components/CabecalhoPacienteAtivo'
+import { Paciente } from '@/types/hospital'
+import { pb } from '@/lib/pocketbase/client'
 
 const VIAS_DISPONIVEIS: { valor: ViaAdministracaoMedicamento; rotulo: string }[] = [
   { valor: 'oral', rotulo: 'Oral (VO)' },
@@ -50,6 +53,7 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
   const { user } = useAuth()
   const { toast } = useToast()
 
+  const [pacienteDados, setPacienteDados] = useState<Paciente | null>(null)
   const [catalogoFarmacia, setCatalogoFarmacia] = useState<ItemFarmacia[]>([])
   const [prescricoesExistentes, setPrescricoesExistentes] = useState<PrescricaoMedica[]>([])
   const [carregandoCatalogo, setCarregandoCatalogo] = useState(false)
@@ -73,7 +77,13 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
   useEffect(() => {
     carregarCatalogo()
     carregarPrescricoesPA()
-  }, [atendimentoPaId])
+    if (pacienteId) {
+      pb.collection('pacientes')
+        .getOne<Paciente>(pacienteId)
+        .then((p) => setPacienteDados(p))
+        .catch(() => {})
+    }
+  }, [atendimentoPaId, pacienteId])
 
   const carregarCatalogo = async () => {
     setCarregandoCatalogo(true)
@@ -220,6 +230,14 @@ export const SecaoPrescricaoPAMedica: React.FC<SecaoPrescricaoPAMedicaProps> = (
 
   return (
     <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4 space-y-4">
+      {/* Identificação Clara do Paciente Ativo na Prescrição Médica do PA */}
+      {pacienteDados && (
+        <CabecalhoPacienteAtivo
+          paciente={pacienteDados}
+          subtituloContexto="Prescrição na Unidade (PA)"
+        />
+      )}
+
       {/* Cabeçalho da seção */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200 pb-3">
         <div className="flex items-center gap-2">

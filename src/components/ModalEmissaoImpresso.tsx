@@ -41,6 +41,7 @@ import {
 } from '@/types/hospital'
 import { emitirImpressoAssistencial } from '@/services/impressosAssistenciais'
 import { FolhaImpressoA4 } from './FolhaImpressoA4'
+import { CabecalhoPacienteAtivo } from '@/components/CabecalhoPacienteAtivo'
 import { formatarDataHoraFuso } from '@/services/dataFusoUnidade'
 
 interface ModalEmissaoImpressoProps {
@@ -546,11 +547,11 @@ export const ModalEmissaoImpresso: React.FC<ModalEmissaoImpressoProps> = ({
         {/* Cabeçalho do Modal */}
         <DialogHeader className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 shrink-0 print:hidden">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold shrink-0">
                 <Printer className="w-5 h-5" />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
                   Emissão de Impressos Assistenciais
                   <Badge
@@ -560,11 +561,12 @@ export const ModalEmissaoImpresso: React.FC<ModalEmissaoImpressoProps> = ({
                     A4 Padrão SUS
                   </Badge>
                 </DialogTitle>
-                <p className="text-xs text-slate-500">
-                  Paciente:{' '}
-                  <strong className="text-slate-800 uppercase">{paciente?.nome || '—'}</strong> •
-                  CNS: {paciente?.cartao_sus || '—'}
-                </p>
+                <div className="mt-2">
+                  <CabecalhoPacienteAtivo
+                    paciente={paciente}
+                    subtituloContexto="Impresso Assistencial Oficial"
+                  />
+                </div>
               </div>
             </div>
 
