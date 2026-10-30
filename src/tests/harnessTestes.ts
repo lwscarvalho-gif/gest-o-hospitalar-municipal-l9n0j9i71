@@ -27,6 +27,11 @@ import {
   ContextoValidacaoFaturamento,
 } from '../services/consistenciaFaturamento'
 import {
+  previsualizarSigtapCSV,
+  normalizarCodigoProcedimentoSigtap,
+  parseValorDecimalSigtap,
+} from '../services/importacaoSigtap'
+import {
   ContaFaturamento,
   ProducaoBPAItem,
   ProcedimentoSigtap,
@@ -1161,10 +1166,12 @@ export function executarHarnessLocal(): {
   }
 
   // =========================================================================
-  // CENÁRIO (t): Checagem administrativa de causa externa (Cap. XIX/XX da CID-10)
+  // CENÁRIO (t): Não inferir causa externa ou acidente a partir de CID Capítulo S/T
+  // Requisito 1: Validar apenas campos explicitamente informados; normas sem vigência confirmada 2026 viram aviso 'revisão humana'
   // =========================================================================
   try {
-    const contaTraumaSemCidSec: ContaFaturamento = {
+    // 1. Conta com CID S06.0 mas SEM declaração explícita de acidente/causa externa no caráter de atendimento: NÃO infere causa externa
+    const contaCidSTSemDeclaracao: ContaFaturamento = {
       id: 'conta-trauma-01',
       numero_conta: 'AIH-202505-1006',
       paciente: 'pac-01',
@@ -1172,34 +1179,49 @@ export function executarHarnessLocal(): {
       data_alta: '2025-05-12',
       procedimento_principal_codigo: '03.03.01.003-7',
       procedimento_principal_nome: 'Tratamento de Doenças Infecciosas',
-      cid_principal: 'S06.0', // Traumatismo craniano / Causa externa
-      cid_secundario: '', // VAZIO
+      cid_principal: 'S06.0', // CID do capítulo S/T
+      cid_secundario: '', // Vazio
+      carater_atendimento: 'urgencia_clinica', // Não é acidente/causa externa
       competencia: '2025-05',
       status: 'aberta',
       created: '2026-10-30',
       updated: '2026-10-30',
     }
 
-    const resultadoT = validarContaHospitalarAIH(contaTraumaSemCidSec, contextoFaturamentoTeste)
-    const advCausaExterna = resultadoT.advertencias.find(
-      (a) => a.id === 'aih_causa_externa_sem_cid_secundario',
+    const resultadoT1 = validarContaHospitalarAIH(contaCidSTSemDeclaracao, contextoFaturamentoTeste)
+    const infereCausaIndevida = resultadoT1.advertencias.some(
+      (a) => a.id === 'aih_causa_externa_declarada_sem_cid_secundario',
+    ) || resultadoT1.erros.some((e) => e.campo === 'cid_secundario')
+
+    // 2. Conta com caráter de atendimento explicitamente declarado como acidente/externo: gera aviso 'revisão humana', NUNCA erro bloqueador
+    const contaAcidenteDeclarado: ContaFaturamento = {
+      ...contaCidSTSemDeclaracao,
+      id: 'conta-trauma-02',
+      carater_atendimento: 'acidente_transito',
+    }
+
+    const resultadoT2 = validarContaHospitalarAIH(contaAcidenteDeclarado, contextoFaturamentoTeste)
+    const avisoRevisaoHumana = resultadoT2.advertencias.find(
+      (a) => a.id === 'aih_causa_externa_declarada_sem_cid_secundario',
     )
+    const temErroBloqueador = resultadoT2.erros.some((e) => e.campo === 'cid_secundario')
 
     const passouT =
-      advCausaExterna !== undefined &&
-      advCausaExterna.fonteOficial.includes('Portarias GM/MS 1969/2001 e SAS 579/2001') &&
-      advCausaExterna.mensagem.includes('causa externa / traumatismo')
+      infereCausaIndevida === false &&
+      avisoRevisaoHumana !== undefined &&
+      avisoRevisaoHumana.mensagem.includes('revisão humana') &&
+      temErroBloqueador === false
 
     resultados.push({
       id: 'cenario_t_causa_externa_cid_secundario',
-      cenario: '(t) CID do capítulo S/T gera aviso administrativo de obrigatoriedade de CID secundário (Portarias GM/MS 1969/2001 e SAS 579/2001)',
+      cenario: '(t) CID de capítulo S/T não infere causa externa; campos explicitamente informados geram aviso de revisão humana sem bloquear conta',
       passou: passouT,
-      detalhes: `CID S06.0 identificado administrativamente no Capítulo XIX gerando advertência para preenchimento de causa externa associada.`,
+      detalhes: `Validação confirmada: S06.0 isolado não inferiu causa externa espúria; declaração explícita de acidente gerou aviso documental sem bloqueio.`,
     })
   } catch (err: any) {
     resultados.push({
       id: 'cenario_t_causa_externa_cid_secundario',
-      cenario: '(t) CID do capítulo S/T gera aviso administrativo de obrigatoriedade de CID secundário (Portarias GM/MS 1969/2001 e SAS 579/2001)',
+      cenario: '(t) CID de capítulo S/T não infere causa externa; campos explicitamente informados geram aviso de revisão humana sem bloquear conta',
       passou: false,
       detalhes: 'Falha no teste de causa externa da AIH',
       erro: err.message,
@@ -1269,6 +1291,191 @@ export function executarHarnessLocal(): {
       cenario: '(u) Painel agregador de conferência consolida contas AIH e BPA sem alterar status nem dados retrospectivos',
       passou: false,
       detalhes: 'Falha no teste de conferência consolidada',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO (v): Catálogo SIGTAP parcial/recorte emite aviso 'validar manualmente' sem acusar inexistência
+  // Requisito 2: Catálogo parcial não permite afirmar que procedimento ausente é inválido
+  // =========================================================================
+  try {
+    const contextoParcial: ContextoValidacaoFaturamento = {
+      ...contextoFaturamentoTeste,
+      tabelaSigtapParcial: true, // Recorte parcial de tabela
+    }
+
+    const contaProcForaDoRecorte: ContaFaturamento = {
+      id: 'conta-recorte-01',
+      numero_conta: 'AIH-202505-8888',
+      paciente: 'pac-01',
+      data_internacao: '2025-05-02',
+      data_alta: '2025-05-04',
+      procedimento_principal_codigo: '03.01.01.007-2', // Não está no mock do contexto
+      procedimento_principal_nome: 'Procedimento fora do recorte',
+      cid_principal: 'A09',
+      competencia: '2025-05',
+      status: 'aberta',
+      created: '2026-10-30',
+      updated: '2026-10-30',
+    }
+
+    const resV = validarContaHospitalarAIH(contaProcForaDoRecorte, contextoParcial)
+    const avisoTabelaIncompleta = resV.advertencias.find(
+      (a) => a.id === 'aih_procedimento_tabela_parcial_validar_manual',
+    )
+    const teveErroInexistente = resV.erros.some(
+      (e) => e.id === 'aih_procedimento_inexistente_sigtap',
+    )
+
+    const passouV =
+      resV.valida === true && // Não bloqueia conta
+      avisoTabelaIncompleta !== undefined &&
+      avisoTabelaIncompleta.mensagem.includes('tabela incompleta, validar manualmente') &&
+      teveErroInexistente === false
+
+    resultados.push({
+      id: 'cenario_v_sigtap_tabela_parcial_aviso',
+      cenario: '(v) Procedimento ausente em catálogo parcial emite aviso "tabela incompleta, validar manualmente" sem bloquear conta',
+      passou: passouV,
+      detalhes: `Catálogo parcial gerou advertência 'tabela incompleta, validar manualmente' mantendo a conta válida sem erro indevido.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_v_sigtap_tabela_parcial_aviso',
+      cenario: '(v) Procedimento ausente em catálogo parcial emite aviso "tabela incompleta, validar manualmente" sem bloquear conta',
+      passou: false,
+      detalhes: 'Falha no teste de catálogo parcial',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO (w): Parser e pré-visualização SIGTAP CSV — zeros à esquerda, decimais e duplicidade no lote
+  // Requisito 3: Preservação de zeros à esquerda, validação decimal e rejeição por linha
+  // =========================================================================
+  try {
+    // 1. Teste de zeros à esquerda
+    const codComZero = normalizarCodigoProcedimentoSigtap('301060088') // 9 dígitos (perdeu zero inicial)
+    const codZerosPreservados =
+      codComZero.valido &&
+      codComZero.codigoNormalizado === '0301060088' &&
+      codComZero.codigoFormatado === '03.01.06.008-8'
+
+    // 2. Teste de parse de valores decimais
+    const decValido1 = parseValorDecimalSigtap('12,50')
+    const decValido2 = parseValorDecimalSigtap('1.250,50')
+    const decInvalidoNeg = parseValorDecimalSigtap('-10.00')
+    const decInvalidoLetras = parseValorDecimalSigtap('abc')
+    const decCorreto =
+      decValido1.valido &&
+      decValido1.valor === 12.5 &&
+      decValido2.valido &&
+      decValido2.valor === 1250.5 &&
+      !decInvalidoNeg.valido &&
+      !decInvalidoLetras.valido
+
+    // 3. Teste do parser de lote com duplicidade e dados malformados
+    const csvSintetico = `codigo;nome;sh;sa;sp;modalidade
+03.01.06.008-8;Atendimento Urgencia;0;12,50;0;ambulatorial
+301060088;Atendimento Urgencia Duplicado;0;12,50;0;ambulatorial
+04.07.01.003-2;Apendicectomia;450,20;0;180,30;hospitalar
+04.07.01.003-2;Apendicectomia Duplicada;450,20;0;180,30;hospitalar
+99.99;Procedimento Codigo Curto Invalido;10,00;0;0;hospitalar
+03.03.01.003-7;Tratamento Infeccao;VALOR_ERRADO;0;0;hospitalar
+`
+
+    const preview = previsualizarSigtapCSV({
+      conteudoCSV: csvSintetico,
+      competencia: '2026-09',
+    })
+
+    // Deve ter 2 itens válidos (03.01.06.008-8 e 04.07.01.003-2)
+    // E 4 rejeições (duplicidade 301060088, duplicidade 04.07.01.003-2, código inválido 99.99, valor inválido)
+    const rejeicoesDuplicidade = preview.rejeicoes.filter((r) => r.campo === 'duplicidade')
+    const rejeicoesValor = preview.rejeicoes.filter((r) => r.campo?.startsWith('valor'))
+    const rejeicoesCodigo = preview.rejeicoes.filter((r) => r.campo === 'codigo')
+
+    const passouW =
+      codZerosPreservados &&
+      decCorreto &&
+      preview.totalValidos === 2 &&
+      preview.totalRejeitados === 4 &&
+      rejeicoesDuplicidade.length === 2 &&
+      rejeicoesValor.length === 1 &&
+      rejeicoesCodigo.length === 1
+
+    resultados.push({
+      id: 'cenario_w_parser_sigtap_zeros_decimais_duplicidades',
+      cenario: '(w) Importação SIGTAP valida linha a linha preservando zeros à esquerda, conferindo decimais e rejeitando duplicidades no lote',
+      passou: passouW,
+      detalhes: `Validado: zeros à esquerda restaurados (03.01.06.008-8), decimais parseados e 4 rejeições sintéticas apontadas com exatidão.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_w_parser_sigtap_zeros_decimais_duplicidades',
+      cenario: '(w) Importação SIGTAP valida linha a linha preservando zeros à esquerda, conferindo decimais e rejeitando duplicidades no lote',
+      passou: false,
+      detalhes: 'Falha no teste de parser SIGTAP',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO (x): Competência explícita e regras de normas não confirmadas 2026 (Manual 2017)
+  // Requisito 1: Regras 2017 viram aviso "revisão humana", nunca bloqueiam conta; competência explícita requerida
+  // =========================================================================
+  try {
+    // 1. Competência malformada na importação lança exceção imediata
+    let rejeitouCompInvalida = false
+    try {
+      previsualizarSigtapCSV({
+        conteudoCSV: 'codigo;nome\n03.01.06.008-8;Teste',
+        competencia: 'competencia_invalida',
+      })
+    } catch {
+      rejeitouCompInvalida = true
+    }
+
+    // 2. Conta com alta > 6 meses gera apenas ADVERTÊNCIA de "revisão humana", sem bloquear conta (valida === true)
+    const contaAltaAntiga: ContaFaturamento = {
+      id: 'conta-alta-antiga',
+      numero_conta: 'AIH-202505-9999',
+      paciente: 'pac-01',
+      data_internacao: '2024-08-01',
+      data_alta: '2024-08-15', // 9 meses antes de 2025-05
+      procedimento_principal_codigo: '04.07.01.003-2',
+      procedimento_principal_nome: 'Apendicectomia',
+      cid_principal: 'K35.8',
+      competencia: '2025-05',
+      status: 'aberta',
+      created: '2026-10-30',
+      updated: '2026-10-30',
+    }
+
+    const resX = validarContaHospitalarAIH(contaAltaAntiga, contextoFaturamentoTeste)
+    const advAlta = resX.advertencias.find(
+      (a) => a.id === 'aih_alta_mais_de_6_meses_competencia',
+    )
+
+    const passouX =
+      rejeitouCompInvalida &&
+      resX.valida === true && // Conta continua válida (não bloqueada)
+      advAlta !== undefined &&
+      advAlta.mensagem.includes('revisão humana (sem bloqueio de conta)')
+
+    resultados.push({
+      id: 'cenario_x_regras_2017_revisao_humana_sem_bloqueio',
+      cenario: '(x) Regras do Manual SIH 2017 sem vigência confirmada 2026 geram aviso "revisão humana" sem bloquear conta; competência explícita validada',
+      passou: passouX,
+      detalhes: `Validado: competência explícita obrigatória; alta > 6 meses sinalizada para revisão humana com conta preservada para conferência.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_x_regras_2017_revisao_humana_sem_bloqueio',
+      cenario: '(x) Regras do Manual SIH 2017 sem vigência confirmada 2026 geram aviso "revisão humana" sem bloquear conta; competência explícita validada',
+      passou: false,
+      detalhes: 'Falha no teste de regras 2017 e competência explícita',
       erro: err.message,
     })
   }

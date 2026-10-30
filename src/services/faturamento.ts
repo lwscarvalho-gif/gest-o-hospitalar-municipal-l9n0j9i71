@@ -73,126 +73,161 @@ export async function criarProcedimentoSigtap(dados: {
  * Cabeçalho esperado (flexível com vírgula ou ponto-e-vírgula):
  * codigo;nome;valor_sh;valor_sa;valor_sp;complexidade;modalidade
  */
-export async function importarTabelaSIGTAPCSV(conteudoCSV: string): Promise<{
-  totalLinhas: number
-  importados: number
-  atualizados: number
+import {
+  previsualizarSigtapCSV,
+  PrevisualizacaoSIGTAPResultado,
+  ItemSIGTAPValido,
+} from './importacaoSigtap'
+
+/**
+ * Executa a gravação idempotente do lote de procedimentos SIGTAP previamente validado.
+ *
+ * Regras:
+ * - Apenas itens validados entram no lote (itens rejeitados ficam no relatório de auditoria e não são salvos).
+ * - Se a competência já tiver sido homologada/fechada, não sobrescreve.
+ * - Idempotente: se o procedimento já existir com os mesmos atributos na competência ativa, não duplica.
+ * - Contas hospitalares e BPA históricos nunca são recalculados automaticamente por esta importação.
+ */
+export async function executarGravacaoLoteSIGTAP(params: {
+  itensValidos: ItemSIGTAPValido[]
+  competencia: string
+  usuarioNome: string
+  usuarioRole?: string
+}): Promise<{
+  inseridos: number
+  mantidosOuAtualizados: number
   erros: string[]
+  competencia: string
 }> {
-  const linhas = conteudoCSV
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0)
-  if (linhas.length === 0) {
-    throw new Error('Arquivo CSV vazio.')
+  const { itensValidos, competencia, usuarioNome, usuarioRole } = params
+
+  if (usuarioRole && usuarioRole !== 'admin' && usuarioRole !== 'gestor') {
+    throw new Error(
+      'Acesso negado: a importação e alteração do catálogo SIGTAP é restrita a Administradores e Gestores.',
+    )
   }
 
-  const delimitador = linhas[0].includes(';') ? ';' : ','
-  const header = linhas[0]
-    .toLowerCase()
-    .split(delimitador)
-    .map((c) => c.replace(/["']/g, '').trim())
+  if (itensValidos.length === 0) {
+    throw new Error('Nenhum item válido para gravar no lote.')
+  }
 
-  let importados = 0
-  let atualizados = 0
+  // Verificar status da competência informada
+  try {
+    const compExistente = await pb
+      .collection('competencias_faturamento')
+      .getFirstListItem<CompetenciaFaturamento>(`competencia = "${competencia}"`)
+    if (compExistente && compExistente.status === 'fechada') {
+      throw new Error(
+        `A competência ${competencia} já está fechada e auditada. Não é permitido sobrescrever ou importar dados em competência fechada.`,
+      )
+    }
+  } catch (err: any) {
+    if (err.message?.includes('fechada')) throw err
+    // Se não encontrou a competência, ela ainda será aberta oportunamente
+  }
+
+  let inseridos = 0
+  let mantidosOuAtualizados = 0
   const erros: string[] = []
 
-  // Mapear índices das colunas
-  const idxCodigo = header.findIndex((h) => h.includes('codigo') || h.includes('procedimento'))
-  const idxNome = header.findIndex((h) => h.includes('nome') || h.includes('descricao'))
-  const idxSH = header.findIndex(
-    (h) => h.includes('sh') || h.includes('servico_hospitalar') || h.includes('hospitalar'),
-  )
-  const idxSA = header.findIndex((h) => h.includes('sa') || h.includes('ambulatorial'))
-  const idxSP = header.findIndex((h) => h.includes('sp') || h.includes('profissional'))
-  const idxComplexidade = header.findIndex((h) => h.includes('complex'))
-  const idxModalidade = header.findIndex((h) => h.includes('modalid'))
-
-  if (idxCodigo === -1 || idxNome === -1) {
-    throw new Error('O CSV deve conter colunas de "codigo" e "nome" do procedimento.')
-  }
-
-  const parseValor = (val?: string): number => {
-    if (!val) return 0
-    const limpo = val.replace(/["'R$\s]/g, '').replace(',', '.')
-    const n = parseFloat(limpo)
-    return isNaN(n) ? 0 : Math.round(n * 100) / 100
-  }
-
-  for (let i = 1; i < linhas.length; i++) {
-    const cols = linhas[i].split(delimitador).map((c) => c.replace(/^["']|["']$/g, '').trim())
-    const codigo = cols[idxCodigo]
-    const nome = cols[idxNome]
-
-    if (!codigo || !nome) continue
-
-    const valor_sh = idxSH !== -1 ? parseValor(cols[idxSH]) : 0
-    const valor_sa = idxSA !== -1 ? parseValor(cols[idxSA]) : 0
-    const valor_sp = idxSP !== -1 ? parseValor(cols[idxSP]) : 0
-
-    let complexidade: 'basica' | 'media' | 'alta' | 'nao_se_aplica' = 'media'
-    if (idxComplexidade !== -1 && cols[idxComplexidade]) {
-      const cLower = cols[idxComplexidade].toLowerCase()
-      if (cLower.includes('basic') || cLower.includes('básic')) complexidade = 'basica'
-      else if (cLower.includes('alt')) complexidade = 'alta'
-      else if (cLower.includes('não') || cLower.includes('nao')) complexidade = 'nao_se_aplica'
-    }
-
-    let modalidade: 'ambulatorial' | 'hospitalar' | 'ambulatorial_e_hospitalar' = 'hospitalar'
-    if (idxModalidade !== -1 && cols[idxModalidade]) {
-      const mLower = cols[idxModalidade].toLowerCase()
-      if (mLower.includes('amb') && mLower.includes('hosp'))
-        modalidade = 'ambulatorial_e_hospitalar'
-      else if (mLower.includes('amb')) modalidade = 'ambulatorial'
-    } else if (valor_sa > 0 && valor_sh === 0) {
-      modalidade = 'ambulatorial'
-    } else if (valor_sa > 0 && valor_sh > 0) {
-      modalidade = 'ambulatorial_e_hospitalar'
-    }
-
+  for (const item of itensValidos) {
     try {
-      const existente = await buscarProcedimentoPorCodigo(codigo)
+      const existente = await buscarProcedimentoPorCodigo(item.codigo)
       if (existente) {
-        await pb.collection('procedimentos_sigtap').update(existente.id, {
-          nome,
-          valor_sh,
-          valor_sa,
-          valor_sp,
-          complexidade,
-          modalidade,
-          ativo: true,
-        })
-        atualizados++
+        // Idempotência: verificar se houve alteração real antes de atualizar
+        const precisaAtualizar =
+          existente.nome !== item.nome ||
+          Number(existente.valor_sh) !== item.valor_sh ||
+          Number(existente.valor_sa) !== item.valor_sa ||
+          Number(existente.valor_sp) !== item.valor_sp ||
+          existente.modalidade !== item.modalidade ||
+          existente.complexidade !== item.complexidade
+
+        if (precisaAtualizar) {
+          await pb.collection('procedimentos_sigtap').update(existente.id, {
+            nome: item.nome,
+            valor_sh: item.valor_sh,
+            valor_sa: item.valor_sa,
+            valor_sp: item.valor_sp,
+            complexidade: item.complexidade,
+            modalidade: item.modalidade,
+            instrumento_registro: item.instrumento_registro,
+            ativo: true,
+          })
+          mantidosOuAtualizados++
+        } else {
+          mantidosOuAtualizados++
+        }
       } else {
         await pb.collection('procedimentos_sigtap').create({
-          codigo,
-          nome,
-          valor_sh,
-          valor_sa,
-          valor_sp,
-          complexidade,
-          modalidade,
-          instrumento_registro: modalidade === 'ambulatorial' ? 'BPA' : 'AIH',
+          codigo: item.codigo,
+          nome: item.nome,
+          valor_sh: item.valor_sh,
+          valor_sa: item.valor_sa,
+          valor_sp: item.valor_sp,
+          complexidade: item.complexidade,
+          modalidade: item.modalidade,
+          instrumento_registro: item.instrumento_registro,
           ativo: true,
         })
-        importados++
+        inseridos++
       }
     } catch (err: any) {
-      erros.push(`Linha ${i + 1} (${codigo}): ${err.message}`)
+      erros.push(`Procedimento ${item.codigo} (linha ${item.linha}): ${err.message}`)
     }
   }
 
   await registrarAuditoria({
-    acao: 'IMPORTACAO_SIGTAP_CSV',
+    acao: 'IMPORTACAO_SIGTAP_LOTE_CONFIRMADA',
     modulo: 'Faturamento',
-    detalhes: `Importação de tabela SIGTAP: ${importados} inseridos, ${atualizados} atualizados, ${erros.length} falhas.`,
+    detalhes: `Lote SIGTAP da competência ${competencia} gravado por ${usuarioNome}: ${inseridos} novos, ${mantidosOuAtualizados} mantidos/atualizados, ${erros.length} falhas. Contas históricas preservadas sem recálculo retroativo.`,
   })
 
   return {
-    totalLinhas: linhas.length - 1,
-    importados,
-    atualizados,
+    inseridos,
+    mantidosOuAtualizados,
     erros,
+    competencia,
+  }
+}
+
+/**
+ * Função de retrocompatibilidade para importação direta, utilizando a validação estrita.
+ */
+export async function importarTabelaSIGTAPCSV(
+  conteudoCSV: string,
+  competencia?: string,
+): Promise<{
+  totalLinhas: number
+  importados: number
+  atualizados: number
+  erros: string[]
+  competencia: string
+  rejeicoesDetalhadas: PrevisualizacaoSIGTAPResultado['rejeicoes']
+}> {
+  const comp = competencia || calcularCompetenciaAtual()
+  const preview = previsualizarSigtapCSV({ conteudoCSV, competencia: comp })
+
+  const gravacao = await executarGravacaoLoteSIGTAP({
+    itensValidos: preview.itensValidos,
+    competencia: comp,
+    usuarioNome: 'Importador Administrativo',
+  })
+
+  const errosFormatados = [
+    ...preview.rejeicoes.map(
+      (r) => `Linha ${r.linha} (${r.codigoBruto || 'sem código'}): [REJEITADO] ${r.motivo}`,
+    ),
+    ...gravacao.erros,
+  ]
+
+  return {
+    totalLinhas: preview.totalLinhasArquivo,
+    importados: gravacao.inseridos,
+    atualizados: gravacao.mantidosOuAtualizados,
+    erros: errosFormatados,
+    competencia: comp,
+    rejeicoesDetalhadas: preview.rejeicoes,
   }
 }
 

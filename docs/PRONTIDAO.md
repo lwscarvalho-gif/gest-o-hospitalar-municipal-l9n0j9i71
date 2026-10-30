@@ -94,32 +94,43 @@ imprimirRelatorioConsole()
 | **(q) Procedimento inexistente no SIGTAP**          | `validarContaHospitalarAIH`                        | **PASSOU** | Código de procedimento não importado é rejeitado como inexistente na SIGTAP municipal sem inferência espúria de compatibilidade.                         |
 | **(r) SIGTAP com competência não importada**        | `validarContaHospitalarAIH`                        | **PASSOU** | Competência sem importação SIGTAP sinaliza advertência de 'validar manualmente' em vez de gerar falso erro impeditivo.                                   |
 | **(s) Duplicidade de produção BPA**                 | `validarItemProducaoBPA`                           | **PASSOU** | Mesmo atendimento + procedimento + competência gera sinalização de duplicidade para revisão administrativa sem interrupção de fluxo.                     |
-| **(t) Checagem administrativa de causa externa**    | `validarContaHospitalarAIH`, CID Capítulo XIX/XX   | **PASSOU** | CID S06.0 do capítulo de lesões gera aviso documental de CID secundário/causa externa (Portarias GM/MS 1969/2001 e SAS 579/2001).                        |
+| **(t) Não inferir causa externa de CID S/T**        | `validarContaHospitalarAIH`                        | **PASSOU** | CID S06.0 não infere causa externa espúria; declaração explícita de acidente gera aviso de "revisão humana" sem bloquear conta.                          |
 | **(u) Painel agregador de conferência**             | `executarConferenciaConsistencia`                  | **PASSOU** | Consolida e totaliza inconsistências de AIH e BPA sem alterar status retrospectivo e sem marcar contas como enviadas.                                    |
+| **(v) Catálogo parcial SIGTAP (recorte)**           | `validarContaHospitalarAIH`                        | **PASSOU** | Procedimento ausente em catálogo parcial emite aviso "tabela incompleta, validar manualmente", nunca erro impeditivo de inexistência.                    |
+| **(w) Parser e pré-visualização SIGTAP CSV**        | `previsualizarSigtapCSV`                           | **PASSOU** | Restaura zeros à esquerda (03.01.06.008-8), valida decimais (SH/SA/SP) e rejeita duplicidades dentro do lote com relatório linha a linha.                |
+| **(x) Regras Manual 2017 e competência explícita**  | `validarContaHospitalarAIH`, `previsualizarSigtap` | **PASSOU** | Regras normativas sem vigência confirmada 2026 viram aviso documental de revisão humana; competência explícita exigida e validada.                       |
 
 ---
 
-## 4. Conferência de Consistência do Faturamento SUS Municipal (v0.0.27)
+## 4. Conferência de Consistência do Faturamento SUS Municipal (v0.0.28)
 
-### 4.1. Natureza da Validação (Aviso Regulatório Obrigatório)
+### 4.1. Natureza da Validação e Força das Regras (Aviso Regulatório Obrigatório)
 
-A conferência implementada na versão 0.0.27 é uma **validação administrativa e operacional interna preventiva**, executada no painel de faturamento antes de qualquer tentativa de fechamento ou consolidação.
+A conferência implementada na versão 0.0.28 é uma **validação administrativa e operacional interna preventiva**, executada no painel de faturamento antes de qualquer tentativa de fechamento ou consolidação.
 
 - **NUNCA alegar homologação oficial DATASUS** nem conformidade jurídica plena com o SIHD/SIA-SUS federal;
 - O sistema não efetua transmissão externa, não substitui os validadores federais de remessa e não marca contas como enviadas pelo mero ato de conferência ou emissão de relatório;
-- Nenhum dado retrospectivo do prontuário ou das contas fechadas é alterado.
+- Nenhum dado retrospectivo do prontuário ou das contas fechadas é alterado;
+- **Revisão da Força das Regras Normativas:** Regras baseadas no Manual SIH de Janeiro/2017 cuja vigência estrita em 2026 não esteja comprovada em publicação recente do Ministério da Saúde são tratadas no validador como **AVISO "revisão humana"** e **NUNCA bloqueiam contas**;
+- **Não Inferência de Causa Externa:** O sistema **não infere causa externa ou acidente de trabalho a partir do capítulo do CID (ex: capítulos S/T)**. Apenas campos explicitamente informados (caráter de atendimento declarado) acionam advertências de preenchimento complementar;
+- **Catálogo Parcial vs Tabela Completa:** Uma importação de catálogo em recorte/parcial não constitui prova de que um procedimento ausente seja inexistente no SUS. Procedimentos não localizados em tabela parcial geram aviso de `tabela incompleta, validar manualmente`, evitando falsos bloqueios na conferência.
 
 ### 4.2. Fontes Oficiais Documentadas e Consultadas
 
-1. **Manual Técnico Operacional SIH — Janeiro/2017 (DATASUS):**
+1. **Página Oficial de Downloads da Tabela Unificada SIGTAP (DATASUS):**
+   - **URL Oficial:** `http://tabela-unificada.datasus.gov.br/tabela-unificada/app/download.jsp`
+   - **Última Competência Publicada Registrada:** Competência `09/2026`, gerada em `05/10/2026`.
+   - **Formato Oficial de Distribuição:** O DATASUS distribui as competências mensais por meio de arquivos relacionais posicionais em texto plano (`.txt` em layout fixo) empacotados pelo aplicativo SIGTAP Desktop, e **NÃO em formato CSV tabular simples**.
+   - **Tratamento no Sistema:** O sistema opera com importador estruturado CSV/TSV validado, com seleção explícita de competência, pré-visualização linha a linha, preservação de zeros à esquerda nos códigos de 10 dígitos (padrão SUS `XX.XX.XX.XXX-X`), validação decimal e idempotência transacional por lote.
+
+2. **Manual Técnico Operacional SIH — Janeiro/2017 (DATASUS):**
    - **URL Oficial:** `ftp://ftp2.datasus.gov.br/public/sistemas/dsweb/SIHD/Manuais/MANUAL_SIH_janeiro_2017.pdf`
    - **Versão:** Janeiro/2017.
-   - **Regras Utilizadas:**
-     - AIH válida para apresentação até 3 competências anteriores à de apresentação;
-     - Alta do paciente permitida somente até 6 meses anteriores à competência de processamento;
-     - Diagnóstico principal obrigatório e diagnósticos secundários obrigatórios quando causas externas e agravos do trabalhador (Portarias GM/MS nº 1.969/2001 e SAS nº 579/2001 — Capítulos XIX e XX da CID-10, grupos S/T e V/W/X/Y).
+   - **Critério de Aplicação na v0.0.28:**
+     - Apresentação em até 3 competências e alta em até 6 meses sinalizam **advertência para revisão humana preventiva**, sem travar a tramitação da conta hospitalar municipal;
+     - Diagnóstico de causas externas e acidentes só é checado quando explicitamente preenchido pelo profissional nos campos do atendimento.
 
-2. **Manual de Operacionalização nos Sistemas de Informação: Componente Créditos Financeiros (MS/gov.br, 2025):**
+3. **Manual de Operacionalização nos Sistemas de Informação: Componente Créditos Financeiros (MS/gov.br, 2025):**
    - **URL Oficial:** `https://www.gov.br/saude/pt-br/centrais-de-conteudo/publicacoes/guias-e-manuais/2025/manual-operacionalizacao-nos-sistemas-de-informacao-creditos-financeiros.pdf`
    - **Versão:** 2025.
    - **Regras Utilizadas:**
@@ -127,14 +138,13 @@ A conferência implementada na versão 0.0.27 é uma **validação administrativ
      - Decomposição e apropriação dos valores de Serviços Hospitalares (SH) e Serviços Profissionais (SP);
      - Conformidade com a Tabela Unificada de Procedimentos, Medicamentos e OPM do SUS (SIGTAP).
 
-3. **SIGTAP Oficial — Sistema de Gerenciamento da Tabela de Procedimentos do SUS (DATASUS):**
-   - **URL Oficial:** `http://sigtap.datasus.gov.br`
-   - **Versão/Competências:** Mensal / Competência ativa.
-   - **Regras Utilizadas:**
-     - Validação de código e modalidade de procedimento (hospitalar vs ambulatorial);
-     - Tratamento estrito de vigência: se a competência da conta não tiver sido importada no banco municipal, o sistema sinaliza `competência não importada — validar manualmente` em vez de inventar compatibilidade ou gerar falso erro.
-
 4. **SIA/SUS — Sistema de Informações Ambulatoriais do SUS (DATASUS):**
+   - **URL Oficial:** `http://sia.datasus.gov.br`
+   - **Regras Utilizadas:**
+     - Instrumento de registro BPA individualizado (BPA-I);
+     - Detecção e sinalização administrativa de duplicidade de produção na mesma competência (mesmo atendimento assistencial + mesmo procedimento SIGTAP + mesma competência), sem interrupção arbitrária do faturamento.
+
+5. **SIA/SUS — Sistema de Informações Ambulatoriais do SUS (DATASUS):**
    - **URL Oficial:** `http://sia.datasus.gov.br`
    - **Regras Utilizadas:**
      - Instrumento de registro BPA individualizado (BPA-I);
@@ -150,11 +160,16 @@ A implementação de exportação oficial em lote do faturamento SUS permanece c
    - Layout posicional binário/texto com campos de 70 posições da AIH inicial (tipo 1) e AIH de continuidade (tipo 5);
    - Cálculo de dígito verificador do número de AIH nacional com base na faixa fornecida pela Secretaria Estadual de Saúde (SES);
    - Registro tipo 01 (Identificação do estabelecimento), tipo 02 (Dados do paciente e internação) e tipo 03 (Procedimentos realizados e equipes cirúrgicas).
+   - _Nota de Limite:_ Não construir rotina de exportação federal sem layout posicional formalmente homologado.
 
-2. **Geração de Arquivo Magnético BPA (BPA-C e BPA-I):**
+2. **Conversor do Layout Posicional Oficial SIGTAP Desktop (.txt):**
+   - O DATASUS disponibiliza os arquivos mensais em layout posicional tabular (`tb_procedimento.txt`, `tb_registro.txt`, `tb_descricao.txt`, etc.);
+   - Backlog técnico: construção de parser/conversor para importar diretamente os arquivos descompactados do SIGTAP Desktop sem necessidade de pré-conversão para CSV.
+
+3. **Geração de Arquivo Magnético BPA (BPA-C e BPA-I):**
    - Formato posicional padronizado pelo SIA/SUS com cabeçalho de remessa (registro tipo 01), linhas individualizadas (registro tipo 02) com CNS do paciente, CNS/CBO do profissional executante, código CNES da unidade de atendimento e totalizadores da remessa.
 
-3. **Homologação e Validação Pré-Transmissão:**
+4. **Homologação e Validação Pré-Transmissão:**
    - Ambiente de homologação contra os programas executáveis do Ministério da Saúde: **Validador SIHD** (Sistema de Internação Hospitalar Descentralizado) e **BPA Magnético Desktop**;
    - Trilha de auditoria das glosas de remessa e conciliação de relatórios de rejeição federal (.REJ e .REL).
 

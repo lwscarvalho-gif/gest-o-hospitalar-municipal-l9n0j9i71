@@ -36,12 +36,14 @@ import {
   exportarRelatorioProducaoCSV,
   listarProcedimentosSigtap,
   importarTabelaSIGTAPCSV,
+  executarGravacaoLoteSIGTAP,
   listarCID10,
   criarCID10,
   criarProcedimentoSigtap,
   calcularCompetenciaAtual,
   TotaisCompetencia,
 } from '@/services/faturamento'
+import { previsualizarSigtapCSV, PrevisualizacaoSIGTAPResultado } from '@/services/importacaoSigtap'
 import { listarPacientes } from '@/services/cadastros'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -137,9 +139,17 @@ export function FaturamentoView() {
   const [totaisConsolidados, setTotaisConsolidados] = useState<TotaisCompetencia | null>(null)
   const [consolidando, setConsolidando] = useState(false)
 
-  // Upload SIGTAP CSV
+  // Upload e Pré-Visualização SIGTAP CSV
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadingSigtap, setUploadingSigtap] = useState(false)
+  const [modalPreviewSigtap, setModalPreviewSigtap] = useState(false)
+  const [previewSigtapDados, setPreviewSigtapDados] =
+    useState<PrevisualizacaoSIGTAPResultado | null>(null)
+  const [competenciaImportacaoSigtap, setCompetenciaImportacaoSigtap] = useState<string>(
+    competenciaFiltro !== 'todas' ? competenciaFiltro : calcularCompetenciaAtual(),
+  )
+  const [gravandoLoteSigtap, setGravandoLoteSigtap] = useState(false)
+  const [abaPreviewSigtap, setAbaPreviewSigtap] = useState<'validos' | 'rejeicoes'>('validos')
 
   // CNES parametrizado
   const [cnesParametrizado, setCnesParametrizado] = useState<string>('7823901')
@@ -499,7 +509,7 @@ export function FaturamentoView() {
     })
   }
 
-  // Importação CSV SIGTAP
+  // Importação CSV SIGTAP: Pré-visualização antes de gravar
   const handleUploadSIGTAP = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -507,22 +517,82 @@ export function FaturamentoView() {
     setUploadingSigtap(true)
     try {
       const text = await file.text()
-      const resultado = await importarTabelaSIGTAPCSV(text)
-      toast({
-        title: 'Tabela SIGTAP Importada',
-        description: `${resultado.importados} novos cadastrados, ${resultado.atualizados} atualizados. Total: ${resultado.totalLinhas} linhas processadas.`,
+      const compAlvo =
+        competenciaImportacaoSigtap ||
+        (competenciaFiltro !== 'todas' ? competenciaFiltro : calcularCompetenciaAtual())
+
+      const preview = previsualizarSigtapCSV({
+        conteudoCSV: text,
+        competencia: compAlvo,
       })
-      const novos = await listarProcedimentosSigtap()
-      setSigtapList(novos)
+
+      setPreviewSigtapDados(preview)
+      setAbaPreviewSigtap(preview.rejeicoes.length > 0 ? 'rejeicoes' : 'validos')
+      setModalPreviewSigtap(true)
+
+      if (preview.rejeicoes.length > 0) {
+        toast({
+          title: 'Pré-Visualização Carregada com Rejeições',
+          description: `${preview.totalValidos} procedimentos válidos e ${preview.totalRejeitados} rejeições detectadas. Revise antes de confirmar.`,
+          variant: 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Pré-Visualização Concluída',
+          description: `${preview.totalValidos} procedimentos validados com sucesso. Confirme para gravar.`,
+        })
+      }
     } catch (err: any) {
       toast({
-        title: 'Erro na importação SIGTAP',
+        title: 'Erro ao processar CSV SIGTAP',
         description: err.message || 'Formato CSV incompatível.',
         variant: 'destructive',
       })
     } finally {
       setUploadingSigtap(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  // Confirmação Explícita de Gravação do Lote SIGTAP
+  const handleConfirmarGravacaoLoteSigtap = async () => {
+    if (!previewSigtapDados || previewSigtapDados.itensValidos.length === 0) {
+      toast({
+        title: 'Nenhum item válido',
+        description: 'Não há itens válidos no lote para gravação.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setGravandoLoteSigtap(true)
+    try {
+      const compAlvo = previewSigtapDados.competencia
+      const resultado = await executarGravacaoLoteSIGTAP({
+        itensValidos: previewSigtapDados.itensValidos,
+        competencia: compAlvo,
+        usuarioNome: user?.name || 'Administrador do Faturamento',
+        usuarioRole: user?.role,
+      })
+
+      toast({
+        title: 'Lote SIGTAP Gravado com Sucesso',
+        description: `Competência ${compAlvo}: ${resultado.inseridos} novos inseridos, ${resultado.mantidosOuAtualizados} mantidos/atualizados. Contas históricas preservadas.`,
+      })
+
+      setModalPreviewSigtap(false)
+      setPreviewSigtapDados(null)
+      const novos = await listarProcedimentosSigtap()
+      setSigtapList(novos)
+      carregarDadosGerais()
+    } catch (err: any) {
+      toast({
+        title: 'Falha na gravação do lote SIGTAP',
+        description: err.message || 'Não foi possível gravar os dados.',
+        variant: 'destructive',
+      })
+    } finally {
+      setGravandoLoteSigtap(false)
     }
   }
 
@@ -1792,12 +1862,29 @@ export function FaturamentoView() {
                   className="hidden"
                 />
 
+                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
+                  <Label
+                    htmlFor="comp-import-sigtap"
+                    className="text-[10px] font-bold text-slate-600 uppercase"
+                  >
+                    Competência Alvo:
+                  </Label>
+                  <Input
+                    id="comp-import-sigtap"
+                    value={competenciaImportacaoSigtap}
+                    onChange={(e) => setCompetenciaImportacaoSigtap(e.target.value)}
+                    placeholder="AAAA-MM"
+                    className="w-24 h-6 text-xs font-mono px-1 py-0"
+                    title="Competência oficial da tabela importada (ex: 2026-09)"
+                  />
+                </div>
+
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleBaixarModeloCSV}
                   className="text-xs h-8"
-                  title="Baixar arquivo modelo"
+                  title="Baixar arquivo modelo CSV"
                 >
                   <Download className="w-3.5 h-3.5 mr-1" />
                   Modelo CSV
@@ -1812,7 +1899,7 @@ export function FaturamentoView() {
                       className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs h-8 shadow-sm"
                     >
                       <Upload className="w-3.5 h-3.5 mr-1.5" />
-                      {uploadingSigtap ? 'Importando CSV...' : 'Importar SIGTAP (CSV)'}
+                      {uploadingSigtap ? 'Processando...' : 'Importar SIGTAP (CSV)'}
                     </Button>
 
                     <Button
@@ -2711,6 +2798,234 @@ export function FaturamentoView() {
               Fechar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============================================================== */}
+      {/* MODAL: PRÉ-VISUALIZAÇÃO DE IMPORTAÇÃO SIGTAP E RELATÓRIO       */}
+      {/* ============================================================== */}
+      <Dialog open={modalPreviewSigtap} onOpenChange={setModalPreviewSigtap}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          {previewSigtapDados && (
+            <div className="space-y-4">
+              <DialogHeader>
+                <div className="flex items-center justify-between">
+                  <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <Database className="w-5 h-5 text-emerald-700" />
+                    Pré-Visualização do Lote SIGTAP — Competência {previewSigtapDados.competencia}
+                  </DialogTitle>
+                  <Badge variant="outline" className="font-mono text-xs">
+                    Delimitador: "{previewSigtapDados.delimitadorDetectado}"
+                  </Badge>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Confira o relatório linha a linha antes de gravar no banco de dados. Itens com
+                  erro não entram no lote.
+                </p>
+              </DialogHeader>
+
+              {/* Banner informativo de normas e limites */}
+              <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-lg text-xs space-y-1 text-amber-900">
+                <div className="font-bold flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-700" />
+                  Conformidade Normativa e Idempotência:
+                </div>
+                <p className="text-[11px] text-amber-800">
+                  • Fonte Oficial DATASUS: <code>http://tabela-unificada.datasus.gov.br</code>{' '}
+                  (versão oficial distribuída em layout posicional .txt pelo SIGTAP Desktop).
+                  <br />• Gravação idempotente: procedimentos já existentes com mesmos atributos são
+                  preservados sem duplicação; competências históricas e contas não são recalculadas
+                  retroativamente.
+                </p>
+              </div>
+
+              {/* Cards de Resumo */}
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                  <div className="text-[10px] uppercase font-bold text-slate-500">
+                    Total Linhas Arquivo
+                  </div>
+                  <div className="text-lg font-black font-mono text-slate-800">
+                    {previewSigtapDados.totalLinhasArquivo}
+                  </div>
+                </div>
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                  <div className="text-[10px] uppercase font-bold text-emerald-700">
+                    Validados p/ Gravação
+                  </div>
+                  <div className="text-lg font-black font-mono text-emerald-800">
+                    {previewSigtapDados.totalValidos}
+                  </div>
+                </div>
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg">
+                  <div className="text-[10px] uppercase font-bold text-rose-700">
+                    Linhas Rejeitadas
+                  </div>
+                  <div className="text-lg font-black font-mono text-rose-800">
+                    {previewSigtapDados.totalRejeitados}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabs de Itens Válidos vs Rejeições */}
+              <Tabs
+                value={abaPreviewSigtap}
+                onValueChange={(v) => setAbaPreviewSigtap(v as 'validos' | 'rejeicoes')}
+              >
+                <TabsList className="grid grid-cols-2">
+                  <TabsTrigger value="validos" className="text-xs">
+                    Itens Válidos ({previewSigtapDados.totalValidos})
+                  </TabsTrigger>
+                  <TabsTrigger value="rejeicoes" className="text-xs text-rose-700">
+                    Relatório de Rejeições ({previewSigtapDados.totalRejeitados})
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* Aba Válidos */}
+                <TabsContent value="validos" className="space-y-2 mt-3">
+                  <div className="overflow-x-auto border border-slate-200 rounded-lg max-h-[320px]">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] sticky top-0 border-b">
+                        <tr>
+                          <th className="py-2 px-3">Linha</th>
+                          <th className="py-2 px-3">Código (Preserva Zeros)</th>
+                          <th className="py-2 px-3">Nome do Procedimento</th>
+                          <th className="py-2 px-3 text-right">SH</th>
+                          <th className="py-2 px-3 text-right">SA</th>
+                          <th className="py-2 px-3 text-right">SP</th>
+                          <th className="py-2 px-3 text-center">Modalidade</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {previewSigtapDados.itensValidos.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="py-8 text-center text-slate-400">
+                              Nenhum item válido identificado no arquivo.
+                            </td>
+                          </tr>
+                        ) : (
+                          previewSigtapDados.itensValidos.slice(0, 100).map((it) => (
+                            <tr key={`val-${it.linha}-${it.codigo}`} className="hover:bg-slate-50">
+                              <td className="py-1.5 px-3 font-mono text-slate-500">{it.linha}</td>
+                              <td className="py-1.5 px-3 font-mono font-bold text-blue-700">
+                                {it.codigo}
+                              </td>
+                              <td className="py-1.5 px-3 font-medium text-slate-800">{it.nome}</td>
+                              <td className="py-1.5 px-3 text-right font-mono">
+                                R$ {it.valor_sh.toFixed(2)}
+                              </td>
+                              <td className="py-1.5 px-3 text-right font-mono">
+                                R$ {it.valor_sa.toFixed(2)}
+                              </td>
+                              <td className="py-1.5 px-3 text-right font-mono">
+                                R$ {it.valor_sp.toFixed(2)}
+                              </td>
+                              <td className="py-1.5 px-3 text-center">
+                                <Badge variant="outline" className="text-[9px]">
+                                  {it.modalidade}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {previewSigtapDados.itensValidos.length > 100 && (
+                    <p className="text-[11px] text-slate-500 text-center">
+                      Exibindo as primeiras 100 linhas válidas de um total de{' '}
+                      {previewSigtapDados.itensValidos.length}.
+                    </p>
+                  )}
+                </TabsContent>
+
+                {/* Aba Rejeições */}
+                <TabsContent value="rejeicoes" className="space-y-2 mt-3">
+                  <div className="overflow-x-auto border border-rose-200 rounded-lg max-h-[320px] bg-rose-50/20">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-rose-100/70 text-rose-900 font-bold uppercase text-[10px] sticky top-0 border-b border-rose-200">
+                        <tr>
+                          <th className="py-2 px-3">Linha</th>
+                          <th className="py-2 px-3">Código Bruto</th>
+                          <th className="py-2 px-3">Campo</th>
+                          <th className="py-2 px-3">Motivo da Rejeição</th>
+                          <th className="py-2 px-3">Detalhe</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-rose-100">
+                        {previewSigtapDados.rejeicoes.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={5}
+                              className="py-8 text-center text-emerald-700 font-medium"
+                            >
+                              Nenhuma rejeição! Todas as linhas do arquivo foram aprovadas nas
+                              validações estruturais.
+                            </td>
+                          </tr>
+                        ) : (
+                          previewSigtapDados.rejeicoes.map((rej, idx) => (
+                            <tr key={`rej-${idx}-${rej.linha}`} className="hover:bg-rose-50/60">
+                              <td className="py-1.5 px-3 font-mono font-bold text-rose-700">
+                                {rej.linha}
+                              </td>
+                              <td className="py-1.5 px-3 font-mono text-slate-700">
+                                {rej.codigoBruto || '-'}
+                              </td>
+                              <td className="py-1.5 px-3 uppercase text-[10px] font-bold text-slate-600">
+                                {rej.campo || 'formato'}
+                              </td>
+                              <td className="py-1.5 px-3 font-semibold text-rose-900">
+                                {rej.motivo}
+                              </td>
+                              <td className="py-1.5 px-3 text-slate-600 text-[11px]">
+                                {rej.detalhe || '-'}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </TabsContent>
+              </Tabs>
+
+              {/* Ações e Confirmação Explícita */}
+              <DialogFooter className="pt-3 border-t border-slate-200 flex items-center justify-between gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setModalPreviewSigtap(false)}
+                  disabled={gravandoLoteSigtap}
+                >
+                  Cancelar e Descartar
+                </Button>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 font-medium">
+                    {previewSigtapDados.totalValidos} itens prontos para gravação
+                  </span>
+                  <Button
+                    size="sm"
+                    onClick={handleConfirmarGravacaoLoteSigtap}
+                    disabled={gravandoLoteSigtap || previewSigtapDados.totalValidos === 0}
+                    className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-sm"
+                  >
+                    {gravandoLoteSigtap ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" /> Gravando Lote...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Confirmar e Gravar Lote no
+                        Banco
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

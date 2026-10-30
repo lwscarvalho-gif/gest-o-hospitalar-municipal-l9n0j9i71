@@ -78,6 +78,7 @@ export interface ContextoValidacaoFaturamento {
   competenciaAtiva: string // Formato 'YYYY-MM'
   competenciasImportadasSigtap?: string[] // Competências com SIGTAP formalmente carregada
   catalogoSigtap: ProcedimentoSigtap[]
+  tabelaSigtapParcial?: boolean // Se true, tabela local é um recorte/parcial (não completa)
   catalogoCid10?: CID10Item[]
   pacientesExistentes?: Paciente[]
   profissionaisExistentes?: Profissional[]
@@ -243,20 +244,35 @@ export function validarContaHospitalarAIH(
         campo: 'procedimento_principal_codigo',
         nivel: 'advertencia',
         mensagem: `Competência ${competenciaAlvo} não importada na SIGTAP local — validar manualmente vigência do procedimento ${procCodigoLimpo}.`,
-        fonteOficial: 'SIGTAP Oficial (http://sigtap.datasus.gov.br)',
+        fonteOficial: 'SIGTAP Oficial (http://tabela-unificada.datasus.gov.br)',
         regraReferencia:
-          'Procedimentos e atributos variam por competência; não inferir compatibilidade de tabela incompleta.',
+          'Procedimentos e atributos variam por competência; não inferir compatibilidade de tabela ausente.',
       })
     } else if (!procEncontrado) {
-      erros.push({
-        id: 'aih_procedimento_inexistente_sigtap',
-        campo: 'procedimento_principal_codigo',
-        nivel: 'erro',
-        mensagem: `Procedimento principal ${procCodigoLimpo} não foi localizado na tabela SIGTAP municipal da competência.`,
-        fonteOficial: 'SIGTAP Oficial (http://sigtap.datasus.gov.br) e Manual SIH 2017',
-        regraReferencia:
-          'Todo procedimento faturado em AIH deve existir no catálogo SIGTAP ativo da competência.',
-      })
+      // Requisito 2: Catálogo parcial (importação em recorte) não permite afirmar que procedimento ausente é inválido.
+      // Se a tabela for parcial ou não declarada completa, gera aviso 'tabela incompleta, validar manualmente', não erro.
+      if (contexto.tabelaSigtapParcial) {
+        advertencias.push({
+          id: 'aih_procedimento_tabela_parcial_validar_manual',
+          campo: 'procedimento_principal_codigo',
+          nivel: 'advertencia',
+          mensagem: `Procedimento principal ${procCodigoLimpo} não localizado em catálogo local parcial/recorte — tabela incompleta, validar manualmente.`,
+          fonteOficial: 'SIGTAP Oficial (http://tabela-unificada.datasus.gov.br)',
+          regraReferencia:
+            'Importação parcial de SIGTAP não constitui evidência de inexistência do procedimento no SUS.',
+        })
+      } else {
+        erros.push({
+          id: 'aih_procedimento_inexistente_sigtap',
+          campo: 'procedimento_principal_codigo',
+          nivel: 'erro',
+          mensagem: `Procedimento principal ${procCodigoLimpo} não foi localizado na tabela SIGTAP municipal da competência.`,
+          fonteOficial:
+            'SIGTAP Oficial (http://tabela-unificada.datasus.gov.br) e Manual Créditos Financeiros MS 2025',
+          regraReferencia:
+            'Todo procedimento faturado em AIH deve existir no catálogo SIGTAP ativo da competência.',
+        })
+      }
     } else if (procEncontrado.modalidade && procEncontrado.modalidade === 'ambulatorial') {
       advertencias.push({
         id: 'aih_modalidade_exclusiva_ambulatorial',
@@ -283,20 +299,30 @@ export function validarContaHospitalarAIH(
   } else {
     const cidLimpo = conta.cid_principal.trim().toUpperCase()
 
-    // Regra oficial: causas externas e agravos do trabalho (Capítulos S/T e V/W/X/Y)
-    // Portarias GM/MS 1969/2001 e SAS 579/2001
-    if (isCausaExternaOuAgravoTrabalho(cidLimpo)) {
-      if (!conta.cid_secundario || conta.cid_secundario.trim() === '') {
-        advertencias.push({
-          id: 'aih_causa_externa_sem_cid_secundario',
-          campo: 'cid_secundario',
-          nivel: 'advertencia',
-          mensagem: `CID principal (${cidLimpo}) aponta causa externa / traumatismo (Cap. XIX/XX). Conforme Portarias GM/MS 1969/2001 e SAS 579/2001, recomenda-se preenchimento de CID secundário/causa associada.`,
-          fonteOficial: 'Manual SIH/DATASUS 2017 (Portarias GM/MS 1969/2001 e SAS 579/2001)',
-          regraReferencia:
-            'Obrigatoriedade de registro de causa externa / acidente quando indicado pelo capítulo de lesões.',
-        })
-      }
+    // Requisito 1: Não inferir causa externa ou doença ocupacional a partir do capítulo do CID (S/T).
+    // Validar apenas campos explicitamente informados e regras documentadas aplicáveis.
+    // Regras normativas sem vigência confirmada em 2026 (Manual SIH 2017) viram AVISO "revisão humana", sem bloquear conta.
+    const caraterAtendimento = (conta.carater_atendimento || '').toLowerCase()
+    const ehAcidenteOuCausaExternaDeclarada =
+      caraterAtendimento.includes('acidente') ||
+      caraterAtendimento.includes('trabalho') ||
+      caraterAtendimento.includes('transito') ||
+      caraterAtendimento.includes('extern')
+
+    if (
+      ehAcidenteOuCausaExternaDeclarada &&
+      (!conta.cid_secundario || conta.cid_secundario.trim() === '')
+    ) {
+      advertencias.push({
+        id: 'aih_causa_externa_declarada_sem_cid_secundario',
+        campo: 'cid_secundario',
+        nivel: 'advertencia',
+        mensagem: `Caráter de atendimento explicitamente registrado como causa externa/acidente sem CID secundário informado — recomendada revisão humana.`,
+        fonteOficial:
+          'Manual SIH 2017 / Portarias GM/MS 1969/2001 (revisão humana — vigência em confirmação 2026)',
+        regraReferencia:
+          'Campo explicitamente informado demanda verificação de CID complementar sem bloqueio automático.',
+      })
     }
   }
 
@@ -336,8 +362,9 @@ export function validarContaHospitalarAIH(
         id: 'aih_alta_mais_de_6_meses_competencia',
         campo: 'data_alta',
         nivel: 'advertencia',
-        mensagem: `Alta ocorrida há ${diffMesesAlta} meses da competência de processamento (${competenciaAlvo}), excedendo o limite de 6 meses.`,
-        fonteOficial: 'Manual Técnico Operacional SIH — Janeiro/2017 (DATASUS)',
+        mensagem: `Alta ocorrida há ${diffMesesAlta} meses da competência de processamento (${competenciaAlvo}), excedendo o limite de 6 meses do Manual 2017 — sinalizado para revisão humana (sem bloqueio de conta).`,
+        fonteOficial:
+          'Manual Técnico Operacional SIH — Janeiro/2017 (DATASUS — revisão humana, sem confirmação 2026)',
         regraReferencia:
           'Alta do paciente permitida somente até 6 meses anteriores à competência de apresentação.',
       })
@@ -352,8 +379,9 @@ export function validarContaHospitalarAIH(
         id: 'aih_apresentacao_mais_de_3_competencias',
         campo: 'competencia',
         nivel: 'advertencia',
-        mensagem: `Internação iniciada há mais de 3 competências anteriores à de apresentação (${competenciaAlvo}). Verificar exigência de AIH de continuidade/longa permanência.`,
-        fonteOficial: 'Manual Técnico Operacional SIH — Janeiro/2017 (DATASUS)',
+        mensagem: `Internação iniciada há mais de 3 competências anteriores à de apresentação (${competenciaAlvo}) — sinalizado para revisão humana quanto a AIH de continuidade/longa permanência (sem bloqueio de conta).`,
+        fonteOficial:
+          'Manual Técnico Operacional SIH — Janeiro/2017 (DATASUS — revisão humana, sem confirmação 2026)',
         regraReferencia:
           'AIH válida para apresentação até 3 competências anteriores à de processamento (ou requer AIH de continuidade).',
       })
@@ -433,18 +461,30 @@ export function validarItemProducaoBPA(
         campo: 'procedimento_codigo',
         nivel: 'advertencia',
         mensagem: `Competência ${competenciaAlvo} não importada na SIGTAP — validar manualmente vigência do procedimento ${codProc}.`,
-        fonteOficial: 'SIGTAP Oficial (http://sigtap.datasus.gov.br)',
+        fonteOficial: 'SIGTAP Oficial (http://tabela-unificada.datasus.gov.br)',
         regraReferencia: 'Procedimentos e instrumentos de registro variam por competência.',
       })
     } else if (!procEncontrado) {
-      erros.push({
-        id: 'bpa_procedimento_inexistente_sigtap',
-        campo: 'procedimento_codigo',
-        nivel: 'erro',
-        mensagem: `Procedimento ambulatorial ${codProc} inexistente no catálogo SIGTAP importado.`,
-        fonteOficial: 'SIA/SUS e SIGTAP Oficial',
-        regraReferencia: 'O procedimento deve estar vigente e cadastrado no catálogo municipal.',
-      })
+      // Requisito 2: Tabela parcial não permite afirmar que procedimento é inválido
+      if (contexto.tabelaSigtapParcial) {
+        advertencias.push({
+          id: 'bpa_procedimento_tabela_parcial_validar_manual',
+          campo: 'procedimento_codigo',
+          nivel: 'advertencia',
+          mensagem: `Procedimento ambulatorial ${codProc} não localizado em catálogo local parcial/recorte — tabela incompleta, validar manualmente.`,
+          fonteOficial: 'SIGTAP Oficial (http://tabela-unificada.datasus.gov.br)',
+          regraReferencia: 'Importação parcial não prova inexistência do procedimento no SUS.',
+        })
+      } else {
+        erros.push({
+          id: 'bpa_procedimento_inexistente_sigtap',
+          campo: 'procedimento_codigo',
+          nivel: 'erro',
+          mensagem: `Procedimento ambulatorial ${codProc} inexistente no catálogo SIGTAP importado.`,
+          fonteOficial: 'SIA/SUS e SIGTAP Oficial (http://tabela-unificada.datasus.gov.br)',
+          regraReferencia: 'O procedimento deve estar vigente e cadastrado no catálogo municipal.',
+        })
+      }
     } else if (procEncontrado.modalidade && procEncontrado.modalidade === 'hospitalar') {
       advertencias.push({
         id: 'bpa_modalidade_exclusiva_hospitalar',
