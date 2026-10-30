@@ -940,22 +940,28 @@ Em complemento a este relatório de prontidão e homologação técnica, consult
   - **SAMU / RIS / TFD / APAC / Nutrição:** Mapeados como códigos internos implementáveis no repositório, sem inferência de dependências externas obrigatórias (como PACS ou telemetria) não exigidas pelo texto;
   - **5 Próximos Blocos de Código Interno:** Priorização clara de Mensageria Interna, Portal do Paciente Web, Módulo APAC, Transporte/TFD e RIS (editor de laudos), com dependências externas (ICP-Brasil, webservices federais, homologações) devidamente isoladas.
 
-- **Serviço de Nutrição e Dietética (SND - Requisito 7.4.3.5 / v0.0.69 Parte 2 UI e Testes de Integração Concluídos):**
+- **Serviço de Nutrição e Dietética (SND - Requisito 7.4.3.5 / v0.0.70 Auditoria de Integridade e Bloqueio de Bypass Concluídos):**
   - **v0.0.66 (Parte 1 Base):** Migração `0034_modulo_snd_nutricao_base.js` (`snd_cardapio_refeicoes`, `snd_dietas_catalogo`, `snd_prescricoes_dieteticas`, `snd_distribuicoes_refeicoes`), hook `snd_nutricao.pb.js` com imutabilidade física e endpoint `/backend/v1/snd/mapa-cozinha`;
   - **v0.0.67 (Parte 2 UI Base):** `src/components/SndView.tsx`, `CatalogoSndTab.tsx`, `PrescricaoSndTab.tsx`, `MapaCozinhaSndTab.tsx`, `RelatoriosSndTab.tsx`;
   - **v0.0.68 (Parte 1 Integração Almoxarifado/Estoque - 7.4.3.5.c.i p23):**
-    1. **Migração 0035 (`0035_composicoes_e_baixas_estoque_snd.js`):** Criação das coleções `snd_composicoes_refeicoes` (ficha de composição operacional versionada por refeição/dieta, itens com unidade de consumo/estoque e fator explícito obrigatório) e `snd_baixas_estoque_distribuicoes` (vínculo atômico entre distribuição confirmada e baixa de insumos com snapshot congelado da receita, lotes e saldos);
-    2. **Hook Server-side (`pocketbase/hooks/snd_nutricao.pb.js`):** Rota transacional `/backend/v1/snd/distribuicao/confirmar-com-baixa` com único evento de baixa (status 'distribuido'; status 'planejado'/'nao_distribuido' NÃO consome insumos), validação de validade do lote, saldo no servidor e unidades com conversão explícita (rejeição a conversões ausentes ou implícitas), rollback atômico integral em caso de falha, idempotência estrita (replay 200 pós-timeout, conflito 409 em divergência de payload) e bloqueio a saldo negativo concorrente; rota de estorno compensatório `/backend/v1/snd/baixa/estornar` (restaura saldo com movimentos de entrada em `farmacia_movimentos_estoque`, audita autor/motivo/data UTC e bloqueia duplo estorno sem exclusão histórica);
-    3. **Tipos e Serviço Cliente (`src/types/hospital.ts` e `src/services/snd.ts`):** Métodos tipados `salvarComposicaoOperacional`, `listarComposicoesOperacionais`, `obterPreviaInsumosDistribuicao`, `confirmarDistribuicaoComBaixa`, `estornarBaixaSND`, `consultarConsumoInsumosSND`;
+    1. **Migração 0035 (`0035_composicoes_e_baixas_estoque_snd.js`):** Coleções `snd_composicoes_refeicoes` e `snd_baixas_estoque_distribuicoes`;
+    2. **Hook Server-side (`pocketbase/hooks/snd_nutricao.pb.js`):** Rota transacional `/backend/v1/snd/distribuicao/confirmar-com-baixa` e estorno compensatório `/backend/v1/snd/baixa/estornar`;
+    3. **Tipos e Serviço Cliente (`src/types/hospital.ts` e `src/services/snd.ts`)**;
     4. **Harness de Testes Locais (`src/tests/harnessTestes.ts`):** Casos SND-11 a SND-16;
   - **v0.0.69 (Parte 2 UI, Testes e Documentação - 7.4.3.5.c.i p23):**
-    1. **UI de Ficha de Composição Versionada (`ModalFichaComposicao.tsx` integrado em `CatalogoSndTab.tsx`):** Criação e versionamento por operador autorizado com código, refeição, tipo de dieta, seleção de insumos do almoxarifado de nutrição, quantidades, unidade de consumo e fatores de conversão; inativação lógica formal com justificativa auditada sem exclusão física;
-    2. **Prévia de Insumos/Estoque antes da Confirmação (`MapaCozinhaSndTab.tsx`):** Ao selecionar status 'distribuido', a UI consulta `obterPreviaInsumosDistribuicao` e exibe os insumos da ficha correspondente, saldos em tempo real, lotes e avisos de bloqueio (insuficiente/vencido/sem ficha); chamada transacional a `/backend/v1/snd/distribuicao/confirmar-com-baixa`;
-    3. **Resiliência e Erros sem Perda de Formulário:** Em caso de erro do servidor (estoque insuficiente, lote vencido, conversão inválida), o formulário é preservado na tela com a mensagem de erro acionável e a MESMA chave de idempotência para retentativa; respostas de requisições obsoletas descartadas;
-    4. **Consulta de Consumo e Estorno Compensatório (`ModalConsumoEstornoSnd.tsx` em `RelatoriosSndTab.tsx`):** Listagem de baixas com filtros por período, ponto de estoque e situação; inspeção de snapshot congelado; ação de estorno compensatório exigindo motivo formal obrigatório e autor da sessão; rejeição estrita a duplo estorno via resposta real do servidor;
-    5. **Isolamento do Payload da Cozinha:** A cozinha continua recebendo estritamente o payload operacional sanitizado (leito, dieta, consistência, restrições e alergias) sem ampliação de acessos ou dados clínicos sigilosos;
-    6. **Testes Locais no Harness (`src/tests/harnessTestes.ts`):** Casos SND-17 a SND-21 exercitando funções reais do serviço (`salvarComposicaoOperacional`, `obterPreviaInsumosDistribuicao`, `inativarComposicaoOperacional`, isolamento de payload da cozinha, filtros de consulta de consumo);
-    7. **Limites Honestos e Parciais Explícitos:**
-       - Testes unitários/locais provam os contratos e regras de serviço, mas NÃO provam concorrência real multi-nó distribuída sob alta carga simultânea;
+    1. `ModalFichaComposicao.tsx`, prévia no `MapaCozinhaSndTab.tsx`, estorno em `ModalConsumoEstornoSnd.tsx` e testes SND-17 a SND-21;
+  - **v0.0.70 (Auditoria de Integridade e Bloqueio de Bypass SND / RIS):**
+    1. **Migração 0036 (`0036_regras_integridade_snd_ris_bypass.js`):**
+       - Bloqueio total de escrita direta via API cliente em `snd_baixas_estoque_distribuicoes` (`createRule = null`, `updateRule = null`, `deleteRule = null`);
+       - Bloqueio total de escrita/edição/deleção direta de recibos em `ris_entregas_laudos` (`createRule = null`, `updateRule = null`, `deleteRule = null`);
+       - Bloqueio de exclusão em `snd_distribuicoes_refeicoes` (`deleteRule = null`);
+    2. **Hooks Server-Side com Bloqueio de Bypass e Preservação de Histórico:**
+       - `pocketbase/hooks/snd_nutricao.pb.js` (`onRecordCreate` e `onRecordUpdate`): Proíbe criar ou alterar diretamente distribuição para status 'distribuido' fora do endpoint transacional `/backend/v1/snd/distribuicao/confirmar-com-baixa` (`OPERAÇÃO_NEGADA_BYPASS`); impede baixa retroativa ou mutação em registros legados/já distribuídos (`OPERAÇÃO_NEGADA_IMUTABILIDADE`);
+       - `pocketbase/hooks/exames_laudos.pb.js` (`onRecordCreate` em `laudos_versoes`): Garante obrigatoriedade de sessão autenticada e derivação compulsória do autor, paciente e versão, impedindo falsificação pelo payload do cliente;
+       - `pocketbase/hooks/ris_modulo.pb.js` (`/backend/v1/ris/entregas`): Recibos de entrega criados exclusivamente no endpoint com derivação da sessão, snapshot de conferência e imutabilidade completa;
+       - `pocketbase/hooks/snd_nutricao.pb.js` (`/backend/v1/snd/mapa-cozinha`): Projeção sanitizada estrita para a cozinha, garantindo ausência total de diagnóstico, CID, prontuário detalhado ou corpo clínico em list/detail/expand ou rota alternativa;
+    3. **Testes no Harness (`src/tests/harnessTestes.ts`):** Casos AUDIT-01 a AUDIT-04 exercitando as funções e regras reais (bloqueio de bypass SND, rollback composto, estorno duplo rejeitado, autor/versão RIS não falsificáveis, isolamento LGPD da cozinha);
+    4. **Limites Honestos e Parciais Explícitos:**
+       - Testes unitários/locais provam os contratos e regras de serviço sob mocks/adaptadores, mas NÃO provam concorrência real multi-nó sob carga massiva distribuída (nenhuma topologia de cluster multi-nó é afirmada sem infraestrutura provada);
        - Assinatura digital ICP-Brasil (7.4.3.5.b.ii) permanece pendente de autoridade certificadora credenciada e infraestrutura governamental;
-       - Validação visual e ergonômica em operação hospitalar real permanece pendente de homologação humana pelos profissionais de nutrição e copa.
+       - Validação visual e ergonômica em operação hospitalar real permanece pendente de homologação assistencial humana.

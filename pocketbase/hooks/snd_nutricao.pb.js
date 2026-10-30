@@ -369,6 +369,16 @@ onRecordCreate((e) => {
   var statusOperacional = e.record.getString('status_operacional') || 'planejado'
   var motivoNaoDist = sanitizar(e.record.get('motivo_nao_distribuido'))
 
+  // BLOQUEIO DE BYPASS TRANSACIONAL (Regra de Auditoria Codex):
+  // É estritamente proibido criar diretamente uma distribuição com status 'distribuido'
+  // via API de coleção sem passar pelo endpoint transacional `/backend/v1/snd/distribuicao/confirmar-com-baixa`.
+  // Isso impede a fabricação de distribuições concluídas sem baixa atômica de insumos.
+  if (statusOperacional === 'distribuido') {
+    throw new BadRequestError(
+      'OPERAÇÃO_NEGADA_BYPASS: Distribuição com status "distribuido" consome insumos do estoque e deve ser confirmada exclusivamente pelo endpoint transacional /backend/v1/snd/distribuicao/confirmar-com-baixa.',
+    )
+  }
+
   // Regra Estrita: motivo OBRIGATÓRIO se nao_distribuido
   if (statusOperacional === 'nao_distribuido') {
     if (!motivoNaoDist || motivoNaoDist.length < 3) {
@@ -414,6 +424,37 @@ onRecordCreate((e) => {
     } catch (err) {
       if (err instanceof BadRequestError) throw err
     }
+  }
+
+  e.next()
+}, 'snd_distribuicoes_refeicoes')
+
+// ============================================================================
+// 2b. Hook de Proteção em Alteração de Distribuição: snd_distribuicoes_refeicoes (onRecordUpdate)
+// Impede bypass que tente transitar registro existente para 'distribuido' via API direta,
+// e protege distribuições legadas/já distribuídas contra alterações indevidas.
+// ============================================================================
+onRecordUpdate((e) => {
+  var novoStatus = e.record.getString('status_operacional')
+  var statusAnterior = e.record.originalCopy()
+    ? e.record.originalCopy().getString('status_operacional')
+    : ''
+
+  // Se o registro antigo já era 'distribuido' (legado ou confirmado previamente),
+  // ele é imutável em seu status para evitar baixa retroativa ou corrupção de histórico.
+  if (statusAnterior === 'distribuido') {
+    if (novoStatus !== 'distribuido') {
+      throw new BadRequestError(
+        'OPERAÇÃO_NEGADA_IMUTABILIDADE: Refeição já confirmada como "distribuído" é imutável. Para correções de consumo, utilize o estorno formal de baixa.',
+      )
+    }
+  }
+
+  // Se tenta mudar para 'distribuido' via update direto da coleção (bypass do endpoint de baixa):
+  if (novoStatus === 'distribuido' && statusAnterior !== 'distribuido') {
+    throw new BadRequestError(
+      'OPERAÇÃO_NEGADA_BYPASS: A transição para status "distribuido" exige baixa atômica no estoque e deve ser realizada exclusivamente via /backend/v1/snd/distribuicao/confirmar-com-baixa.',
+    )
   }
 
   e.next()

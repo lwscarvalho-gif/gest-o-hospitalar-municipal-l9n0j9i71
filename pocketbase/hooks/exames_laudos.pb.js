@@ -418,13 +418,12 @@ onRecordCreate((e) => {
 
   e.record.set('numero_versao', proximaVersao)
 
-  // 6. Dados autoritativos do emissor derivados da sessão autenticada
+  // 6. Dados autoritativos do emissor derivados OBRIGATORIAMENTE da sessão autenticada
+  // (Previne falsificação de autor/paciente/versão enviados pelo payload do cliente)
   if (auth) {
     e.record.set('usuario_id', auth.id)
-    const authNome = auth.get('name')
-    if (authNome && String(authNome).trim().length > 0) {
-      e.record.set('responsavel_laudo_nome', authNome)
-    }
+    const authNome = auth.get('name') || auth.get('email') || 'Profissional Autorizado'
+    e.record.set('responsavel_laudo_nome', authNome)
     const authCargo = auth.get('cargo') || auth.get('role')
     if (authCargo) {
       e.record.set('responsavel_laudo_cargo', authCargo)
@@ -444,6 +443,11 @@ onRecordCreate((e) => {
         e.record.set('responsavel_laudo', profs[0].id)
       }
     } catch (_) {}
+  } else {
+    // Se não há auth (ex.: requisição não autenticada tentando bypass via API direta):
+    throw new ForbiddenError(
+      'Não autorizado: registro de versão de laudo exige operador autenticado.',
+    )
   }
 
   // Timestamp seguro do laudo
