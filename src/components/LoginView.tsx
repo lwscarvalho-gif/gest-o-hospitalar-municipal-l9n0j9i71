@@ -43,12 +43,6 @@ export const LoginView: React.FC<LoginModalProps> = ({ onSuccess }) => {
     }
   }
 
-  const handlePreencherUsuario = (userEmail: string) => {
-    setEmail(userEmail)
-    setPassword('Skip@Pass')
-    setErrorMsg(null)
-  }
-
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center px-4 py-8 relative">
       <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px] opacity-40 pointer-events-none" />
@@ -106,12 +100,9 @@ export const LoginView: React.FC<LoginModalProps> = ({ onSuccess }) => {
               </div>
 
               <div className="space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <Label htmlFor="password" text-xs className="text-xs text-slate-300">
-                    Senha de acesso
-                  </Label>
-                  <span className="text-[11px] text-slate-500">Padrão: Skip@Pass</span>
-                </div>
+                <Label htmlFor="password" className="text-xs text-slate-300">
+                  Senha de acesso
+                </Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
                   <Input
@@ -142,50 +133,9 @@ export const LoginView: React.FC<LoginModalProps> = ({ onSuccess }) => {
             </CardContent>
           </form>
 
-          <CardFooter className="flex flex-col border-t border-slate-800/80 pt-4 pb-4 px-6 space-y-3">
-            <span className="text-xs text-slate-400 font-medium">
-              Acesso rápido por perfil semeado:
-            </span>
-            <div className="grid grid-cols-2 gap-2 w-full">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handlePreencherUsuario('admin@saude.gov.br')}
-                className="text-xs border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-200 justify-start"
-              >
-                👑 Administrador
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handlePreencherUsuario('gestor@saude.gov.br')}
-                className="text-xs border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-200 justify-start"
-              >
-                📊 Gestor de Saúde
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handlePreencherUsuario('medico@saude.gov.br')}
-                className="text-xs border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-200 justify-start"
-              >
-                🩺 Profissional Médico
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handlePreencherUsuario('recepcao@saude.gov.br')}
-                className="text-xs border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-200 justify-start"
-              >
-                📋 Recepção / Triagem
-              </Button>
-            </div>
-            <p className="text-[11px] text-slate-500 text-center pt-2">
-              Sistema web hospedado em nuvem • Sem necessidade de instalação local
+          <CardFooter className="flex flex-col border-t border-slate-800/80 pt-3 pb-4 px-6 text-center">
+            <p className="text-[11px] text-slate-500">
+              Acesso restrito e monitorado • Auditoria ativa de acessos
             </p>
           </CardFooter>
         </Card>

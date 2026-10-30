@@ -15,12 +15,14 @@ import {
   LogOut,
   Stethoscope,
   ClipboardList,
+  Flame,
   Menu,
   X,
 } from 'lucide-react'
 
 export type ActiveTab =
   | 'dashboard'
+  | 'pronto_atendimento'
   | 'pacientes'
   | 'profissionais'
   | 'setores_leitos'
@@ -44,23 +46,29 @@ const NAV_ITEMS: NavItem[] = [
     id: 'dashboard',
     label: 'Visão Geral',
     icon: Hospital,
+    allowedRoles: ['admin', 'gestor'],
+  },
+  {
+    id: 'pronto_atendimento',
+    label: 'Pronto Atendimento (PA)',
+    icon: Flame,
     allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
   },
   {
     id: 'agendamentos',
-    label: 'Agendamento',
+    label: 'Agendamento Ambulatorial',
     icon: Calendar,
-    allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
+    allowedRoles: ['admin', 'gestor', 'recepcao'],
   },
   {
     id: 'internacao',
     label: 'Mapa de Leitos & Internação',
     icon: Bed,
-    allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
+    allowedRoles: ['admin', 'gestor', 'profissional'],
   },
   {
     id: 'assistencial',
-    label: 'Registro Assistencial',
+    label: 'Registro Assistencial / Prontuário',
     icon: Stethoscope,
     allowedRoles: ['admin', 'gestor', 'profissional'],
   },
@@ -68,7 +76,7 @@ const NAV_ITEMS: NavItem[] = [
     id: 'pacientes',
     label: 'Cadastro de Pacientes',
     icon: Users,
-    allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
+    allowedRoles: ['admin', 'gestor', 'recepcao'],
   },
   {
     id: 'profissionais',

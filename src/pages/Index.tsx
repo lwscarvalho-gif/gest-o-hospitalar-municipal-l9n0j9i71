@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { LoginView } from '@/components/LoginView'
 import { NavigationBar, ActiveTab } from '@/components/NavigationBar'
 import { DashboardView } from '@/components/DashboardView'
+import { ProntoAtendimentoView } from '@/components/ProntoAtendimentoView'
 import { PacientesView } from '@/components/PacientesView'
 import { ProfissionaisView } from '@/components/ProfissionaisView'
 import { SetoresLeitosView } from '@/components/SetoresLeitosView'
@@ -14,11 +15,34 @@ import { IntegracoesView } from '@/components/IntegracoesView'
 import { AuditoriaView } from '@/components/AuditoriaView'
 import { Loader2 } from 'lucide-react'
 
+// Mapeamento de tela inicial padrão conforme o perfil do operador
+const getDefaultTabForRole = (role?: string): ActiveTab => {
+  switch (role) {
+    case 'admin':
+      return 'auditoria' // administrador -> painel administrativo/auditoria
+    case 'gestor':
+      return 'relatorios' // gestor -> painel de gestão/relatórios
+    case 'profissional':
+      return 'assistencial' // profissional -> registro assistencial/mapa de leitos
+    case 'recepcao':
+      return 'pronto_atendimento' // recepção -> pronto atendimento / triagem / agendamento
+    default:
+      return 'pronto_atendimento'
+  }
+}
+
 const Index: React.FC = () => {
-  const { isAuthenticated, isLoading, user } = useAuth()
-  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard')
+  const { isAuthenticated, isLoading, user, temPermissao } = useAuth()
+  const [activeTab, setActiveTab] = useState<ActiveTab>('pronto_atendimento')
   const [focoInternacaoId, setFocoInternacaoId] = useState<string | undefined>(undefined)
   const [focoPacienteId, setFocoPacienteId] = useState<string | undefined>(undefined)
+
+  // Ao carregar o usuário, redirecionar automaticamente para a sua área de trabalho
+  React.useEffect(() => {
+    if (user?.role) {
+      setActiveTab(getDefaultTabForRole(user.role))
+    }
+  }, [user?.role])
 
   // 1. Loading inicial de checagem de sessão
   if (isLoading) {
@@ -30,9 +54,17 @@ const Index: React.FC = () => {
     )
   }
 
-  // 2. Não autenticado: Exigir login obrigatório (Critério de Aceitação 1: nada é público)
+  // 2. Não autenticado: Exigir login obrigatório (nada é público)
   if (!isAuthenticated) {
-    return <LoginView onSuccess={() => setActiveTab('dashboard')} />
+    return (
+      <LoginView
+        onSuccess={() => {
+          if (user?.role) {
+            setActiveTab(getDefaultTabForRole(user.role))
+          }
+        }}
+      />
+    )
   }
 
   // 3. Usuário autenticado: renderizar visão conforme aba selecionada e perfil
@@ -47,20 +79,36 @@ const Index: React.FC = () => {
       <NavigationBar activeTab={activeTab} onSelectTab={setActiveTab} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
-        {activeTab === 'dashboard' && <DashboardView onNavigate={setActiveTab} />}
-        {activeTab === 'pacientes' && <PacientesView />}
-        {activeTab === 'profissionais' && <ProfissionaisView />}
-        {activeTab === 'setores_leitos' && <SetoresLeitosView />}
-        {activeTab === 'agendamentos' && <AgendamentosView />}
-        {activeTab === 'internacao' && (
+        {activeTab === 'pronto_atendimento' && (
+          <ProntoAtendimentoView
+            onNavegarInternacao={() => setActiveTab('internacao')}
+            onNavegarAgendamento={() => setActiveTab('agendamentos')}
+          />
+        )}
+        {activeTab === 'dashboard' && temPermissao(['admin', 'gestor']) && (
+          <DashboardView onNavigate={setActiveTab} />
+        )}
+        {activeTab === 'pacientes' && temPermissao(['admin', 'gestor', 'recepcao']) && (
+          <PacientesView />
+        )}
+        {activeTab === 'profissionais' && temPermissao(['admin', 'gestor']) && (
+          <ProfissionaisView />
+        )}
+        {activeTab === 'setores_leitos' && temPermissao(['admin', 'gestor']) && (
+          <SetoresLeitosView />
+        )}
+        {activeTab === 'agendamentos' && temPermissao(['admin', 'gestor', 'recepcao']) && (
+          <AgendamentosView />
+        )}
+        {activeTab === 'internacao' && temPermissao(['admin', 'gestor', 'profissional']) && (
           <InternacaoView onAbrirEvolucao={handleAbrirEvolucaoDireta} />
         )}
-        {activeTab === 'assistencial' && (
+        {activeTab === 'assistencial' && temPermissao(['admin', 'gestor', 'profissional']) && (
           <AssistencialView internacaoIdFoco={focoInternacaoId} pacienteIdFoco={focoPacienteId} />
         )}
-        {activeTab === 'relatorios' && <RelatoriosView />}
-        {activeTab === 'integracoes' && <IntegracoesView />}
-        {activeTab === 'auditoria' && <AuditoriaView />}
+        {activeTab === 'relatorios' && temPermissao(['admin', 'gestor']) && <RelatoriosView />}
+        {activeTab === 'integracoes' && temPermissao(['admin', 'gestor']) && <IntegracoesView />}
+        {activeTab === 'auditoria' && temPermissao(['admin']) && <AuditoriaView />}
       </main>
 
       {/* Rodapé institucional */}

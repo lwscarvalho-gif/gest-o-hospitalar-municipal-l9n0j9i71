@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T01:41:21.407Z",
+  "generatedAt": "2026-10-30T02:36:04.524Z",
   "collections": [
     {
       "name": "users",
@@ -818,6 +818,170 @@
         }
       ],
       "indexes": []
+    },
+    {
+      "name": "pronto_atendimento",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "aguardando_triagem",
+            "aguardando_atendimento",
+            "em_atendimento",
+            "finalizado"
+          ]
+        },
+        {
+          "name": "classificacao_risco",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["vermelho", "laranja", "amarelo", "verde", "azul"]
+        },
+        {
+          "name": "queixa_principal",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sinais_vitais",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "discriminador",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_chegada",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_hora_triagem",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "triador_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "profissional_atendimento",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "data_hora_atendimento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_finalizacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "evolucao_clinica",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "diagnostico",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cid10",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "conduta",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["alta", "internacao", "ambulatorio", "observacao"]
+        },
+        {
+          "name": "observacoes_conduta",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "internacao_gerada",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "internacoes"
+        },
+        {
+          "name": "leito_encaminhado",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "leitos"
+        },
+        {
+          "name": "agendamento_gerado",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "agendamentos"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_pa_paciente ON pronto_atendimento (paciente)",
+        "CREATE INDEX idx_pa_status ON pronto_atendimento (status)"
+      ]
     }
   ]
 }

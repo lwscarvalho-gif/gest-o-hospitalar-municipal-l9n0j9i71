@@ -178,3 +178,46 @@ export interface ParametroIntegracao {
   created: string
   updated: string
 }
+
+export type ClassificacaoRisco = 'vermelho' | 'laranja' | 'amarelo' | 'verde' | 'azul'
+
+export type StatusPA =
+  | 'aguardando_triagem'
+  | 'aguardando_atendimento'
+  | 'em_atendimento'
+  | 'finalizado'
+
+export type CondutaPA = 'alta' | 'internacao' | 'ambulatorio' | 'observacao'
+
+export interface FichaProntoAtendimento {
+  id: string
+  paciente: string
+  status: StatusPA
+  classificacao_risco?: ClassificacaoRisco
+  queixa_principal?: string
+  sinais_vitais?: string
+  discriminador?: string
+  data_hora_chegada: string
+  data_hora_triagem?: string
+  triador_nome?: string
+  profissional_atendimento?: string
+  data_hora_atendimento?: string
+  data_hora_finalizacao?: string
+  evolucao_clinica?: string
+  diagnostico?: string
+  cid10?: string
+  conduta?: CondutaPA
+  observacoes_conduta?: string
+  internacao_gerada?: string
+  leito_encaminhado?: string
+  agendamento_gerado?: string
+  expand?: {
+    paciente?: Paciente
+    profissional_atendimento?: Profissional
+    leito_encaminhado?: Leito
+    internacao_gerada?: Internacao
+    agendamento_gerado?: Agendamento
+  }
+  created: string
+  updated: string
+}
