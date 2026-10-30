@@ -966,3 +966,32 @@ Em complemento a este relatório de prontidão e homologação técnica, consult
        - Testes unitários/locais provam os contratos e regras de serviço sob mocks/adaptadores, mas NÃO provam concorrência real multi-nó sob carga massiva distribuída (nenhuma topologia de cluster multi-nó é afirmada sem infraestrutura provada);
        - Assinatura digital ICP-Brasil (7.4.3.5.b.ii) permanece pendente de autoridade certificadora credenciada e infraestrutura governamental;
        - Validação visual e ergonômica em operação hospitalar real permanece pendente de homologação assistencial humana.
+  - **v0.0.71 / v0.0.73 (Módulo SAMU 192 Básico Municipal — Itens 407 a 417 do ANEXO I e Seção 7.4.5.1.e.i):**
+    1. **Parte 1 Backend (v0.0.71 - Entregue e Implantada):**
+       - Migração 0037 (`0037_modulo_samu_basico.js`): coleções `samu_ocorrencias` e `samu_historico_estados` com update/delete bloqueados para clientes (`null`), interceptadores server-side de integridade, índices de unicidade e idempotência;
+       - Hook server-side `pocketbase/hooks/samu_modulo.pb.js`: rotas transacionais `/backend/v1/samu/ocorrencias/abrir`, `/classificar-risco`, `/atribuir-unidade`, `/transicao`, `/vincular-paciente`, `/backend/v1/samu/ocorrencias` (listagem) e detalhe com histórico imutável;
+       - Tipos (`src/types/hospital.ts`) e serviço cliente (`src/services/samu.ts`) com tratamento de exceções tipadas: `ConflitoUnidadeMovelOcupadaError` (409), `IdempotenciaConflitoPayloadError` (409), `RespostaSessaoObsoletaError`;
+       - Casos SAMU-01 a SAMU-07 no harness local;
+    2. **Parte 2 UI, Testes Reais e Fechamento (v0.0.73 - IMPLEMENTADO COM UI):**
+       - Componentes dedicados em `src/components/samu/`:
+         - `SamuView.tsx`: visão principal integrada na barra de navegação (`NavigationBar.tsx` e `Index.tsx`), com listagem paginada, filtros (tipo, período, município, unidade móvel, status), indicadores operacionais rápidos e visualização de chamados;
+         - `ModalAberturaOcorrencia.tsx`: abertura de ocorrência com aceitação explícita de vítima desconhecida sem exigir CPF/CNS, preservação de formulário preenchido em conflito de idempotência 409;
+         - `ModalAcoesOperacionaisSAMU.tsx`: classificação de risco regulatória humana (exclusiva para profissionais autorizados com parecer obrigatório, sem decisão automatizada por software), atribuição de viatura com validação e aviso claro se ocupada (409 `UNIDADE_MOVEL_OCUPADA`), transição de status com justificativa obrigatória e vínculo posterior de paciente com confirmação humana explícita;
+         - `ModalDetalhesOcorrenciaSAMU.tsx`: visualização auditada completa com histórico imutável de transições e detalhes operacionais;
+         - `RelatorioSanitizadoSamuA4.tsx`: folha operacional A4 sanitizada no fuso oficial da unidade (`America/Porto_Velho`), sem exposição de dados clínicos confidenciais e com filtros expressos (Itens 414 a 417);
+       - Harness de Testes Locais (`src/tests/harnessTestes.ts`): Casos SAMU-08 a SAMU-16 exercitando as funções reais de `samu.ts` com fetch/mocks explicitados:
+         - SAMU-08: Abertura com vítima desconhecida sem CPF/CNS via `abrirOcorrenciaSAMU`;
+         - SAMU-09: Vínculo posterior inválido recusado (404) via `vincularPacienteSAMU`;
+         - SAMU-10: Classificação de risco por perfil indevido recusada (403) via `classificarRiscoSAMU`;
+         - SAMU-11: Viatura ocupada dispara `ConflitoUnidadeMovelOcupadaError` (409) via `atribuirUnidadeMovelSAMU`;
+         - SAMU-12: Conflito de payload na mesma chave gera `IdempotenciaConflitoPayloadError` (409);
+         - SAMU-13: Listagem paginada e consulta de detalhe com histórico imutável (`listarOcorrenciasSAMU` e `obterOcorrenciaSAMUPorId`);
+         - SAMU-14: Descarte seguro de resposta assíncrona antiga via `RespostaSessaoObsoletaError`;
+         - SAMU-15: Transição e cancelamento com justificativa e retry idempotente via `transitarStatusSAMU`;
+         - SAMU-16: Emissão do snapshot sanitizado A4 consolidando filtros por tipo, período, cidade e unidade móvel (Itens 414–417);
+    3. **Limitações Honestas e Parciais Explícitas (SAMU):**
+       - **Simulação Local vs. Topologia Multi-Nó Real:** Testes locais exercitam isoladamente funções e contratos cliente/servidor com adaptadores e mocks atômicos, mas NÃO provam concorrência real distribuída em múltiplos nós simultâneos de backend (não se presume topologia multi-nó sem cluster físico testado sob carga real);
+       - **Homologação Humana Assistencial Pendente:** A ergonomia de acolhimento e a usabilidade visual e assistencial em plantão de urgência real dependem de homologação presencial de médicos e enfermeiros reguladores da rede municipal;
+       - **Decisão Clínica Humana Exclusiva:** O sistema não possui nem alega nenhum algoritmo automatizado, IA ou árvore autônoma de decisão clínica para classificação de risco ou despacho — todas as classificações e priorizações dependem compulsoriamente de avaliação e parecer humano de profissional habilitado;
+       - **Sem Telefonia 192, Dispatch Externo ou Mapas Espaciais:** Não há integração telemática com PABX/operadoras de telefonia fixa/móvel 192, rastreamento contínuo por satélite/GPS em mapa ou despacho externo telemático (os itens 407–417 e a Seção 7.4.5.1.e.i tratam do registro operacional e acolhimento hospitalar);
+       - **Independência de Desfecho:** O encerramento ou transporte de ocorrência do SAMU não se converte automaticamente em consulta médica, leito de internação ou alta hospitalar, preservando estritamente a autonomia técnica e o fluxo de acolhimento da equipe da unidade receptora.
