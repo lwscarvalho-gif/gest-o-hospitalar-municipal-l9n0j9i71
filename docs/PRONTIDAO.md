@@ -636,3 +636,11 @@ Todos os cenários do bloco de impressos utilizam funções **reais** importadas
 |   **P4**   | Alertas Clínicos Automáticos de Interação Medicamentosa | Cruzar prescrições ativas com alergias registradas no cadastro do paciente para bloqueio preventivo.                          | Prescrições v0.0.8      |
 |   **P5**   | Protocolo de Comunicação HL7 / FHIR                     | Criar endpoints ou adaptadores padronizados para interoperabilidade com sistemas laboratoriais externos.                      | Exames v0.0.10          |
 |   **P6**   | Demos Públicas de Referência (G-HOSP & Salute)          | Monitoramento de releases públicas e manuais de conformidade de G-HOSP e Salute/Sofis se disponibilizados.                    | Homologação Externa     |
+
+---
+
+## 14. Referência Cruzada com a Matriz de Conformidade Documental (v0.0.46)
+
+Em complemento a este relatório de prontidão, consulte o documento formal consolidado:
+
+- **`docs/MATRIZ_CONFORMIDADE.md`**: Mapeamento item a item do guia de referência vigente (ANEXO I, 474 itens), das seções conhecidas 7.4.1 a 7.4.9, dos 69 itens excluídos formalmente confirmados pelo usuário/Codex, das lacunas reais auditadas (SAMU, radiologia/PACS, transporte/TFD, APAC, nutrição, portal do cidadão, mensageria e cadastros) e dos 5 próximos blocos priorizados por categoria de viabilidade.
