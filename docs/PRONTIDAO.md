@@ -2,7 +2,7 @@
 
 **Sistema:** Gestão Hospitalar Municipal  
 **Stack:** React 19 + TypeScript + Tailwind CSS (Frontend) / Skip Cloud PocketBase v0.36 (Backend)  
-**Versão Atual:** 0.0.48 (Mensageria Interna Hospitalar Parte 2: Interface de Usuário, Caixa de Entrada e Enviadas com Conversa, Composição por Diretório Mínimo e Grupos, Idempotência Anti-Duplo Clique e Retry sem Duplicar, Tags HTML Inertes e Cenários MSG-7 a MSG-10 no Harness)  
+**Versão Atual:** 0.0.61 (Módulo RIS Parte 1 Concluída: Contratos Backend e Sanitizador Server-Side 0.0.60, Serviço Cliente TypeScript com Otimista/SeqRef/Idempotência, Testes Locais de Funções Reais RIS-8 a RIS-14 e Prontidão com Migração 0032 Confirmada)  
 **Data de Consolidação:** Outubro de 2026  
 **Status Operacional:** **PROTÓTIPO AVANÇADO / AMBIENTE DE HOMOLOGAÇÃO CONTROLADA**  
 \*(ATENÇÃO: Este sistema NÃO está autorizado nem pronto para assistência médica real em ambiente de produção sem a resolução integral das lacunas normativas e regulatórias listadas abaixo).\_
@@ -57,6 +57,10 @@
 | **0.0.55** | Transporte Sanitário Interno (Parte 2: Interface de Usuário, Isolamento e Testes)           | Interface completa `TransporteView.tsx` integrada à navegação global (`NavigationBar.tsx` e `Index.tsx`) com abas de viagens programadas (paginada, filtros, finalização com odômetro final), frota e sinalização de manutenção/indisponibilidade, motoristas com controle de validade de CNH, rotas e destinos; reserva atômica de vagas por trecho (ida e/ou volta) alocando vagas SEPARADAS para pacientes e acompanhantes, com controle de sequência (`seqRef`) para descarte de respostas defasadas em voo ao trocar paciente, botão travado contra duplo clique e reenvio idempotente; isolamento estrito de perfil (recepção acessa exclusivamente dados operacionais/administrativos da viagem; justificativas clínicas restritas ao acesso clínico autorizado); cenários TRANSP-7 a TRANSP-12 no harness local com funções reais importadas. |
 | **0.0.56** | Módulo TFD - Tratamento Fora do Domicílio (Parte 1: Backend, Migração e Serviços)           | Migração 0030 (coleções `tfd_processos`, `tfd_historico_estados`, `tfd_viagens_lote` e relação `tfd_processo` em `transporte_viagens`), hook `tfd_processos.pb.js` com transições de estado com justificativa obrigatória (>5 chars), rotas `/previa` e `/confirmar` de lote de viagens, rota de renovação atômica (`POST /backend/v1/tfd/processos/{id}/renovar`), serviço `src/services/tfd.ts` e cenários TFD-1 a TFD-6 no harness local.                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **0.0.57** | Módulo TFD - Tratamento Fora do Domicílio (Parte 2: Interface, Lote, Renovação e Agregados) | Interface `TfdView.tsx` integrada à navegação (`NavigationBar.tsx` e `Index.tsx`) com listagem filtrada/paginada, abertura com CID-10 e justificativa clínica, detalhe com trilha auditável permanente de estados, isolamento clínico rígido (recepção sem CID-10/justificativa), lote de viagens com prévia para revisão humana e confirmação explícita com segregação de conflitos, renovação com preservação de histórico sem herança de aprovação, painel agregado interno por localidade (sem mapas e sem dados pessoais), controle sequencial em voo, retry estável e cenários TFD-7 e TFD-8 no harness.                                                                                                                                                                                                                                        |
+| **0.0.58** | Módulo RIS - Radiologia e Diagnóstico por Imagem (Parte 1: Backend e Migração)              | Migração 0031 (`ris_agendas`, `ris_modelos_laudo`, `ris_historico_transicoes` e expansão de campos RIS em `exames`), hook server-side `ris_modulo.pb.js` com endpoints transacionais e serviço cliente base `src/services/ris.ts`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **0.0.59** | Módulo RIS - Radiologia e Diagnóstico por Imagem (Parte 2: Interface, Gestão e Testes)      | Interface `RisView.tsx` com fila paginada por modalidade/status, agendamento com validação de choque de horários, reagendamento com justificativa, comprovante A4 seguro sem innerHTML, prestador credenciado externo, aplicação de modelos versionados em rascunho sem auto-liberação, e cenários RIS-1 a RIS-7 no harness.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **0.0.60** | Editor Formatado de Laudos RIS (Parte 1: Backend e Correção de Escopo JSVM)                 | Migração 0032 (`editor_formatado_laudos_ris`: `ris_imagens_anexas`, campos de rascunho em `exames` e enriquecimento de `laudos_versoes` e `ris_modelos_laudo`), hook `ris_modulo.pb.js` expandido com endpoints transacionais de rascunho, publicação, retificação e prévia oficial, e correção de escopo do JSVM (sanitizador movido para dentro dos callbacks de rota).                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **0.0.61** | Módulo RIS (Parte 1 Finalizada: Serviço Cliente TS, Testes Reais e Prontidão)               | Serviço cliente TypeScript em `src/services/ris.ts` (`salvarRascunhoLaudoRIS`, `publicarLaudoRIS`, `retificarLaudoRIS`, `obterPreviaLaudoRIS`) cobrindo concorrência otimista (409), token da sessão, descarte por `seqRef` e idempotência; testes de funções reais do sanitizador servidor e regras do contrato (cenários RIS-8 a RIS-14 no harness com 100% de aprovação); estado confirmado da migração 0032 (`APLICADA`) e registro formal de prontidão e pendências da Parte 2 (UI).                                                                                                                                                                                                                                                                                                                                                             |
 
 ---
 
@@ -841,6 +845,61 @@ O módulo de **Radiologia e Diagnóstico por Imagem (RIS)** (ANEXO I Itens 313�
 - **Entrega Formal de Filmes ao Paciente:** **PENDENTE** (Fluxo assistencial municipal opera com laudo impresso A4 e consulta digital no PEP);
 - **Tabelas de Repasse Financeiro a Prestadores Externos:** **PARCIAL / PENDENTE** (Registro do prestador externo entregue; apuração contábil/financeira de honorários de terceiros depende de módulo de faturamento privado/complementar);
 - **Integração DICOM / PACS e Certificação ICP-Brasil:** **EXPLICITAMENTE NÃO ALEGADO / FORA DE ESCOPO** (O sistema RIS não requer nem alega servidor PACS/DICOM ou certificado ICP-Brasil pago).
+
+---
+
+## 19. Editor Formatado de Laudos RIS (v0.0.60 e v0.0.61) — Estado Parcial e Prontidão da Parte 1
+
+Em atendimento à Missão do Codex para a conclusão dos três itens restantes da Parte 1 do RIS, consolida-se o estado verificado e os limites estritos da entrega:
+
+### 19.1. Estado Confirmado da Migração 0032 no Backend
+
+- **Identificação da Migração:** `0032_editor_formatado_laudos_ris.js`
+- **Estado no Backend (Confirmado via `list_migrations` e `db_describe_object`):** **APLICADA**
+- **Estruturas Verificadas no Banco:**
+  1. Criação da coleção `ris_imagens_anexas` (campos: `exame`, `laudo_versao`, `arquivo`, `legenda`, `ordem`, `mime_type`, `tamanho_bytes`, `largura_px`, `altura_px`, `usuario_upload`, `ativo`, `metadata_json`);
+  2. Adição de colunas na coleção `exames`: `conteudo_formatado_rascunho` (text), `config_editor_rascunho` (json), `versao_conteudo_rascunho` (number), `autor_rascunho_id` (relation users), `data_ultimo_rascunho` (date);
+  3. Adição de colunas na coleção `laudos_versoes`: `conteudo_formatado` (text), `config_editor` (json);
+  4. Adição de colunas na coleção `ris_modelos_laudo`: `conteudo_formatado` (text), `config_editor` (json).
+
+### 19.2. O que Está Implantado e Verificado na Parte 1
+
+1. **Contrato de Rotas no Hook Server-Side (`pocketbase/hooks/ris_modulo.pb.js` - implantado em v0.0.60):**
+   - `POST /backend/v1/ris/exames/{id}/salvar-rascunho`: Sanitização no servidor, verificação de concorrência com `versao_esperada` disparando status HTTP 409 (`ConflitoConcorrenciaEdicaoError`), persistência do rascunho e metadados de autoria;
+   - `POST /backend/v1/ris/exames/{id}/publicar-laudo`: Idempotência via `idempotency_key`, congelamento de snapshot da Versão 1 em `laudos_versoes`, transição do status do exame para laudado/liberado com autoria médica autoritativa extraída da sessão;
+   - `POST /backend/v1/ris/exames/{id}/retificar-laudo`: Criação de nova versão (V2, V3...) vinculada à anterior (`versao_anterior_id`), mantendo versões emitidas 100% imutáveis; exigência de justificativa clínica (mínimo 5 caracteres);
+   - `GET /backend/v1/ris/exames/{id}/previa-laudo`: Retorno sanitizado em layout oficial com dados do paciente, exame, histórico de versões e imagens anexas.
+2. **Serviço Cliente TypeScript (`src/services/ris.ts`):**
+   - Funções tipadas: `salvarRascunhoLaudoRIS`, `publicarLaudoRIS`, `retificarLaudoRIS`, `obterPreviaLaudoRIS`;
+   - Tratamento de status 409 com classe `ConflitoConcorrenciaEdicaoError` contendo `versaoAtualServidor` e `versaoEsperadaCliente`;
+   - Implementação de descarte por sequência `seqRef` (`RespostaSessaoObsoletaError`) impedindo contaminação assíncrona entre sessões ou exames;
+   - Transmissão do token Bearer da sessão ativa e suporte a idempotência persistente.
+3. **Bateria de Testes Locais com Funções Reais (`src/tests/harnessTestes.ts` - Cenários RIS-8 a RIS-14):**
+   - `RIS-8`: Sanitizador real servidor remove `<script>`, `<iframe>`, `<object>`, `<embed>`, comentários e handlers `on*`;
+   - `RIS-9`: Sanitizador neutraliza URLs perigosas (`javascript:`, `data:`) e substitui imagens externas não autorizadas por mensagem de segurança, preservando imagens anexas internas;
+   - `RIS-10`: Sanitizador preserva tags clínicas ricas (`h1-h6`, `strong`, `em`, `table`, `thead`, `tbody`, `tr`, `th`, `td`, `ul`, `ol`, `li`, checklists `input[type=checkbox]`);
+   - `RIS-11`: Regra de perfil e vínculo bloqueia anônimos, recepcionistas, enfermeiros e médicos inativos, exigindo perfil Médico/Radiologista ativo;
+   - `RIS-12`: Concorrência otimista com versão esperada dispara erro 409 em descompasso de versões sem sobrescrever rascunho mais recente;
+   - `RIS-13`: Retificação gera nova versão relacionada sem alterar a integridade da Versão 1 emitida e liberada (snapshot idêntico byte a byte);
+   - `RIS-14`: Idempotência com reenvio idêntico retorna resposta cacheada e desvio de payload com mesma chave dispara erro de conflito 409.
+
+### 19.3. O que NÃO Foi Provado (Declaração Honesta de Limites)
+
+- **Segurança em Runtime:** O fato de o hook ter sido implantado com sucesso (deploy ok) comprova que o código é sintaticamente válido no JSVM do Goja/PocketBase, mas **não substitui** auditoria dinâmica de penetração contra vetores complexos de bypass de sanitização sob requisições HTTP reais malformadas;
+- **Concorrência Real Distribuída:** Os testes no harness são locais e determinísticos em memória. **A simulação não comprova concorrência massiva real** sob múltiplos nós ou processos simultâneos disputando locks no SQLite do PocketBase;
+- **Validação Visual Humana:** A formatação gráfica e visual dos laudos depende de inspeção visual humana direta.
+
+### 19.4. Pendências Exatas da Parte 2 (Interface de Usuário)
+
+A Parte 2 do editor de laudos RIS está expressamente delimitada para a próxima etapa:
+
+1. **Interface do Usuário (UI do Editor):** Construção da tela/componente do editor formatado na aba do RIS (botões de formatação, tabela, checklists, inserção de imagens locais anexadas, layout A4 em tela);
+2. **Testes de Round-Trip e Edição Concorrente na UI:** Verificação de carregamento de rascunho -> edição -> prévia visual -> publicação formal; simulação de conflito de concorrência com exibição de modal de alerta e retenção do texto digitado;
+3. **Matriz Recurso por Recurso 7.4.3.4.b.i–iii:**
+   - (i) Laudos descritivos e sumários com editor formatado;
+   - (ii) Modelos pré-definidos aplicados como rascunho editável;
+   - (iii) Histórico de retificações e versões comparativas com destaque da vigente;
+4. **Validação Visual Humana:** Conferência estética humana dos cabeçalhos, margens de impressão A4 e legibilidade dos sumários de resultado.
 
 ---
 

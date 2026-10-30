@@ -189,6 +189,31 @@ export interface RegistrarExameExternoRISParams {
   observacoes?: string
 }
 
+export interface RisConfigEditorLaudo {
+  fonte_familia?: string
+  tamanho_fonte?: string
+  espacamento_linhas?: string
+  margem_superior?: string
+  margem_inferior?: string
+  margem_esquerda?: string
+  margem_direita?: string
+  tamanho_pagina?: 'A4' | 'Carta'
+  orientacao?: 'retrato' | 'paisagem'
+  cor_destaque?: string
+  cabecalho_customizado?: boolean
+  rodape_customizado?: boolean
+  [key: string]: unknown
+}
+
+export interface RisImagemAnexaItem {
+  id: string
+  arquivo: string
+  legenda?: string
+  ordem?: number
+  mime_type?: string
+  tamanho_bytes?: number
+}
+
 export interface RisModeloLaudo {
   id: string
   titulo: string
@@ -196,6 +221,8 @@ export interface RisModeloLaudo {
   codigo_procedimento?: string
   procedimento_nome: string
   texto_padrao: string
+  conteudo_formatado?: string
+  config_editor?: RisConfigEditorLaudo | string
   versao: number
   ativo: boolean
   modelo_anterior_id?: string
@@ -212,8 +239,117 @@ export interface CriarModeloLaudoRISParams {
   procedimento_nome: string
   texto_padrao: string
   codigo_procedimento?: string
+  conteudo_formatado?: string
+  config_editor?: RisConfigEditorLaudo | Record<string, unknown>
   modelo_anterior_id?: string
   motivo_alteracao?: string
+}
+
+export interface SalvarRascunhoLaudoRISParams {
+  conteudo_formatado: string
+  versao_esperada?: number
+  config_editor?: RisConfigEditorLaudo | Record<string, unknown>
+  resultado_sumario?: string
+  session_token?: string
+}
+
+export interface RespostaSalvarRascunhoRIS {
+  sucesso: boolean
+  mensagem: string
+  exame_id: string
+  versao_conteudo_rascunho: number
+  autor_id: string
+  autor_nome: string
+}
+
+export interface PublicarLaudoRISParams {
+  conteudo_formatado?: string
+  resultado_sumario: string
+  idempotency_key?: string
+  config_editor?: RisConfigEditorLaudo | Record<string, unknown>
+  session_token?: string
+}
+
+export interface RespostaPublicarLaudoRIS {
+  sucesso: boolean
+  mensagem: string
+  exame_id: string
+  versao_id: string
+  versao_numero: number
+  status_ris?: string
+  data_laudo?: string
+  responsavel_nome?: string
+  idempotente?: boolean
+}
+
+export interface RetificarLaudoRISParams {
+  conteudo_formatado: string
+  resultado_sumario: string
+  motivo_retificacao: string
+  idempotency_key?: string
+  config_editor?: RisConfigEditorLaudo | Record<string, unknown>
+  session_token?: string
+}
+
+export interface RespostaRetificarLaudoRIS {
+  sucesso: boolean
+  mensagem: string
+  exame_id: string
+  versao_id: string
+  versao_numero: number
+  versao_anterior_id?: string
+  data_laudo?: string
+  responsavel_nome?: string
+  idempotente?: boolean
+}
+
+export interface HistoricoVersaoLaudoPrevia {
+  id: string
+  numero_versao: number
+  data_laudo: string
+  responsavel_laudo_nome: string
+  responsavel_laudo_cargo?: string
+  motivo_retificacao?: string
+  versao_anterior_id?: string
+}
+
+export interface RespostaPreviaLaudoRIS {
+  sucesso: boolean
+  exame_id: string
+  paciente: {
+    id: string
+    nome: string
+    cpf_mascarado: string
+    cns_mascarado: string
+    data_nascimento: string
+    sexo: string
+    tipo_sanguineo?: string
+    alergias?: string
+  }
+  exame: {
+    tipo_exame: string
+    modalidade_ris: string
+    data_solicitacao: string
+    solicitante_nome: string
+    status_ris: string
+    data_laudo?: string
+    responsavel_laudo_nome?: string
+    resultado_sumario?: string
+    versao_vigente: number
+    tem_retificacao: boolean
+    tipo_execucao: string
+    prestador_externo_nome?: string
+  }
+  previa: {
+    tipo_conteudo: 'publicado' | 'rascunho'
+    conteudo_formatado_sanitizado: string
+    config_editor: RisConfigEditorLaudo | Record<string, unknown>
+    imagens_anexas: RisImagemAnexaItem[]
+    historico_versoes: HistoricoVersaoLaudoPrevia[]
+    unidade_nome: string
+    municipio_uf: string
+    aviso_legal: string
+  }
 }
 
 export interface RisHistoricoTransicao {

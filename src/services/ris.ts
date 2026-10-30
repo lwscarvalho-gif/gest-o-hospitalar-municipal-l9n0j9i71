@@ -13,6 +13,13 @@ import {
   CriarModeloLaudoRISParams,
   RisAgenda,
   RisHistoricoTransicao,
+  SalvarRascunhoLaudoRISParams,
+  RespostaSalvarRascunhoRIS,
+  PublicarLaudoRISParams,
+  RespostaPublicarLaudoRIS,
+  RetificarLaudoRISParams,
+  RespostaRetificarLaudoRIS,
+  RespostaPreviaLaudoRIS,
 } from '@/types/hospital'
 import { registrarAuditoria } from './auditoria'
 
@@ -395,6 +402,439 @@ export async function listarModelosLaudoRIS(
   })
 
   return records
+}
+
+/**
+ * ----------------------------------------------------------------------------
+ * SERVIÇOS CLIENTE TYPESCRIPT — EDITOR FORMATADO DE LAUDOS RIS (0.0.60)
+ * Conforme contrato implantado nos endpoints 10, 11, 12 e 13 do hook PocketBase:
+ * - /backend/v1/ris/exames/{id}/salvar-rascunho (POST)
+ * - /backend/v1/ris/exames/{id}/publicar-laudo (POST)
+ * - /backend/v1/ris/exames/{id}/retificar-laudo (POST)
+ * - /backend/v1/ris/exames/{id}/previa-laudo (GET)
+ * ----------------------------------------------------------------------------
+ */
+
+export interface OpcoesRequisicaoRIS {
+  seqMomento?: number
+  seqReferencia?: { current: number }
+  session_token?: string
+}
+
+/**
+ * Função de Sanitização Server-Side / Fonte da Verdade do RIS
+ * Espelha fielmente a implementação JSVM implantada no hook `pocketbase/hooks/ris_modulo.pb.js`
+ * para validação e execução em testes unitários e de integração locais.
+ */
+export function sanitizarHtmlServidorRIS(inputHtml: unknown): string {
+  if (!inputHtml) return ''
+  let str = String(inputHtml)
+  str = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+  str = str.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+  str = str.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+  str = str.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+  str = str.replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
+  str = str.replace(/<applet\b[^<]*(?:(?!<\/applet>)<[^<]*)*<\/applet>/gi, '')
+  str = str.replace(/<!--[\s\S]*?-->/g, '')
+  str = str.replace(/\son[a-zA-Z_]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+  str = str.replace(/href\s*=\s*["']?\s*(?:javascript|vbscript|data):[^"'>\s]*/gi, 'href="#"')
+  str = str.replace(/<img\b([^>]*?)>/gi, function (_match, attrs) {
+    const srcMatch = attrs.match(/src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+    let srcVal = srcMatch ? srcMatch[1] || srcMatch[2] || srcMatch[3] || '' : ''
+    srcVal = srcVal.trim()
+    const isInternoValido =
+      srcVal.indexOf('/api/files/ris_imagens_anexas/') !== -1 ||
+      srcVal.indexOf('/api/files/exames/') !== -1 ||
+      srcVal.indexOf('/assets/') === 0 ||
+      srcVal.indexOf('/ris-internal-image/') === 0
+    if (!isInternoValido) {
+      return '<span class="ris-img-bloqueada text-slate-400 italic text-xs">[Imagem externa bloqueada por segurança do RIS]</span>'
+    }
+    const altMatch = attrs.match(/alt\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+    const altVal = altMatch ? altMatch[1] || altMatch[2] || 'Imagem do Exame' : 'Imagem do Exame'
+    const widthMatch = attrs.match(/width\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+    const heightMatch = attrs.match(/height\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+    const idMatch = attrs.match(/data-imagem-id\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+    let safeAttrs =
+      'src="' + srcVal.replace(/"/g, '&quot;') + '" alt="' + altVal.replace(/"/g, '&quot;') + '"'
+    if (widthMatch)
+      safeAttrs +=
+        ' width="' + (widthMatch[1] || widthMatch[2] || widthMatch[3]).replace(/"/g, '&quot;') + '"'
+    if (heightMatch)
+      safeAttrs +=
+        ' height="' +
+        (heightMatch[1] || heightMatch[2] || heightMatch[3]).replace(/"/g, '&quot;') +
+        '"'
+    if (idMatch)
+      safeAttrs += ' data-imagem-id="' + (idMatch[1] || idMatch[2]).replace(/"/g, '&quot;') + '"'
+    safeAttrs += ' class="ris-imagem-laudo-interna max-w-full rounded border border-slate-300 my-2"'
+    return '<img ' + safeAttrs + ' />'
+  })
+  const allowlistTags = [
+    'p',
+    'br',
+    'hr',
+    'strong',
+    'b',
+    'em',
+    'i',
+    'u',
+    's',
+    'mark',
+    'span',
+    'div',
+    'ul',
+    'ol',
+    'li',
+    'a',
+    'table',
+    'thead',
+    'tbody',
+    'tfoot',
+    'tr',
+    'th',
+    'td',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'blockquote',
+    'input',
+    'label',
+  ]
+  str = str.replace(
+    /<(\/?)([a-zA-Z0-9_-]+)([^>]*)>/gi,
+    function (fullMatch, closingSlash, tagName, restAttrs) {
+      const tagLower = tagName.toLowerCase()
+      if (tagLower === 'img') return fullMatch
+      if (allowlistTags.indexOf(tagLower) === -1) return ''
+      if (tagLower === 'input') {
+        if (!restAttrs.match(/type\s*=\s*["']?checkbox["']?/i)) return ''
+        const isChecked = !!restAttrs.match(/\bchecked\b/i)
+        return (
+          '<input type="checkbox"' +
+          (isChecked ? ' checked' : '') +
+          ' disabled class="ris-checklist-item" />'
+        )
+      }
+      let safeTagAttrs = ''
+      if (tagLower === 'a') {
+        const hrefMatch = restAttrs.match(/href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+        let hVal = hrefMatch ? hrefMatch[1] || hrefMatch[2] || hrefMatch[3] || '#' : '#'
+        if (
+          hVal.toLowerCase().indexOf('javascript:') !== -1 ||
+          hVal.toLowerCase().indexOf('data:') !== -1
+        ) {
+          hVal = '#'
+        }
+        safeTagAttrs +=
+          ' href="' + hVal.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer"'
+      }
+      if (tagLower === 'td' || tagLower === 'th') {
+        const colMatch = restAttrs.match(/colspan\s*=\s*["']?(\d+)["']?/i)
+        const rowMatch = restAttrs.match(/rowspan\s*=\s*["']?(\d+)["']?/i)
+        if (colMatch) safeTagAttrs += ' colspan="' + colMatch[1] + '"'
+        if (rowMatch) safeTagAttrs += ' rowspan="' + rowMatch[1] + '"'
+      }
+      const classMatch = restAttrs.match(/class\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+      if (classMatch) {
+        const clsVal = (classMatch[1] || classMatch[2] || '').trim()
+        safeTagAttrs += ' class="' + clsVal.replace(/["<>]/g, '') + '"'
+      }
+      const styleMatch = restAttrs.match(/style\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+      if (styleMatch) {
+        let rawStyle = (styleMatch[1] || styleMatch[2] || '').trim()
+        rawStyle = rawStyle.replace(/url\s*\([^)]*\)/gi, '')
+        rawStyle = rawStyle.replace(/expression\s*\([^)]*\)/gi, '')
+        rawStyle = rawStyle.replace(/javascript\s*:/gi, '')
+        safeTagAttrs += ' style="' + rawStyle.replace(/"/g, '&quot;') + '"'
+      }
+      const dataMatches = restAttrs.match(/data-[a-zA-Z0-9_-]+\s*=\s*(?:"[^"]*"|'[^']*')/gi)
+      if (dataMatches && dataMatches.length > 0) {
+        for (let d = 0; d < dataMatches.length; d++) {
+          safeTagAttrs += ' ' + dataMatches[d]
+        }
+      }
+      return '<' + closingSlash + tagLower + safeTagAttrs + '>'
+    },
+  )
+  return str
+}
+
+/**
+ * Erro de conflito de concorrência de edição (HTTP 409)
+ */
+export class ConflitoConcorrenciaEdicaoError extends Error {
+  readonly versaoAtualServidor?: number
+  readonly versaoEsperadaCliente?: number
+
+  constructor(mensagem: string, versaoAtualServidor?: number, versaoEsperadaCliente?: number) {
+    super(mensagem)
+    this.name = 'ConflitoConcorrenciaEdicaoError'
+    this.versaoAtualServidor = versaoAtualServidor
+    this.versaoEsperadaCliente = versaoEsperadaCliente
+  }
+}
+
+/**
+ * Erro de resposta obsoleta descartada por seqRef (troca de paciente ou sessão em voo)
+ */
+export class RespostaSessaoObsoletaError extends Error {
+  constructor(mensagem = 'Resposta assíncrona descartada por transição de sessão/paciente.') {
+    super(mensagem)
+    this.name = 'RespostaSessaoObsoletaError'
+  }
+}
+
+/**
+ * Helper para validar se a resposta em voo ainda pertence à sessão ativa (padrão seqRef)
+ */
+function verificarDescarteSessao(opcoes?: OpcoesRequisicaoRIS) {
+  if (
+    opcoes &&
+    opcoes.seqMomento !== undefined &&
+    opcoes.seqReferencia !== undefined &&
+    opcoes.seqMomento !== opcoes.seqReferencia.current
+  ) {
+    throw new RespostaSessaoObsoletaError()
+  }
+}
+
+/**
+ * 12. Salvar Rascunho Formatado no RIS com Concorrência Otimista (409)
+ * Contrato backend: POST /backend/v1/ris/exames/{id}/salvar-rascunho
+ */
+export async function salvarRascunhoLaudoRIS(
+  exameId: string,
+  params: SalvarRascunhoLaudoRISParams,
+  opcoes?: OpcoesRequisicaoRIS,
+): Promise<RespostaSalvarRascunhoRIS> {
+  const token = params.session_token || opcoes?.session_token || pb.authStore.token
+  const baseUrl = import.meta.env.VITE_POCKETBASE_URL || ''
+  const url = `${baseUrl.replace(/\/$/, '')}/backend/v1/ris/exames/${encodeURIComponent(exameId)}/salvar-rascunho`
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      conteudo_formatado: params.conteudo_formatado,
+      versao_esperada: params.versao_esperada,
+      config_editor: params.config_editor,
+      resultado_sumario: params.resultado_sumario,
+    }),
+  })
+
+  // Validação do padrão seqRef: se a sessão/paciente mudou enquanto a requisição estava em voo, descarta
+  verificarDescarteSessao(opcoes)
+
+  const data = await response.json()
+
+  if (!response.ok) {
+    if (response.status === 409) {
+      throw new ConflitoConcorrenciaEdicaoError(
+        data.erro ||
+          'O rascunho deste laudo foi modificado por outro profissional. Atualize sua visualização antes de salvar.',
+        data.versao_atual_servidor,
+        data.versao_esperada_cliente,
+      )
+    }
+    throw new Error(data.erro || 'Falha ao salvar rascunho de laudo RIS.')
+  }
+
+  try {
+    await registrarAuditoria({
+      acao: 'SALVAR_RASCUNHO_RIS',
+      modulo: 'ris',
+      registro_id: exameId,
+      detalhes: JSON.stringify({
+        versao: data.versao_conteudo_rascunho,
+        autor_id: data.autor_id,
+      }),
+    })
+  } catch {
+    /* intentionally ignored */
+  }
+
+  return data as RespostaSalvarRascunhoRIS
+}
+
+/**
+ * 13. Publicar (Liberar) Laudo Formalmente no RIS
+ * Cria Versão 1 imutável em `laudos_versoes`, congela snapshot e atualiza exame para laudado/liberado.
+ * Contrato backend: POST /backend/v1/ris/exames/{id}/publicar-laudo
+ */
+export async function publicarLaudoRIS(
+  exameId: string,
+  params: PublicarLaudoRISParams,
+  opcoes?: OpcoesRequisicaoRIS,
+): Promise<RespostaPublicarLaudoRIS> {
+  const token = params.session_token || opcoes?.session_token || pb.authStore.token
+  const baseUrl = import.meta.env.VITE_POCKETBASE_URL || ''
+  const url = `${baseUrl.replace(/\/$/, '')}/backend/v1/ris/exames/${encodeURIComponent(exameId)}/publicar-laudo`
+
+  const idempotencyKey = params.idempotency_key || `ris-pub-${exameId}-${Date.now().toString(36)}`
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      conteudo_formatado: params.conteudo_formatado,
+      resultado_sumario: params.resultado_sumario,
+      idempotency_key: idempotencyKey,
+      config_editor: params.config_editor,
+    }),
+  })
+
+  verificarDescarteSessao(opcoes)
+
+  const data = await response.json()
+
+  if (!response.ok) {
+    if (response.status === 409) {
+      throw new Error(
+        `IDEMPOTENCY_PAYLOAD_CONFLICT: ${data.erro || 'Conflito de chave de idempotência.'}`,
+      )
+    }
+    throw new Error(data.erro || 'Falha ao liberar laudo RIS.')
+  }
+
+  try {
+    await registrarAuditoria({
+      acao: 'PUBLICAR_LAUDO_RIS',
+      modulo: 'ris',
+      registro_id: exameId,
+      detalhes: JSON.stringify({
+        versao_numero: data.versao_numero,
+        versao_id: data.versao_id,
+        idempotente: data.idempotente,
+        idempotency_key: idempotencyKey,
+      }),
+    })
+  } catch {
+    /* intentionally ignored */
+  }
+
+  return data as RespostaPublicarLaudoRIS
+}
+
+/**
+ * 14. Retificar Laudo Formalmente no RIS
+ * Cria NOVA versão imutável (V2, V3...) sem alterar as versões anteriores já emitidas.
+ * Exige justificativa clínica (mínimo 5 caracteres) e resultado conclusivo.
+ * Contrato backend: POST /backend/v1/ris/exames/{id}/retificar-laudo
+ */
+export async function retificarLaudoRIS(
+  exameId: string,
+  params: RetificarLaudoRISParams,
+  opcoes?: OpcoesRequisicaoRIS,
+): Promise<RespostaRetificarLaudoRIS> {
+  const token = params.session_token || opcoes?.session_token || pb.authStore.token
+  const baseUrl = import.meta.env.VITE_POCKETBASE_URL || ''
+  const url = `${baseUrl.replace(/\/$/, '')}/backend/v1/ris/exames/${encodeURIComponent(exameId)}/retificar-laudo`
+
+  const idempotencyKey = params.idempotency_key || `ris-ret-${exameId}-${Date.now().toString(36)}`
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      conteudo_formatado: params.conteudo_formatado,
+      resultado_sumario: params.resultado_sumario,
+      motivo_retificacao: params.motivo_retificacao,
+      idempotency_key: idempotencyKey,
+      config_editor: params.config_editor,
+    }),
+  })
+
+  verificarDescarteSessao(opcoes)
+
+  const data = await response.json()
+
+  if (!response.ok) {
+    if (response.status === 409) {
+      throw new Error(
+        `IDEMPOTENCY_PAYLOAD_CONFLICT: ${data.erro || 'Conflito de chave de idempotência na retificação.'}`,
+      )
+    }
+    throw new Error(data.erro || 'Falha ao retificar laudo RIS.')
+  }
+
+  try {
+    await registrarAuditoria({
+      acao: 'RETIFICAR_LAUDO_RIS',
+      modulo: 'ris',
+      registro_id: exameId,
+      detalhes: JSON.stringify({
+        versao_numero: data.versao_numero,
+        versao_id: data.versao_id,
+        versao_anterior_id: data.versao_anterior_id,
+        motivo_retificacao: params.motivo_retificacao,
+        idempotente: data.idempotente,
+        idempotency_key: idempotencyKey,
+      }),
+    })
+  } catch {
+    /* intentionally ignored */
+  }
+
+  return data as RespostaRetificarLaudoRIS
+}
+
+/**
+ * 15. Obter Prévia Oficial do Laudo RIS Formatado
+ * Serve prévia com layout municipal, dados do paciente, histórico de versões e imagens anexas.
+ * Contrato backend: GET /backend/v1/ris/exames/{id}/previa-laudo
+ */
+export async function obterPreviaLaudoRIS(
+  exameId: string,
+  opcoes?: OpcoesRequisicaoRIS,
+): Promise<RespostaPreviaLaudoRIS> {
+  const token = opcoes?.session_token || pb.authStore.token
+  const baseUrl = import.meta.env.VITE_POCKETBASE_URL || ''
+  const url = `${baseUrl.replace(/\/$/, '')}/backend/v1/ris/exames/${encodeURIComponent(exameId)}/previa-laudo`
+
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers,
+  })
+
+  verificarDescarteSessao(opcoes)
+
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data.erro || 'Falha ao obter prévia de laudo RIS.')
+  }
+
+  return data as RespostaPreviaLaudoRIS
 }
 
 /**
