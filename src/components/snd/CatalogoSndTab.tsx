@@ -19,7 +19,17 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { Utensils, Plus, Clock, CheckCircle2, AlertTriangle, Layers, Sparkles } from 'lucide-react'
+import {
+  Utensils,
+  Plus,
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
+  Layers,
+  Sparkles,
+  Scale,
+} from 'lucide-react'
+import { ModalFichaComposicao } from './ModalFichaComposicao'
 import { useToast } from '@/hooks/use-toast'
 
 interface CatalogoSndTabProps {
@@ -69,6 +79,7 @@ export const CatalogoSndTab: React.FC<CatalogoSndTabProps> = ({
   const { toast } = useToast()
   const [modalRefeicaoAberta, setModalRefeicaoAberta] = useState(false)
   const [modalDietaAberta, setModalDietaAberta] = useState(false)
+  const [modalComposicaoAberta, setModalComposicaoAberta] = useState(false)
   const [itemParaInativar, setItemParaInativar] = useState<{
     tipo: 'refeicao' | 'dieta'
     id: string
@@ -216,6 +227,35 @@ export const CatalogoSndTab: React.FC<CatalogoSndTabProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Barra de Acesso à Composição de Insumos / Estoque */}
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-lg bg-emerald-600/10 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-300">
+            <Scale className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="font-bold text-sm text-emerald-950 flex items-center gap-2">
+              Fichas Técnicas de Composição de Refeições & Baixa em Estoque
+              <Badge className="bg-emerald-600 text-white text-[10px]">Requisito 7.4.3.5.c.i</Badge>
+            </h3>
+            <p className="text-xs text-emerald-800">
+              Parametrize insumos, unidades de medida e fatores de conversão vinculados ao
+              almoxarifado de nutrição. Gera snapshot imutável em cada evento de distribuição no
+              leito.
+            </p>
+          </div>
+        </div>
+
+        <Button
+          size="sm"
+          className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs h-8 flex items-center gap-1.5 self-end md:self-auto"
+          onClick={() => setModalComposicaoAberta(true)}
+        >
+          <Layers className="w-3.5 h-3.5" />
+          Gerenciar Fichas de Composição
+        </Button>
+      </div>
+
       {/* Guia Informativo de Imutabilidade */}
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-start gap-3">
         <Sparkles className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
@@ -644,6 +684,15 @@ export const CatalogoSndTab: React.FC<CatalogoSndTabProps> = ({
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Gestão de Fichas de Composição */}
+      <ModalFichaComposicao
+        aberta={modalComposicaoAberta}
+        onClose={() => setModalComposicaoAberta(false)}
+        refeicoes={refeicoes}
+        dietas={dietas}
+        podeEditar={podeEditar}
+      />
 
       {/* Modal Inativação Lógica */}
       <Dialog

@@ -29,7 +29,7 @@
 
 As seguintes pendências foram identificadas para evolução nos blocos subsequentes da arquitetura hospitalar:
 
-- [ ] **Integração com Estoque de Insumos e Fórmulas Nutricionais (7.4.3.5.c.i)**: Baixa automática de dietas enterais industrializadas e insumos parenterais vinculada ao módulo de Farmácia/Almoxarifado Hospitalar.
+- [x] **Integração com Estoque de Insumos e Fórmulas Nutricionais (7.4.3.5.c.i)**: Concluída em 2 etapas (v0.0.68 Parte 1 Backend transacional + v0.0.69 Parte 2 UI, prévia em tela, estorno compensatório e testes SND-17+).
 - [ ] **Assinatura Digital ICP-Brasil nos Impressos Dietéticos (7.4.3.5.b.ii)**: Emissão de folhas e recibos de prescrição com carimbo de tempo ICP-Brasil e certificado digital emitido por autoridade certificadora (médico/nutricionista).
 - [ ] **Homologação Assistencial e Teste Visual Humano em Leito**: Testes de usabilidade e leitura de etiquetas em tablets de copa e terminais beira-leito com a equipe de enfermagem e nutrição do município.
 - [ ] **Testes de Concorrência Real Multi-Nó (Cluster PocketBase)**: Avaliação de throughput de submissão de idempotency keys sob concorrência multi-instância em alta volumetria.

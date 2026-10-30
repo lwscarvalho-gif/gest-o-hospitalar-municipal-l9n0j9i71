@@ -24,14 +24,18 @@ import {
   ChevronRight,
   ShieldCheck,
   Building,
+  RotateCcw,
+  History,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { ModalConsumoEstornoSnd } from './ModalConsumoEstornoSnd'
 
 interface RelatoriosSndTabProps {
   setores: Setor[]
   leitos: Leito[]
   pacientes: Paciente[]
   refeicoes: ItemCardapioRefeicao[]
+  podeOperarEstoque?: boolean
 }
 
 export const RelatoriosSndTab: React.FC<RelatoriosSndTabProps> = ({
@@ -39,8 +43,10 @@ export const RelatoriosSndTab: React.FC<RelatoriosSndTabProps> = ({
   leitos,
   pacientes,
   refeicoes,
+  podeOperarEstoque = true,
 }) => {
   const { toast } = useToast()
+  const [modalConsumoAberta, setModalConsumoAberta] = useState(false)
 
   // Filtros de consolidação
   const [dataInicio, setDataInicio] = useState<string>(() => {
@@ -127,14 +133,28 @@ export const RelatoriosSndTab: React.FC<RelatoriosSndTabProps> = ({
           </div>
         </div>
 
-        <Button
-          size="sm"
-          className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 flex items-center gap-1.5 self-end md:self-auto"
-          onClick={handleImprimir}
-        >
-          <Printer className="w-3.5 h-3.5" />
-          Imprimir Folha Sanitizada A4
-        </Button>
+        <div className="flex items-center gap-2 self-end md:self-auto">
+          {podeOperarEstoque && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-indigo-300 text-indigo-700 hover:bg-indigo-50 text-xs h-8 flex items-center gap-1.5"
+              onClick={() => setModalConsumoAberta(true)}
+            >
+              <History className="w-3.5 h-3.5 text-indigo-600" />
+              Consumo de Insumos & Estorno
+            </Button>
+          )}
+
+          <Button
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 flex items-center gap-1.5"
+            onClick={handleImprimir}
+          >
+            <Printer className="w-3.5 h-3.5" />
+            Imprimir Folha Sanitizada A4
+          </Button>
+        </div>
       </div>
 
       {/* Cartões de Indicadores Rápidos */}
@@ -402,6 +422,15 @@ export const RelatoriosSndTab: React.FC<RelatoriosSndTabProps> = ({
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal de Consumo de Insumos e Estorno Compensatório */}
+      <ModalConsumoEstornoSnd
+        aberta={modalConsumoAberta}
+        onClose={() => setModalConsumoAberta(false)}
+        refeicoes={refeicoes}
+        setores={setores}
+        podeOperarEstoque={podeOperarEstoque}
+      />
     </div>
   )
 }

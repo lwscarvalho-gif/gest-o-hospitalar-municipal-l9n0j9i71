@@ -4,8 +4,13 @@ import {
   Setor,
   ItemCardapioRefeicao,
   StatusDistribuicaoRefeicao,
+  PreviaInsumosBaixaSND,
 } from '@/types/hospital'
-import { registrarDistribuicaoRefeicao } from '@/services/snd'
+import {
+  registrarDistribuicaoRefeicao,
+  obterPreviaInsumosDistribuicao,
+  confirmarDistribuicaoComBaixa,
+} from '@/services/snd'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -34,6 +39,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Flame,
+  Scale,
+  PackageCheck,
+  PackageX,
+  AlertCircle,
+  HelpCircle,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -86,7 +96,13 @@ export const MapaCozinhaSndTab: React.FC<MapaCozinhaSndTabProps> = ({
   // Chave de idempotência persistente por item e refeição
   const [idempotencyKey, setIdempotencyKey] = useState('')
 
-  const abrirModalRegistro = (
+  // Prévia de insumos do estoque antes de confirmar
+  const [previaInsumos, setPreviaInsumos] = useState<PreviaInsumosBaixaSND | null>(null)
+  const [carregandoPrevia, setCarregandoPrevia] = useState(false)
+  const [erroServidorBaixa, setErroServidorBaixa] = useState<string | null>(null)
+  const [pontoEstoque, setPontoEstoque] = useState('SND - Almoxarifado de Nutrição')
+
+  const abrirModalRegistro = async (
     item: ItemMapaCozinhaSanitizado,
     statusInicial: StatusDistribuicaoRefeicao = 'distribuido',
   ) => {
@@ -96,9 +112,32 @@ export const MapaCozinhaSndTab: React.FC<MapaCozinhaSndTabProps> = ({
     setTemperatura('')
     setObservacoesOperacionais('')
     setResponsavelEntrega('')
+    setErroServidorBaixa(null)
+    setPreviaInsumos(null)
+    setPontoEstoque('SND - Almoxarifado de Nutrição')
+
     // Chave única e reprodutível por refeição/dia/prescrição
-    setIdempotencyKey(`dist-${item.prescricao_id}-${refeicaoAtivaCodigo}-${dataOperacional}`)
+    const novaChave = `dist-${item.prescricao_id}-${refeicaoAtivaCodigo}-${dataOperacional}`
+    setIdempotencyKey(novaChave)
     setModalRegistroAberta(true)
+
+    // Se for status 'distribuido', carrega a prévia de insumos e saldo de estoque
+    if (statusInicial === 'distribuido') {
+      carregarPreviaInsumos(item.dieta_nome || 'todas')
+    }
+  }
+
+  const carregarPreviaInsumos = async (dietaCodigoOuNome: string) => {
+    setCarregandoPrevia(true)
+    try {
+      const resp = await obterPreviaInsumosDistribuicao(refeicaoAtivaCodigo, dietaCodigoOuNome)
+      setPreviaInsumos(resp)
+    } catch (err: unknown) {
+      console.warn('Não foi possível obter prévia de insumos:', err)
+      setPreviaInsumos(null)
+    } finally {
+      setCarregandoPrevia(false)
+    }
   }
 
   const handleSalvarDistribuicao = async () => {
@@ -117,40 +156,71 @@ export const MapaCozinhaSndTab: React.FC<MapaCozinhaSndTabProps> = ({
     }
 
     setSalvando(true)
+    setErroServidorBaixa(null)
+
     try {
       const refeicaoObj = refeicoes.find((r) => r.codigo === refeicaoAtivaCodigo)
 
-      await registrarDistribuicaoRefeicao({
-        prescricao_dietetica_ref: itemSelecionado.prescricao_id,
-        paciente_ref: itemSelecionado.paciente_id,
-        leito_ref: itemSelecionado.leito_id,
-        setor_ref: itemSelecionado.setor_id,
-        refeicao_codigo: refeicaoAtivaCodigo,
-        data_operacional: dataOperacional,
-        horario_previsto: refeicaoObj?.horario_padrao,
-        status_operacional: statusOperacional,
-        motivo_nao_distribuido:
-          statusOperacional === 'nao_distribuido' ? motivoNaoDistribuido.trim() : undefined,
-        temperatura_afericao: temperatura.trim() || undefined,
-        responsavel_entrega_nome: responsavelEntrega.trim() || undefined,
-        observacoes_operacionais: observacoesOperacionais.trim() || undefined,
-        idempotency_key: idempotencyKey,
-      })
+      // Regra 7.4.3.5.c.i:
+      // Se status === 'distribuido', aciona o endpoint transacional de confirmação com baixa integrada no estoque!
+      // Se 'planejado', 'em_preparo' ou 'nao_distribuido', registra operacionalmente SEM baixar estoque.
+      if (statusOperacional === 'distribuido') {
+        const respConfirmacao = await confirmarDistribuicaoComBaixa({
+          idempotency_key: idempotencyKey,
+          prescricao_dietetica_ref: itemSelecionado.prescricao_id,
+          refeicao_codigo: refeicaoAtivaCodigo,
+          data_operacional: dataOperacional,
+          horario_previsto: refeicaoObj?.horario_padrao,
+          status_operacional: 'distribuido',
+          ponto_estoque: pontoEstoque,
+          responsavel_entrega_nome: responsavelEntrega.trim() || undefined,
+          temperatura_afericao: temperatura.trim() || undefined,
+          observacoes_operacionais: observacoesOperacionais.trim() || undefined,
+        })
 
-      toast({
-        title: 'Status Operacional Registrado',
-        description: `Refeição [${refeicaoAtivaCodigo.toUpperCase()}] registrada como "${statusOperacional}" para o leito ${
-          itemSelecionado.leito_codigo || 'Sem leito'
-        }.`,
-      })
+        toast({
+          title: respConfirmacao.baixa_executada
+            ? 'Distribuição Confirmada com Baixa no Estoque'
+            : 'Distribuição Registrada',
+          description:
+            respConfirmacao.mensagem || 'Refeição entregue e insumos baixados com sucesso.',
+        })
+      } else {
+        await registrarDistribuicaoRefeicao({
+          prescricao_dietetica_ref: itemSelecionado.prescricao_id,
+          paciente_ref: itemSelecionado.paciente_id,
+          leito_ref: itemSelecionado.leito_id,
+          setor_ref: itemSelecionado.setor_id,
+          refeicao_codigo: refeicaoAtivaCodigo,
+          data_operacional: dataOperacional,
+          horario_previsto: refeicaoObj?.horario_padrao,
+          status_operacional: statusOperacional,
+          motivo_nao_distribuido:
+            statusOperacional === 'nao_distribuido' ? motivoNaoDistribuido.trim() : undefined,
+          temperatura_afericao: temperatura.trim() || undefined,
+          responsavel_entrega_nome: responsavelEntrega.trim() || undefined,
+          observacoes_operacionais: observacoesOperacionais.trim() || undefined,
+          idempotency_key: idempotencyKey,
+        })
+
+        toast({
+          title: 'Status Operacional Registrado',
+          description: `Refeição [${refeicaoAtivaCodigo.toUpperCase()}] registrada como "${statusOperacional}". Sem baixa de estoque (só distribuições confirmadas consomem insumos).`,
+        })
+      }
 
       setModalRegistroAberta(false)
       setItemSelecionado(null)
       onAtualizar()
     } catch (err: unknown) {
       const msg = String(err instanceof Error ? err.message : err)
+
+      // Regra de resiliência: O formulário NÃO é fechado ou resetado em caso de erro!
+      // A mensagem é exposta de forma acionável e o operador mantém a mesma chave para reenvio.
+      setErroServidorBaixa(msg)
+
       toast({
-        title: 'Atenção na Distribuição',
+        title: 'Falha na Confirmação / Baixa de Estoque',
         description: msg.includes('IDEMPOTENT_HIT')
           ? 'Registro já processado anteriormente com a mesma chave de idempotência.'
           : msg,
@@ -481,7 +551,22 @@ export const MapaCozinhaSndTab: React.FC<MapaCozinhaSndTabProps> = ({
           </DialogHeader>
 
           {itemSelecionado && (
-            <div className="space-y-3 py-2 text-xs">
+            <div className="space-y-3 py-2 text-xs max-h-[70vh] overflow-y-auto pr-1">
+              {/* Alerta de erro do servidor mantendo o formulário intacto */}
+              {erroServidorBaixa && (
+                <div className="p-3 bg-rose-50 border border-rose-300 rounded-lg text-rose-900 space-y-1">
+                  <div className="font-semibold flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-600" />
+                    Ocorreu um erro no servidor (Formulário preservado)
+                  </div>
+                  <p className="text-[11px] leading-relaxed">{erroServidorBaixa}</p>
+                  <p className="text-[10px] text-rose-700 italic">
+                    Corrija os dados se necessário ou tente novamente. A mesma chave idempotente
+                    será mantida para evitar duplicidades.
+                  </p>
+                </div>
+              )}
+
               <div className="bg-slate-50 border border-slate-200 rounded p-2.5 space-y-1">
                 <div>
                   <strong>Leito:</strong> {itemSelecionado.leito_codigo || 'Sem leito'} •{' '}
@@ -504,16 +589,118 @@ export const MapaCozinhaSndTab: React.FC<MapaCozinhaSndTabProps> = ({
                 <select
                   className="w-full h-8 rounded-md border border-slate-300 px-2 bg-white text-xs"
                   value={statusOperacional}
-                  onChange={(e) =>
-                    setStatusOperacional(e.target.value as StatusDistribuicaoRefeicao)
-                  }
+                  onChange={(e) => {
+                    const novo = e.target.value as StatusDistribuicaoRefeicao
+                    setStatusOperacional(novo)
+                    if (novo === 'distribuido' && !previaInsumos) {
+                      carregarPreviaInsumos(itemSelecionado.dieta_nome || 'todas')
+                    }
+                  }}
                 >
-                  <option value="distribuido">Distribuído no Leito</option>
-                  <option value="em_preparo">Em Preparo na Cozinha</option>
-                  <option value="planejado">Planejado</option>
-                  <option value="nao_distribuido">Não Distribuído (Exige Motivo)</option>
+                  <option value="distribuido">Distribuído no Leito (Consome Estoque)</option>
+                  <option value="em_preparo">Em Preparo na Cozinha (Sem Baixa)</option>
+                  <option value="planejado">Planejado (Sem Baixa)</option>
+                  <option value="nao_distribuido">
+                    Não Distribuído (Exige Motivo • Sem Baixa)
+                  </option>
                 </select>
               </div>
+
+              {/* Prévia de Insumos e Saldo do Almoxarifado antes da Confirmação */}
+              {statusOperacional === 'distribuido' && (
+                <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-lg space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-blue-900 flex items-center gap-1.5 text-xs">
+                      <Scale className="w-4 h-4 text-blue-600" />
+                      Prévia de Insumos & Estoque (Item 7.4.3.5.c.i)
+                    </span>
+                    {previaInsumos?.composicao_encontrada && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] bg-white text-blue-800 border-blue-300 font-mono"
+                      >
+                        Ficha: {previaInsumos.composicao_codigo} (v{previaInsumos.composicao_versao}
+                        )
+                      </Badge>
+                    )}
+                  </div>
+
+                  {carregandoPrevia ? (
+                    <p className="text-[11px] text-blue-700 italic">
+                      Verificando saldos, lotes e validades no estoque...
+                    </p>
+                  ) : !previaInsumos || !previaInsumos.composicao_encontrada ? (
+                    <div className="text-[11px] text-slate-600 bg-white p-2 rounded border border-blue-100 flex items-start gap-1.5">
+                      <HelpCircle className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                      <span>
+                        Nenhuma ficha técnica de insumos vinculada a esta refeição. A confirmação da
+                        distribuição prosseguirá sem baixa de estoque até parametrização da ficha.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {previaInsumos.motivos_bloqueio &&
+                        previaInsumos.motivos_bloqueio.length > 0 && (
+                          <div className="p-2 bg-rose-50 border border-rose-200 rounded text-[11px] text-rose-800 space-y-1">
+                            <span className="font-bold flex items-center gap-1 text-rose-900">
+                              <PackageX className="w-3.5 h-3.5" />
+                              Alerta de Inconsistência de Estoque:
+                            </span>
+                            <ul className="list-disc list-inside space-y-0.5 pl-1">
+                              {previaInsumos.motivos_bloqueio.map((m, idx) => (
+                                <li key={idx}>{m}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                      <div className="bg-white rounded border border-blue-100 divide-y divide-slate-100 max-h-36 overflow-y-auto">
+                        {previaInsumos.itens.map((ins, idx) => (
+                          <div
+                            key={idx}
+                            className="p-1.5 flex items-center justify-between text-[11px]"
+                          >
+                            <div>
+                              <span className="font-semibold text-slate-800">{ins.item_nome}</span>
+                              <div className="text-[10px] text-slate-500">
+                                Nec: {ins.quantidade_necessaria} {ins.unidade_estoque} • Disp:{' '}
+                                {ins.saldo_disponivel} {ins.unidade_estoque}
+                                {ins.lote && ` • Lote: ${ins.lote}`}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              {ins.vencido ? (
+                                <Badge className="bg-rose-100 text-rose-800 text-[10px] border-rose-300">
+                                  Vencido
+                                </Badge>
+                              ) : ins.saldo_suficiente ? (
+                                <Badge className="bg-emerald-100 text-emerald-800 text-[10px] border-emerald-300">
+                                  Saldo OK
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-rose-100 text-rose-800 text-[10px] border-rose-300">
+                                  Insuficiente
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-700 block mb-0.5">
+                          Ponto de Estoque / Almoxarifado de Saída
+                        </label>
+                        <Input
+                          value={pontoEstoque}
+                          onChange={(e) => setPontoEstoque(e.target.value)}
+                          className="h-7 text-xs bg-white"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {statusOperacional === 'nao_distribuido' && (
                 <div className="p-2.5 bg-rose-50 border border-rose-200 rounded">

@@ -89,6 +89,7 @@ export const SndView: React.FC<SndViewProps> = ({ onNavegarSAME, pacienteIdInici
   const podePrescrever = temPermissao(['admin', 'gestor', 'profissional'])
   const podeGerenciarCatalogos = temPermissao(['admin', 'gestor', 'profissional'])
   const podeOperarCozinha = temPermissao(['admin', 'gestor', 'profissional', 'recepcao'])
+  const podeOperarEstoque = temPermissao(['admin', 'gestor', 'profissional'])
 
   // 1. Carregamento inicial de Catálogos e Cadastros
   const carregarDadosBase = async () => {
@@ -382,6 +383,7 @@ export const SndView: React.FC<SndViewProps> = ({ onNavegarSAME, pacienteIdInici
           leitos={leitos}
           pacientes={pacientes}
           refeicoes={refeicoes}
+          podeOperarEstoque={podeOperarEstoque}
         />
       )}
     </div>

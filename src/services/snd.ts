@@ -530,8 +530,10 @@ export async function salvarComposicaoOperacional(
 export async function listarComposicoesOperacionais(
   refeicaoCodigo?: string,
   dietaCodigo?: string,
+  somenteAtivas = true,
 ): Promise<ComposicaoRefeicaoSND[]> {
-  const filterParts: string[] = ['ativo = true']
+  const filterParts: string[] = []
+  if (somenteAtivas) filterParts.push('ativo = true')
   if (refeicaoCodigo) filterParts.push(`refeicao_codigo = "${refeicaoCodigo}"`)
   if (dietaCodigo)
     filterParts.push(
@@ -539,11 +541,37 @@ export async function listarComposicoesOperacionais(
     )
 
   const records = await pb.collection('snd_composicoes_refeicoes').getFullList({
-    filter: filterParts.join(' && '),
+    filter: filterParts.length > 0 ? filterParts.join(' && ') : undefined,
     sort: '-versao',
   })
 
   return records as unknown as ComposicaoRefeicaoSND[]
+}
+
+/**
+ * Inativa logicamente uma ficha de composição operacional por operador autorizado
+ */
+export async function inativarComposicaoOperacional(
+  id: string,
+  motivo: string,
+): Promise<ComposicaoRefeicaoSND> {
+  if (!motivo || motivo.trim().length < 3) {
+    throw new Error('Motivo da inativação é obrigatório (mínimo de 3 caracteres).')
+  }
+
+  const record = await pb.collection('snd_composicoes_refeicoes').update(id, {
+    ativo: false,
+    motivo_alteracao: `Inativação lógica: ${motivo.trim()}`,
+  })
+
+  await registrarAuditoria({
+    acao: 'inativar_composicao_operacional_snd',
+    modulo: 'snd',
+    detalhes: `Ficha de composição ${id} inativada. Motivo: ${motivo.trim()}`,
+    registro_id: id,
+  })
+
+  return record as unknown as ComposicaoRefeicaoSND
 }
 
 // ============================================================================
