@@ -368,6 +368,86 @@ export interface RisHistoricoTransicao {
 }
 
 // ============================================================================
+// ENTREGA FORMAL DE RESULTADOS RIS (REQUISITO 7.4.3.4.c.i)
+// ============================================================================
+
+export type FormaRecebimentoEntregaRIS =
+  | 'presencial_balcao'
+  | 'setor_interno'
+  | 'entrega_ambulatorial'
+
+export interface RisEntregaLaudo {
+  id: string
+  protocolo_entrega: string
+  exame_ref: string
+  laudo_versao_ref: string
+  paciente_ref: string
+  paciente_nome?: string
+  paciente_cpf_mascarado?: string
+  paciente_cns_mascarado?: string
+  exame_tipo?: string
+  exame_modalidade?: string
+  versao_entregue: number
+  destinatario_nome: string
+  destinatario_documento: string
+  destinatario_parentesco_grau?: string
+  forma_recebimento: FormaRecebimentoEntregaRIS
+  observacao?: string
+  data_hora_entrega: string
+  autor_id: string
+  autor_nome: string
+  autor_perfil: string
+  evento_anterior_ref?: string
+  motivo_correcao?: string
+  idempotency_key?: string
+  created: string
+}
+
+export interface RegistrarEntregaLaudoParams {
+  exame_id: string
+  paciente_id?: string
+  laudo_versao_id?: string
+  versao_entregue?: number
+  destinatario_nome: string
+  destinatario_documento: string
+  destinatario_parentesco_grau?: string
+  forma_recebimento?: FormaRecebimentoEntregaRIS
+  observacao?: string
+  idempotency_key?: string
+  confirmar_versao_divergente?: boolean
+  evento_anterior_ref?: string
+  motivo_correcao?: string
+  session_token?: string
+}
+
+export interface RespostaRegistrarEntregaLaudo {
+  sucesso: boolean
+  idempotente?: boolean
+  mensagem: string
+  entrega: RisEntregaLaudo
+}
+
+export interface ListarEntregasLaudoFiltros {
+  exame_id?: string
+  paciente_id?: string
+  data_inicio?: string
+  data_fim?: string
+  busca?: string
+  page?: number
+  perPage?: number
+  session_token?: string
+}
+
+export interface RespostaListarEntregasLaudo {
+  sucesso: boolean
+  page: number
+  perPage: number
+  totalItems: number
+  totalPages: number
+  items: RisEntregaLaudo[]
+}
+
+// ============================================================================
 // MÓDULO DE TRATAMENTO FORA DO DOMICÍLIO (TFD) - SEÇÃO 7.4.4.2.e
 // ============================================================================
 

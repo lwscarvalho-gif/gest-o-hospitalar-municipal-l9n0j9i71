@@ -20,6 +20,10 @@ import {
   RetificarLaudoRISParams,
   RespostaRetificarLaudoRIS,
   RespostaPreviaLaudoRIS,
+  RegistrarEntregaLaudoParams,
+  RespostaRegistrarEntregaLaudo,
+  ListarEntregasLaudoFiltros,
+  RespostaListarEntregasLaudo,
 } from '@/types/hospital'
 import { registrarAuditoria } from './auditoria'
 
@@ -911,4 +915,167 @@ export async function listarAgendasDoExameRIS(exameId: string): Promise<RisAgend
   })
 
   return records
+}
+
+// ============================================================================
+// NOVO BLOCO AUTORIZADO CODEX: ENTREGA FORMAL DE RESULTADOS RIS (7.4.3.4.c.i)
+// ============================================================================
+
+export class ConflitoVersaoRetificadaError extends Error {
+  versaoSolicitada: number
+  versaoVigente: number
+  versaoVigenteId?: string
+  motivoRetificacao?: string
+  dataRetificacao?: string
+
+  constructor(
+    message: string,
+    versaoSolicitada: number,
+    versaoVigente: number,
+    versaoVigenteId?: string,
+    motivoRetificacao?: string,
+    dataRetificacao?: string,
+  ) {
+    super(message)
+    this.name = 'ConflitoVersaoRetificadaError'
+    this.versaoSolicitada = versaoSolicitada
+    this.versaoVigente = versaoVigente
+    this.versaoVigenteId = versaoVigenteId
+    this.motivoRetificacao = motivoRetificacao
+    this.dataRetificacao = dataRetificacao
+  }
+}
+
+export class IdempotenciaConflitoPayloadError extends Error {
+  codigo: string
+  registroExistenteId?: string
+
+  constructor(message: string, registroExistenteId?: string) {
+    super(message)
+    this.name = 'IdempotenciaConflitoPayloadError'
+    this.codigo = 'IDEMPOTENCY_PAYLOAD_CONFLICT'
+    this.registroExistenteId = registroExistenteId
+  }
+}
+
+/**
+ * 12. Registro Formal de Entrega de Laudos e Resultados (7.4.3.4.c.i)
+ * Registra entrega presencial/interna de laudo publicado com autor derivado da sessão,
+ * data/hora do servidor, proteção contra versão retificada silenciosa (409)
+ * e chave de idempotência persistente.
+ */
+export async function registrarEntregaLaudo(
+  params: RegistrarEntregaLaudoParams,
+  seqRef?: { current: number },
+  seqMomento?: number,
+): Promise<RespostaRegistrarEntregaLaudo> {
+  const idempotencyKey =
+    params.idempotency_key ||
+    `ris-ent-${params.exame_id}-${params.versao_entregue || 1}-${Date.now().toString(36)}`
+
+  const payload = {
+    ...params,
+    idempotency_key: idempotencyKey,
+  }
+
+  try {
+    const res = (await pb.send('/backend/v1/ris/entregas', {
+      method: 'POST',
+      body: payload,
+    })) as RespostaRegistrarEntregaLaudo
+
+    // Se fornecido seqRef, verifica se a resposta em voo ainda pertence à sessão ativa
+    if (seqRef && seqMomento !== undefined && seqRef.current !== seqMomento) {
+      throw new RespostaSessaoObsoletaError(
+        'Resposta descartada: o paciente ou exame em foco foi alterado durante a requisição de entrega.',
+      )
+    }
+
+    try {
+      await registrarAuditoria({
+        acao: 'ENTREGA_LAUDO_RIS',
+        modulo: 'ris',
+        registro_id: res.entrega.id,
+        detalhes: JSON.stringify({
+          protocolo: res.entrega.protocolo_entrega,
+          exame_id: params.exame_id,
+          versao_entregue: res.entrega.versao_entregue,
+          destinatario_nome: params.destinatario_nome,
+          forma_recebimento: res.entrega.forma_recebimento,
+          evento_anterior_ref: params.evento_anterior_ref || null,
+        }),
+      })
+    } catch {
+      /* intentionally ignored */
+    }
+
+    return res
+  } catch (err: any) {
+    // Trata conflito de versão retificada no servidor (409)
+    if (
+      err?.status === 409 &&
+      (err?.response?.codigo === 'CONFLITO_VERSAO_RETIFICADA' ||
+        err?.data?.codigo === 'CONFLITO_VERSAO_RETIFICADA')
+    ) {
+      const data = err.response || err.data
+      throw new ConflitoVersaoRetificadaError(
+        data.erro || 'Existe uma versão retificada mais recente deste laudo.',
+        data.versao_solicitada,
+        data.versao_vigente,
+        data.versao_vigente_id,
+        data.motivo_retificacao,
+        data.data_retificacao,
+      )
+    }
+
+    // Trata conflito de idempotência com payload divergente (409)
+    if (
+      err?.status === 409 &&
+      (err?.response?.codigo === 'IDEMPOTENCY_PAYLOAD_CONFLICT' ||
+        err?.data?.codigo === 'IDEMPOTENCY_PAYLOAD_CONFLICT')
+    ) {
+      const data = err.response || err.data
+      throw new IdempotenciaConflitoPayloadError(
+        data.erro || 'A mesma chave de idempotência foi submetida com payload divergente.',
+        data.registro_existente_id,
+      )
+    }
+
+    throw err
+  }
+}
+
+/**
+ * 13. Listagem paginada e filtrada de entregas formais de laudos
+ * Apenas metadados administrativos mínimos (sem corpo clínico, preservando sigilo)
+ */
+export async function listarEntregasLaudo(
+  filtros: ListarEntregasLaudoFiltros = {},
+  seqRef?: { current: number },
+  seqMomento?: number,
+): Promise<RespostaListarEntregasLaudo> {
+  const queryParams = new URLSearchParams()
+  if (filtros.exame_id) queryParams.set('exame_id', filtros.exame_id)
+  if (filtros.paciente_id) queryParams.set('paciente_id', filtros.paciente_id)
+  if (filtros.data_inicio) queryParams.set('data_inicio', filtros.data_inicio)
+  if (filtros.data_fim) queryParams.set('data_fim', filtros.data_fim)
+  if (filtros.busca) queryParams.set('busca', filtros.busca)
+  if (filtros.page) queryParams.set('page', String(filtros.page))
+  if (filtros.perPage) queryParams.set('perPage', String(filtros.perPage))
+
+  const queryString = queryParams.toString()
+  const path = `/backend/v1/ris/entregas${queryString ? `?${queryString}` : ''}`
+
+  const res = (await pb.send(path, {
+    method: 'GET',
+  })) as RespostaListarEntregasLaudo
+
+  // Verificação de descarte de resposta de sessão antiga (seqRef)
+  if (seqRef && seqMomento !== undefined && seqRef.current !== seqMomento) {
+    throw new RespostaSessaoObsoletaError(
+      'Resposta descartada: contexto de listagem alterado durante a requisição de entregas.',
+    )
+  }
+
+  return res
 }

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T18:04:28.970Z",
+  "generatedAt": "2026-10-30T18:20:29.528Z",
   "collections": [
     {
       "name": "users",
@@ -7908,6 +7908,153 @@
         "CREATE INDEX idx_ris_img_exame ON ris_imagens_anexas (exame)",
         "CREATE INDEX idx_ris_img_paciente ON ris_imagens_anexas (paciente)",
         "CREATE INDEX idx_ris_img_created ON ris_imagens_anexas (created)"
+      ]
+    },
+    {
+      "name": "ris_entregas_laudos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional' || @request.auth.role = 'recepcao')",
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "exame_ref",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "exames"
+        },
+        {
+          "name": "laudo_versao_ref",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "laudos_versoes"
+        },
+        {
+          "name": "paciente_ref",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "versao_entregue",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "destinatario_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "destinatario_documento",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "destinatario_parentesco_grau",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "forma_recebimento",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["presencial_balcao", "setor_interno", "entrega_ambulatorial"]
+        },
+        {
+          "name": "observacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_entrega",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "autor_id",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "autor_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "autor_perfil",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "hash_payload",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "evento_anterior_ref",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "motivo_correcao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "protocolo_entrega",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_ris_entregas_exame ON ris_entregas_laudos (exame_ref)",
+        "CREATE INDEX idx_ris_entregas_paciente ON ris_entregas_laudos (paciente_ref)",
+        "CREATE INDEX idx_ris_entregas_versao ON ris_entregas_laudos (laudo_versao_ref)",
+        "CREATE INDEX idx_ris_entregas_data ON ris_entregas_laudos (data_hora_entrega)",
+        "CREATE INDEX idx_ris_entregas_idemp ON ris_entregas_laudos (idempotency_key)",
+        "CREATE INDEX idx_ris_entregas_protocolo ON ris_entregas_laudos (protocolo_entrega)"
       ]
     }
   ]

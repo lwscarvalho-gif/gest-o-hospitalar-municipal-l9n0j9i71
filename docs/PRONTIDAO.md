@@ -923,6 +923,8 @@ Em complemento a este relatório de prontidão e homologação técnica, consult
   3. `cotacao-sistema-hospitalar-9345d.pdf` (2 páginas, pré-cotação oficial da Secretaria Municipal de Saúde de Mirante da Serra–RO).
      O documento persiste trechos textuais, numeração de itens, subseções e páginas para eliminar a necessidade de novos uploads de anexos no fluxo de trabalho.
 
+- **Entrega Formal de Laudos e Resultados RIS (7.4.3.4.c.i / v0.0.64 Parte 1):** Backend e serviço cliente de registro de entrega implantados com sucesso (migração `0033_ris_entrega_laudos.js`, hook `ris_modulo.pb.js` com rotas `POST /backend/v1/ris/entregas` e `GET /backend/v1/ris/entregas`, serviço `src/services/ris.ts` com `registrarEntregaLaudo` e `listarEntregasLaudo`). UI e testes de interface delegados para a Parte 2.
+
 - **`docs/MATRIZ_CONFORMIDADE.md` (Revisão Material v0.0.47):** Reconciliação rigorosa item a item contra as fontes reais, corrigindo distorções prévias:
   - **Portal do Paciente Web:** Reclassificado como requisito exigido na Cotação (Item 01) e DOC-02 (7.4.4.3.b.iv), não se resumindo aos itens amarelos 404/427; requer login próprio do cidadão com mascaramento LGPD;
   - **Mensageria Interna:** Reclassificada como requisito exigido na Cotação ("envio de mensagens entre usuários e ou grupos") e itens 419/421, planejada como código interno sem envio externo;

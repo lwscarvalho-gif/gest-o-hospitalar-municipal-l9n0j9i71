@@ -2068,3 +2068,538 @@ routerAdd('GET', '/backend/v1/ris/exames/{id}/previa-laudo', (c) => {
     return c.json(400, { erro: err.message || String(err) })
   }
 })
+
+// ============================================================================
+// BLOCO AUTORIZADO CODEX: ENTREGA FORMAL DE RESULTADOS RIS (7.4.3.4.c.i)
+// Registro por operador de entrega presencial/interna de laudo JÁ LIBERADO.
+// Autor derivado da sessão (@request.auth), data/hora do servidor em UTC,
+// idempotência persistente, proteção contra versão retificada silenciosa,
+// imutabilidade (correção via novo evento relacionado).
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// 12. POST /backend/v1/ris/entregas
+// Registra entrega formal presencial/interna de laudo publicado
+// ----------------------------------------------------------------------------
+routerAdd('POST', '/backend/v1/ris/entregas', (c) => {
+  var auth = c.auth
+  if (!auth) {
+    return c.json(401, {
+      erro: 'Não autorizado: faça login para registrar entrega de laudo no RIS.',
+    })
+  }
+
+  var autorId = auth.id
+  var autorNome = auth.getString('name') || auth.getString('email') || 'Operador Autorizado'
+  var autorPerfil = auth.getString('role') || 'recepcao'
+
+  var perfisPermitidos = ['admin', 'gestor', 'profissional', 'recepcao']
+  if (perfisPermitidos.indexOf(autorPerfil) === -1) {
+    return c.json(403, {
+      erro: 'Acesso negado: Perfil não possui autorização para registro formal de entregas no RIS.',
+    })
+  }
+
+  function sanitizar(val) {
+    if (val === null || val === undefined) return ''
+    return String(val).trim()
+  }
+
+  function normalizarHash(obj) {
+    var chaves = Object.keys(obj).sort()
+    var partes = []
+    for (var k = 0; k < chaves.length; k++) {
+      partes.push(chaves[k] + '=' + String(obj[chaves[k]]))
+    }
+    return partes.join('&')
+  }
+
+  var body = {}
+  try {
+    var rawBody = c.request.body
+    if (rawBody) {
+      if (typeof rawBody === 'string') {
+        body = JSON.parse(rawBody)
+      } else if (typeof rawBody === 'object') {
+        body = rawBody
+      }
+    }
+  } catch (_) {
+    body = {}
+  }
+
+  var exameId = sanitizar(body.exame_id || body.exame_ref)
+  var pacienteId = sanitizar(body.paciente_id || body.paciente_ref)
+  var laudoVersaoId = sanitizar(body.laudo_versao_id || body.laudo_versao_ref)
+  var versaoInformada = body.versao_entregue !== undefined ? Number(body.versao_entregue) : null
+  var destinatarioNome = sanitizar(body.destinatario_nome)
+  var destinatarioDocumento = sanitizar(body.destinatario_documento)
+  var destinatarioParentesco = sanitizar(body.destinatario_parentesco_grau || 'proprio_paciente')
+  var formaRecebimento = sanitizar(body.forma_recebimento || 'presencial_balcao')
+  var observacao = sanitizar(body.observacao)
+  var idempotencyKey = sanitizar(body.idempotency_key)
+  var confirmarVersaoDivergente = Boolean(body.confirmar_versao_divergente)
+  var eventoAnteriorRef = sanitizar(body.evento_anterior_ref)
+  var motivoCorrecao = sanitizar(body.motivo_correcao)
+
+  if (!exameId) {
+    return c.json(400, { erro: 'Identificação do exame é obrigatória para registrar a entrega.' })
+  }
+  if (!destinatarioNome) {
+    return c.json(400, {
+      erro: 'Nome do destinatário/retirante conferido presencialmente é obrigatório.',
+    })
+  }
+  if (!destinatarioDocumento) {
+    return c.json(400, {
+      erro: 'Documento de identificação do destinatário é obrigatório para comprovação de entrega.',
+    })
+  }
+
+  var formasValidas = ['presencial_balcao', 'setor_interno', 'entrega_ambulatorial']
+  if (formasValidas.indexOf(formaRecebimento) === -1) {
+    return c.json(400, {
+      erro: 'Forma de recebimento inválida. Valores aceitos: ' + formasValidas.join(', '),
+    })
+  }
+
+  if (eventoAnteriorRef && (!motivoCorrecao || motivoCorrecao.length < 5)) {
+    return c.json(400, {
+      erro: 'A correção de recibo anterior exige justificativa com no mínimo 5 caracteres.',
+    })
+  }
+
+  // 1. Tratamento de Idempotência Persistente
+  var hashCalculado = normalizarHash({
+    exame_id: exameId,
+    paciente_id: pacienteId,
+    laudo_versao_id: laudoVersaoId,
+    versao_entregue: versaoInformada,
+    destinatario_nome: destinatarioNome,
+    destinatario_documento: destinatarioDocumento,
+    forma_recebimento: formaRecebimento,
+    evento_anterior_ref: eventoAnteriorRef,
+  })
+
+  if (idempotencyKey) {
+    try {
+      var existentes = c.app.findRecordsByFilter(
+        'ris_entregas_laudos',
+        'idempotency_key = {:key}',
+        '-created',
+        1,
+        0,
+        { key: idempotencyKey },
+      )
+      if (existentes && existentes.length > 0) {
+        var recExistente = existentes[0]
+        var hashExistente = recExistente.getString('hash_payload')
+        if (hashExistente && hashExistente !== hashCalculado) {
+          return c.json(409, {
+            erro: 'IDEMPOTENCY_PAYLOAD_CONFLICT: A mesma chave de idempotência foi submetida com dados de entrega divergentes.',
+            codigo: 'IDEMPOTENCY_PAYLOAD_CONFLICT',
+            registro_existente_id: recExistente.id,
+          })
+        }
+        return c.json(200, {
+          sucesso: true,
+          idempotente: true,
+          mensagem: 'Registro de entrega já processado anteriormente com a mesma chave.',
+          entrega: {
+            id: recExistente.id,
+            protocolo_entrega: recExistente.getString('protocolo_entrega'),
+            exame_ref: recExistente.getString('exame_ref'),
+            paciente_ref: recExistente.getString('paciente_ref'),
+            laudo_versao_ref: recExistente.getString('laudo_versao_ref'),
+            versao_entregue: recExistente.getInt('versao_entregue'),
+            destinatario_nome: recExistente.getString('destinatario_nome'),
+            destinatario_documento: recExistente.getString('destinatario_documento'),
+            destinatario_parentesco_grau: recExistente.getString('destinatario_parentesco_grau'),
+            forma_recebimento: recExistente.getString('forma_recebimento'),
+            observacao: recExistente.getString('observacao'),
+            data_hora_entrega: recExistente.getString('data_hora_entrega'),
+            autor_id: recExistente.getString('autor_id'),
+            autor_nome: recExistente.getString('autor_nome'),
+            autor_perfil: recExistente.getString('autor_perfil'),
+            evento_anterior_ref: recExistente.getString('evento_anterior_ref'),
+            motivo_correcao: recExistente.getString('motivo_correcao'),
+            created: recExistente.getString('created'),
+          },
+        })
+      }
+    } catch (_) {}
+  }
+
+  // 2. Validações de integridade no banco: exame, paciente, status e vínculo
+  var exameRec
+  try {
+    exameRec = c.app.findRecordById('exames', exameId)
+  } catch (_) {
+    return c.json(404, { erro: 'Exame informado não foi encontrado.' })
+  }
+
+  var examePacienteId = exameRec.getString('paciente')
+  if (pacienteId && pacienteId !== examePacienteId) {
+    return c.json(400, {
+      erro: 'Vínculo inválido: O paciente informado diverge do paciente vinculado ao exame.',
+      codigo: 'VINCULO_PACIENTE_INVALIDO',
+    })
+  }
+  pacienteId = examePacienteId
+
+  // Recusa se o exame estiver cancelado
+  var exameStatus = exameRec.getString('status')
+  var statusRis = exameRec.getString('status_ris')
+  if (exameStatus === 'cancelado' || statusRis === 'cancelado') {
+    return c.json(400, {
+      erro: 'Operação recusada: Não é permitido entregar laudo de exame cancelado.',
+      codigo: 'EXAME_CANCELADO',
+    })
+  }
+
+  // Recusa se não houver laudo liberado (exame precisa estar com laudo emitido/liberado)
+  if (exameStatus !== 'liberado' && statusRis !== 'laudado') {
+    return c.json(400, {
+      erro: 'Operação recusada: O exame ainda não possui laudo liberado/publicado. A entrega de rascunhos é estritamente proibida.',
+      codigo: 'LAUDO_NAO_LIBERADO',
+    })
+  }
+
+  // 3. Validação do laudo_versao e controle de retificação posterior
+  var colVersoes = c.app.findCollectionByNameOrId('laudos_versoes')
+  var todasVersoes = []
+  try {
+    todasVersoes = c.app.findRecordsByFilter(
+      'laudos_versoes',
+      'exame = {:exId}',
+      '-numero_versao',
+      100,
+      0,
+      { exId: exameId },
+    )
+  } catch (_) {}
+
+  if (!todasVersoes || todasVersoes.length === 0) {
+    return c.json(400, {
+      erro: 'Operação recusada: Nenhuma versão publicada de laudo encontrada para este exame. A entrega de rascunhos é proibida.',
+      codigo: 'SEM_VERSAO_LIBERADA',
+    })
+  }
+
+  var versaoMaisRecente = todasVersoes[0]
+  var numeroMaisRecente = versaoMaisRecente.getInt('numero_versao')
+
+  var versaoAlvo = null
+  if (laudoVersaoId) {
+    for (var v = 0; v < todasVersoes.length; v++) {
+      if (todasVersoes[v].id === laudoVersaoId) {
+        versaoAlvo = todasVersoes[v]
+        break
+      }
+    }
+    if (!versaoAlvo) {
+      return c.json(400, {
+        erro: 'Versão de laudo informada não pertence ao histórico publicado deste exame.',
+        codigo: 'VERSAO_LAUDO_NAO_ENCONTRADA',
+      })
+    }
+  } else if (versaoInformada !== null && versaoInformada !== undefined) {
+    for (var vi = 0; vi < todasVersoes.length; vi++) {
+      if (todasVersoes[vi].getInt('numero_versao') === versaoInformada) {
+        versaoAlvo = todasVersoes[vi]
+        break
+      }
+    }
+    if (!versaoAlvo) {
+      return c.json(400, {
+        erro:
+          'O número de versão de laudo informado (' +
+          versaoInformada +
+          ') não existe no histórico deste exame.',
+        codigo: 'VERSAO_INEXISTENTE',
+      })
+    }
+  } else {
+    versaoAlvo = versaoMaisRecente
+  }
+
+  var numeroAlvo = versaoAlvo.getInt('numero_versao')
+  laudoVersaoId = versaoAlvo.id
+
+  // 3b. Validação final no servidor contra versão trocada silenciosamente (retificação posterior)
+  if (numeroAlvo < numeroMaisRecente && !confirmarVersaoDivergente) {
+    return c.json(409, {
+      erro:
+        'CONFLITO_VERSAO_RETIFICADA: Existe uma versão retificada mais recente (V' +
+        numeroMaisRecente +
+        ') do que a versão solicitada para entrega (V' +
+        numeroAlvo +
+        '). Exige confirmação explícita do operador humano para prosseguir.',
+      codigo: 'CONFLITO_VERSAO_RETIFICADA',
+      versao_solicitada: numeroAlvo,
+      versao_vigente: numeroMaisRecente,
+      versao_vigente_id: versaoMaisRecente.id,
+      data_retificacao:
+        versaoMaisRecente.getString('data_laudo') || versaoMaisRecente.getString('created'),
+      motivo_retificacao: versaoMaisRecente.getString('motivo_retificacao') || '',
+    })
+  }
+
+  // 4. Criação do evento imutável de entrega
+  var colEntregas = c.app.findCollectionByNameOrId('ris_entregas_laudos')
+  var agoraUtc = new Date().toISOString()
+  var protocoloGerado = 'REC-RIS-' + Date.now().toString(36).toUpperCase()
+
+  var recEntrega = new Record(colEntregas)
+  recEntrega.set('exame_ref', exameId)
+  recEntrega.set('laudo_versao_ref', laudoVersaoId)
+  recEntrega.set('paciente_ref', pacienteId)
+  recEntrega.set('versao_entregue', numeroAlvo)
+  recEntrega.set('destinatario_nome', destinatarioNome)
+  recEntrega.set('destinatario_documento', destinatarioDocumento)
+  recEntrega.set('destinatario_parentesco_grau', destinatarioParentesco)
+  recEntrega.set('forma_recebimento', formaRecebimento)
+  recEntrega.set('observacao', observacao)
+  recEntrega.set('data_hora_entrega', agoraUtc)
+  recEntrega.set('autor_id', autorId)
+  recEntrega.set('autor_nome', autorNome)
+  recEntrega.set('autor_perfil', autorPerfil)
+  recEntrega.set('idempotency_key', idempotencyKey)
+  recEntrega.set('hash_payload', hashCalculado)
+  recEntrega.set('evento_anterior_ref', eventoAnteriorRef)
+  recEntrega.set('motivo_correcao', motivoCorrecao)
+  recEntrega.set('protocolo_entrega', protocoloGerado)
+
+  c.app.save(recEntrega)
+
+  // Atualiza histórico na fila RIS para auditoria sem alterar o corpo clínico
+  try {
+    var colHist = c.app.findCollectionByNameOrId('ris_historico_transicoes')
+    var hRec = new Record(colHist)
+    hRec.set('exame', exameId)
+    hRec.set('status_anterior', statusRis || exameStatus || 'laudado')
+    hRec.set('status_novo', statusRis || exameStatus || 'laudado')
+    hRec.set(
+      'motivo_justificativa',
+      'Entrega formal de laudo (Versão ' +
+        numeroAlvo +
+        ') para ' +
+        destinatarioNome +
+        ' via ' +
+        formaRecebimento +
+        ' [Protocolo ' +
+        protocoloGerado +
+        ']',
+    )
+    hRec.set('usuario_autor_id', autorId)
+    hRec.set('usuario_autor_nome', autorNome)
+    hRec.set('usuario_cargo', autorPerfil)
+    hRec.set('data_hora', agoraUtc)
+    hRec.set('detalhes', {
+      evento_entrega_id: recEntrega.id,
+      protocolo_entrega: protocoloGerado,
+      versao_entregue: numeroAlvo,
+      destinatario_documento: destinatarioDocumento,
+      forma_recebimento: formaRecebimento,
+      evento_anterior_ref: eventoAnteriorRef || null,
+    })
+    c.app.save(hRec)
+  } catch (_) {}
+
+  return c.json(200, {
+    sucesso: true,
+    mensagem: 'Entrega formal de laudo registrada com sucesso.',
+    entrega: {
+      id: recEntrega.id,
+      protocolo_entrega: protocoloGerado,
+      exame_ref: exameId,
+      paciente_ref: pacienteId,
+      laudo_versao_ref: laudoVersaoId,
+      versao_entregue: numeroAlvo,
+      destinatario_nome: destinatarioNome,
+      destinatario_documento: destinatarioDocumento,
+      destinatario_parentesco_grau: destinatarioParentesco,
+      forma_recebimento: formaRecebimento,
+      observacao: observacao,
+      data_hora_entrega: agoraUtc,
+      autor_id: autorId,
+      autor_nome: autorNome,
+      autor_perfil: autorPerfil,
+      evento_anterior_ref: eventoAnteriorRef,
+      motivo_correcao: motivoCorrecao,
+      created: agoraUtc,
+    },
+  })
+})
+
+// ----------------------------------------------------------------------------
+// 13. GET /backend/v1/ris/entregas
+// Listagem paginada e filtrada de eventos de entrega de laudos
+// Retorna APENAS metadados administrativos mínimos (segurança e sigilo clínico)
+// ----------------------------------------------------------------------------
+routerAdd('GET', '/backend/v1/ris/entregas', (c) => {
+  var auth = c.auth
+  if (!auth) {
+    return c.json(401, {
+      erro: 'Não autorizado: faça login para consultar entregas de laudos no RIS.',
+    })
+  }
+
+  var autorPerfil = auth.getString('role') || 'recepcao'
+  var perfisPermitidos = ['admin', 'gestor', 'profissional', 'recepcao']
+  if (perfisPermitidos.indexOf(autorPerfil) === -1) {
+    return c.json(403, {
+      erro: 'Acesso negado: Perfil não possui autorização para consultar entregas no RIS.',
+    })
+  }
+
+  function sanitizar(val) {
+    if (val === null || val === undefined) return ''
+    return String(val).trim()
+  }
+
+  var query = c.request.url.query()
+  var exameId = sanitizar(query.get('exame_id') || query.get('exame_ref'))
+  var pacienteId = sanitizar(query.get('paciente_id') || query.get('paciente_ref'))
+  var dataInicio = sanitizar(query.get('data_inicio') || query.get('dataInicio'))
+  var dataFim = sanitizar(query.get('data_fim') || query.get('dataFim'))
+  var pageStr = sanitizar(query.get('page'))
+  var perPageStr = sanitizar(query.get('perPage') || query.get('per_page'))
+  var busca = sanitizar(query.get('busca'))
+
+  var page = parseInt(pageStr, 10) || 1
+  if (page < 1) page = 1
+  var perPage = parseInt(perPageStr, 10) || 20
+  if (perPage < 1) perPage = 20
+  if (perPage > 100) perPage = 100
+  var offset = (page - 1) * perPage
+
+  var filterParts = []
+  var filterParams = {}
+
+  if (exameId) {
+    filterParts.push('exame_ref = {:exRef}')
+    filterParams['exRef'] = exameId
+  }
+  if (pacienteId) {
+    filterParts.push('paciente_ref = {:pacRef}')
+    filterParams['pacRef'] = pacienteId
+  }
+  if (dataInicio) {
+    filterParts.push('data_hora_entrega >= {:dtIni}')
+    filterParams['dtIni'] = dataInicio
+  }
+  if (dataFim) {
+    filterParts.push('data_hora_entrega <= {:dtFim}')
+    filterParams['dtFim'] = dataFim
+  }
+  if (busca) {
+    filterParts.push(
+      '(destinatario_nome ~ {:q} || destinatario_documento ~ {:q} || protocolo_entrega ~ {:q})',
+    )
+    filterParams['q'] = busca
+  }
+
+  var filterExpr = filterParts.length > 0 ? filterParts.join(' && ') : ''
+
+  var registros = []
+  try {
+    registros = c.app.findRecordsByFilter(
+      'ris_entregas_laudos',
+      filterExpr,
+      '-data_hora_entrega',
+      perPage,
+      offset,
+      filterParams,
+    )
+  } catch (err) {
+    return c.json(400, {
+      erro: 'Erro ao consultar entregas de laudos: ' + (err.message || String(err)),
+    })
+  }
+
+  // Contagem total
+  var totalItems = 0
+  try {
+    var todos = c.app.findRecordsByFilter(
+      'ris_entregas_laudos',
+      filterExpr,
+      'id',
+      0,
+      0,
+      filterParams,
+    )
+    totalItems = todos ? todos.length : 0
+  } catch (_) {
+    totalItems = registros ? registros.length : 0
+  }
+
+  var totalPages = Math.ceil(totalItems / perPage) || 1
+
+  var items = []
+  if (registros && registros.length > 0) {
+    for (var i = 0; i < registros.length; i++) {
+      var r = registros[i]
+      var pacNome = ''
+      var pacCpfMasc = ''
+      var pacCnsMasc = ''
+      var exameTipo = ''
+      var exameModalidade = ''
+
+      try {
+        var pRec = c.app.findRecordById('pacientes', r.getString('paciente_ref'))
+        pacNome = pRec.getString('nome')
+        var pCpf = pRec.getString('cpf')
+        if (pCpf) {
+          pacCpfMasc = pCpf.replace(/(\d{3})\d{5}(\d{2})/, '$1.***.**$2')
+        }
+        var pCns = pRec.getString('cartao_sus')
+        if (pCns) {
+          pacCnsMasc = pCns.replace(/(\d{3})\d{8}(\d{4})/, '$1.****.****.$2')
+        }
+      } catch (_) {}
+
+      try {
+        var exRec = c.app.findRecordById('exames', r.getString('exame_ref'))
+        exameTipo = exRec.getString('tipo_exame')
+        exameModalidade = exRec.getString('modalidade_ris') || 'outro'
+      } catch (_) {}
+
+      // Retorna estritamente metadados administrativos sem corpo clínico do laudo
+      items.push({
+        id: r.id,
+        protocolo_entrega: r.getString('protocolo_entrega'),
+        exame_ref: r.getString('exame_ref'),
+        laudo_versao_ref: r.getString('laudo_versao_ref'),
+        paciente_ref: r.getString('paciente_ref'),
+        paciente_nome: pacNome,
+        paciente_cpf_mascarado: pacCpfMasc,
+        paciente_cns_mascarado: pacCnsMasc,
+        exame_tipo: exameTipo,
+        exame_modalidade: exameModalidade,
+        versao_entregue: r.getInt('versao_entregue'),
+        destinatario_nome: r.getString('destinatario_nome'),
+        destinatario_documento: r.getString('destinatario_documento'),
+        destinatario_parentesco_grau: r.getString('destinatario_parentesco_grau'),
+        forma_recebimento: r.getString('forma_recebimento'),
+        observacao: r.getString('observacao'),
+        data_hora_entrega: r.getString('data_hora_entrega'),
+        autor_id: r.getString('autor_id'),
+        autor_nome: r.getString('autor_nome'),
+        autor_perfil: r.getString('autor_perfil'),
+        evento_anterior_ref: r.getString('evento_anterior_ref'),
+        motivo_correcao: r.getString('motivo_correcao'),
+        created: r.getString('created'),
+      })
+    }
+  }
+
+  return c.json(200, {
+    sucesso: true,
+    page: page,
+    perPage: perPage,
+    totalItems: totalItems,
+    totalPages: totalPages,
+    items: items,
+  })
+})
