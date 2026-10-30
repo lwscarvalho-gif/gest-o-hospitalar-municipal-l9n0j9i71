@@ -67,7 +67,9 @@ import {
   FileCheck,
   XCircle,
   Plus,
+  RotateCcw,
 } from 'lucide-react'
+import { EditorFormatadoRIS } from '@/components/EditorFormatadoRIS'
 
 interface RisViewProps {
   onNavegarSAME?: (pacienteId?: string) => void
@@ -171,6 +173,10 @@ export const RisView: React.FC<RisViewProps> = ({ onNavegarSAME }) => {
   })
   const [salvandoExterno, setSalvandoExterno] = useState(false)
   const [erroExterno, setErroExterno] = useState<string | null>(null)
+
+  // Modal do Editor Formatado Completo RIS (DOC-02 Seção 7.4.3.4.b.i–iii)
+  const [modalEditorFormatadoAberto, setModalEditorFormatadoAberto] = useState(false)
+  const [exameEditorAtivo, setExameEditorAtivo] = useState<ItemFilaRIS | null>(null)
 
   // Modelos de Laudo
   const [modelosLaudo, setModelosLaudo] = useState<RisModeloLaudo[]>([])
@@ -619,13 +625,11 @@ export const RisView: React.FC<RisViewProps> = ({ onNavegarSAME }) => {
     }
   }
 
-  // Redigir / Finalizar Laudo Clínico (Revisão Humana Formal via serviço existente)
+  // Redigir / Finalizar Laudo Clínico: Abre o Editor Formatado Completo RIS
   const handleAbrirRedacaoLaudo = (ex: ItemFilaRIS) => {
     setExameFoco(ex)
-    setTextoRascunhoLaudo(ex.rascunho_laudo || ex.laudo_texto || '')
-    setSumarioResultadoLaudo(ex.resultado_sumario || '')
-    setErroLaudoFinal(null)
-    setModalLaudoRascunhoAberto(true)
+    setExameEditorAtivo(ex)
+    setModalEditorFormatadoAberto(true)
   }
 
   const handleSubmeterLaudoFinal = async (e: React.FormEvent) => {
@@ -1236,11 +1240,38 @@ export const RisView: React.FC<RisViewProps> = ({ onNavegarSAME }) => {
                                     <Button
                                       size="sm"
                                       onClick={() => handleAbrirRedacaoLaudo(item)}
-                                      className="h-7 text-[11px] px-2 bg-emerald-700 hover:bg-emerald-600 text-white"
+                                      className="h-7 text-[11px] px-2 bg-emerald-700 hover:bg-emerald-600 text-white font-bold"
                                     >
                                       <FileCheck className="w-3.5 h-3.5 mr-1" />
-                                      Redigir Laudo
+                                      Editor Laudo RIS
                                     </Button>
+                                  </>
+                                )}
+
+                                {/* Laudo Já Emitido: Botão para Consulta de Versões / Retificação / Impressão no Editor Formatado */}
+                                {(item.status_ris === 'laudado' || item.status === 'liberado') && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleAbrirRedacaoLaudo(item)}
+                                      className="h-7 text-[11px] px-2 border-emerald-600 text-emerald-800 hover:bg-emerald-50"
+                                      title="Consultar Laudo Formatado e Versões"
+                                    >
+                                      <Eye className="w-3.5 h-3.5 mr-1" />
+                                      Ver Laudo V{item.versao_atual || 1}
+                                    </Button>
+                                    {podeLaudar && (
+                                      <Button
+                                        size="sm"
+                                        onClick={() => handleAbrirRedacaoLaudo(item)}
+                                        className="h-7 text-[11px] px-2 bg-amber-700 hover:bg-amber-600 text-white"
+                                        title="Retificar Laudo Emitido (Nova Versão)"
+                                      >
+                                        <RotateCcw className="w-3 h-3 mr-1" />
+                                        Retificar
+                                      </Button>
+                                    )}
                                   </>
                                 )}
 
@@ -2145,7 +2176,26 @@ export const RisView: React.FC<RisViewProps> = ({ onNavegarSAME }) => {
       </Dialog>
 
       {/* ==================================================================== */}
-      {/* MODAL 7: REDIGIR / EMITIR LAUDO (REVISÃO HUMANA FORMAL) */}
+      {/* MODAL EDITOR FORMATADO COMPLETO RIS (PARTE 2 / 7.4.3.4.b.i–iii) */}
+      {/* ==================================================================== */}
+      {exameEditorAtivo && (
+        <EditorFormatadoRIS
+          exame={exameEditorAtivo}
+          aberto={modalEditorFormatadoAberto}
+          onClose={() => {
+            setModalEditorFormatadoAberto(false)
+            setExameEditorAtivo(null)
+          }}
+          onSucessoPublicacao={() => {
+            setModalEditorFormatadoAberto(false)
+            setExameEditorAtivo(null)
+            carregarFila()
+          }}
+        />
+      )}
+
+      {/* ==================================================================== */}
+      {/* MODAL 7: REDIGIR / EMITIR LAUDO (REVISÃO HUMANA FORMAL - MANTIDO PARA FALLBACK) */}
       {/* ==================================================================== */}
       <Dialog open={modalLaudoRascunhoAberto} onOpenChange={setModalLaudoRascunhoAberto}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
