@@ -94,19 +94,28 @@ export interface PacoteSigtapExtraido {
 export const LIMITE_MAX_BYTES_ZIP = 50 * 1024 * 1024 // 50 MB
 export const LIMITE_MAX_BYTES_TOTAL_UNZIPPED = 150 * 1024 * 1024 // 150 MB
 export const LIMITE_MAX_BYTES_ARQUIVO_UNICO = 80 * 1024 * 1024 // 80 MB
+export const LIMITE_MAX_ENTRADAS_ZIP = 500 // Máximo de entradas/arquivos no pacote
 
 /**
- * Decodifica bytes em texto utilizando ISO-8859-1 (Latin1), com fallback controlado para UTF-8.
- * Trata acentuações como "Cirúrgico", "Atenção", "Ambulatório", etc.
+ * Decodifica bytes em texto utilizando a codificação padrão oficial do Ministério da Saúde:
+ * ISO-8859-1 (Latin1).
+ *
+ * NOTA DE LIMITAÇÃO TÉCNICA:
+ * A decodificação em ISO-8859-1 mapeia bytes de 0x00 a 0xFF diretamente em caracteres Unicode,
+ * tratando acentuações do português ("Cirúrgico", "Atenção", etc.). A TextDecoder('iso-8859-1')
+ * nunca dispara erro 'fatal' por si só em bytes isolados; portanto, este método NÃO constitui
+ * prova de detecção universal de encoding corrompido, apenas aplica a norma do DATASUS.
+ * Caso seja fornecido texto já convertido em UTF-8 válido com acentuação multibyte sem mojibake,
+ * o leitor preserva a compatibilidade.
  */
 export function decodificarTextoBytes(bytes: Uint8Array): string {
+  if (!bytes || bytes.byteLength === 0) return ''
   try {
-    // Padrão do DATASUS: ISO-8859-1
+    // Padrão normativo do DATASUS: ISO-8859-1
     const decoderIso = new TextDecoder('iso-8859-1', { fatal: false })
-    const texto = decoderIso.decode(bytes)
-    return texto
+    return decoderIso.decode(bytes)
   } catch {
-    // Fallback para utf-8
+    // Fallback controlado para UTF-8
     const decoderUtf8 = new TextDecoder('utf-8', { fatal: false })
     return decoderUtf8.decode(bytes)
   }
@@ -147,18 +156,47 @@ export function descompactarZipSeguro(
     )
   }
 
+  // Contadores para validação ativa ANTES e DURANTE a descompressão (no filter de cada entrada)
+  let entradasVistas = 0
+  let tamanhoEstimadoAcumulado = 0
+
   let arquivosBrutos: Record<string, Uint8Array>
   try {
     arquivosBrutos = unzipSync(bytes, {
       filter: (file) => {
         // Ignorar pastas e arquivos de sistema do macOS/Windows
         if (file.name.endsWith('/') || file.name.includes('__MACOSX')) return false
-        // Validar contra Zip-Slip
+
+        // 1. Validação ativa de Zip-Slip no momento da descoberta da entrada
         if (!validarCaminhoSeguroZip(file.name)) {
           throw new Error(
             `Caminho perigoso detectado no arquivo ZIP (Zip-Slip bloqueado): "${file.name}"`,
           )
         }
+
+        // 2. Validação ativa do número de entradas ANTES de inflar
+        entradasVistas++
+        if (entradasVistas > LIMITE_MAX_ENTRADAS_ZIP) {
+          throw new Error(
+            `Número excessivo de arquivos no pacote ZIP (${entradasVistas} entradas detectadas; limite de segurança: ${LIMITE_MAX_ENTRADAS_ZIP}).`,
+          )
+        }
+
+        // 3. Validação preventiva contra Zip-Bomb usando tamanho original declarado no cabeçalho (size)
+        if (typeof file.size === 'number' && file.size > 0) {
+          if (file.size > LIMITE_MAX_BYTES_ARQUIVO_UNICO) {
+            throw new Error(
+              `Entrada "${file.name}" declara tamanho descompactado de ${(file.size / (1024 * 1024)).toFixed(1)} MB, excedendo o limite individual permitido (${(LIMITE_MAX_BYTES_ARQUIVO_UNICO / (1024 * 1024)).toFixed(0)} MB).`,
+            )
+          }
+          tamanhoEstimadoAcumulado += file.size
+          if (tamanhoEstimadoAcumulado > LIMITE_MAX_BYTES_TOTAL_UNZIPPED) {
+            throw new Error(
+              `Tamanho expandido total declarado pelo pacote ZIP (${(tamanhoEstimadoAcumulado / (1024 * 1024)).toFixed(1)} MB) excede o limite máximo de segurança (${(LIMITE_MAX_BYTES_TOTAL_UNZIPPED / (1024 * 1024)).toFixed(0)} MB).`,
+            )
+          }
+        }
+
         return true
       },
     })
@@ -166,7 +204,8 @@ export function descompactarZipSeguro(
     throw new Error(`Falha ao descompactar pacote ZIP do SIGTAP: ${err.message}`)
   }
 
-  let tamanhoAcumulado = 0
+  // Validação estrita DURANTE/APÓS montagem em memória
+  let tamanhoRealAcumulado = 0
   const resultado: Record<string, Uint8Array> = {}
 
   for (const [caminho, conteudo] of Object.entries(arquivosBrutos)) {
@@ -178,8 +217,8 @@ export function descompactarZipSeguro(
         `Arquivo interno "${caminho}" excede o limite máximo individual (${(LIMITE_MAX_BYTES_ARQUIVO_UNICO / (1024 * 1024)).toFixed(0)} MB).`,
       )
     }
-    tamanhoAcumulado += conteudo.byteLength
-    if (tamanhoAcumulado > LIMITE_MAX_BYTES_TOTAL_UNZIPPED) {
+    tamanhoRealAcumulado += conteudo.byteLength
+    if (tamanhoRealAcumulado > LIMITE_MAX_BYTES_TOTAL_UNZIPPED) {
       throw new Error(
         `O pacote ZIP expandido excede o limite total de segurança (${(LIMITE_MAX_BYTES_TOTAL_UNZIPPED / (1024 * 1024)).toFixed(0)} MB).`,
       )
@@ -363,8 +402,7 @@ export function processarPacoteSigtapPosicional(params: {
       layoutsIdentificados: [],
       lacunas,
       coberturaCatalogo: 'incompleto_sem_layout',
-      declaracaoCobertura:
-        'Pacote incompleto: layout oficial de procedimentos não localizado. O sistema recusa parsers fixos ou fictícios.',
+      declaracaoCobertura: `Formato inválido ou pacote incompleto: ${lacunas.join('; ')}. O sistema recusa parsers fixos, deduções arbitrárias ou layouts ausentes. Certifique-se de enviar o arquivo ZIP original disponibilizado pelo DATASUS (contendo tb_procedimento.txt e tb_procedimento_layout.txt).`,
       totalLinhasProcedimentos: 0,
       totalValidos: 0,
       totalRejeitados: 0,
@@ -372,8 +410,9 @@ export function processarPacoteSigtapPosicional(params: {
       rejeicoes: [
         {
           linha: 0,
-          motivo: `Lacuna estrutural do pacote: ${lacunas.join('; ')}`,
+          motivo: `Formato de pacote não reconhecido ou layout ausente: ${lacunas.join('; ')}. O arquivo não atende à estrutura oficial do DATASUS.`,
           campo: 'formato',
+          detalhe: `Arquivos encontrados no pacote ZIP (${nomesArquivos.length}): ${nomesArquivos.slice(0, 10).join(', ')}${nomesArquivos.length > 10 ? '...' : ''}`,
         },
       ],
     }
@@ -395,7 +434,7 @@ export function processarPacoteSigtapPosicional(params: {
 
   if (!colCodigo || !colNome) {
     throw new Error(
-      'O layout "tb_procedimento_layout.txt" não define as colunas mínimas CO_PROCEDIMENTO e NO_PROCEDIMENTO.',
+      'Formato desconhecido de layout: o arquivo "tb_procedimento_layout.txt" não define as colunas obrigatórias CO_PROCEDIMENTO e NO_PROCEDIMENTO. Pacote rejeitado para prevenir leituras corrompidas.',
     )
   }
 

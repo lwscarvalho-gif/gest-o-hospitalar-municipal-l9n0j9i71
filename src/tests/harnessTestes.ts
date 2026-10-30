@@ -39,6 +39,7 @@ import {
   descompactarZipSeguro,
   decodificarTextoBytes,
   LIMITE_MAX_BYTES_ZIP,
+  LIMITE_MAX_ENTRADAS_ZIP,
 } from '../services/importadorSigtapPosicional'
 import {
   ContaFaturamento,
@@ -1888,6 +1889,38 @@ export function executarHarnessLocal(): {
       cenario: '(7) Prevenção estrita contra Zip-Slip e rejeição de arquivos que excedam limites de segurança',
       passou: false,
       detalhes: 'Falha no teste de segurança de ZIP',
+      erro: err.message,
+    })
+  }
+
+  // 8. Rejeição explícita de layout ausente ou formato desconhecido
+  try {
+    const arquivosSemLayout: Record<string, Uint8Array> = {
+      'outro_arquivo.txt': new TextEncoder().encode('conteudo qualquer'),
+    }
+    const resultadoIncompleto = processarPacoteSigtapPosicional({
+      arquivos: arquivosSemLayout,
+      competenciaInformada: '2026-09',
+    })
+
+    const passou8 =
+      resultadoIncompleto.sucesso === false &&
+      resultadoIncompleto.coberturaCatalogo === 'incompleto_sem_layout' &&
+      resultadoIncompleto.rejeicoes.length > 0 &&
+      resultadoIncompleto.rejeicoes[0].motivo.includes('Formato de pacote não reconhecido')
+
+    resultados.push({
+      id: 'sigtap_posicional_8_formato_desconhecido_falha_explicita',
+      cenario: '(8) Formato desconhecido ou layout ausente falha com mensagem clara e explícita ao usuário',
+      passou: passou8,
+      detalhes: 'Validado: pacotes sem tb_procedimento_layout.txt ou tb_procedimento.txt são rejeitados com mensagem orientativa detalhada.',
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'sigtap_posicional_8_formato_desconhecido_falha_explicita',
+      cenario: '(8) Formato desconhecido ou layout ausente falha com mensagem clara e explícita ao usuário',
+      passou: false,
+      detalhes: 'Falha na validação de formato desconhecido',
       erro: err.message,
     })
   }
