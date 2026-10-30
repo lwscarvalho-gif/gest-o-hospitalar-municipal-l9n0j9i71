@@ -12,6 +12,101 @@ export interface AppUser {
   updated: string
 }
 
+// -------------------------------------------------------------
+// FASE 2: MÓDULO FARMÁCIA
+// -------------------------------------------------------------
+export type TipoItemFarmacia = 'medicamento' | 'material'
+export type UnidadeMedidaFarmacia =
+  | 'comprimido'
+  | 'ampola'
+  | 'frasco'
+  | 'unidade'
+  | 'caixa'
+  | 'envelope'
+  | 'tubo'
+
+export interface ItemFarmacia {
+  id: string
+  nome: string
+  tipo: TipoItemFarmacia
+  principio_ativo?: string
+  apresentacao?: string
+  unidade_medida: UnidadeMedidaFarmacia
+  lote?: string
+  validade?: string
+  estoque_atual: number
+  estoque_minimo?: number
+  ativo?: boolean
+  observacoes?: string
+  created: string
+  updated: string
+}
+
+export type TipoMovimentoFarmacia = 'dispensacao_paciente' | 'remessa_setor'
+
+export interface DispensacaoFarmacia {
+  id: string
+  paciente: string
+  item: string
+  quantidade: number
+  lote?: string
+  prescricao_origem?: string
+  profissional_dispensador?: string
+  data_dispensacao: string
+  tipo_movimento: TipoMovimentoFarmacia
+  setor_destino?: string
+  observacoes?: string
+  expand?: {
+    paciente?: Paciente
+    item?: ItemFarmacia
+  }
+  created: string
+  updated: string
+}
+
+// -------------------------------------------------------------
+// FASE 2: MÓDULO IMUNIZAÇÃO
+// -------------------------------------------------------------
+export type ViaAdministracaoVacina = 'intramuscular' | 'subcutanea' | 'intradermica' | 'oral'
+export type DoseVacina = '1a_dose' | '2a_dose' | '3a_dose' | 'reforco' | 'anual' | 'dose_unica'
+
+export interface Vacina {
+  id: string
+  nome: string
+  fabricante?: string
+  indicacao?: string
+  via_administracao: ViaAdministracaoVacina
+  lote_padrao?: string
+  validade_lote?: string
+  doses_previstas?: number
+  estoque_doses: number
+  ativo?: boolean
+  observacoes?: string
+  created: string
+  updated: string
+}
+
+export interface RegistroImunizacao {
+  id: string
+  paciente: string
+  vacina: string
+  dose: DoseVacina
+  lote: string
+  validade_lote?: string
+  data_aplicacao: string
+  profissional_aplicador?: string
+  aplicador_nome?: string
+  local_aplicacao?: string
+  observacoes?: string
+  expand?: {
+    paciente?: Paciente
+    vacina?: Vacina
+    profissional_aplicador?: Profissional
+  }
+  created: string
+  updated: string
+}
+
 export interface Setor {
   id: string
   nome: string

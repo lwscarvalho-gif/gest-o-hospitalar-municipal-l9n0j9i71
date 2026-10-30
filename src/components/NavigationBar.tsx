@@ -18,11 +18,15 @@ import {
   Flame,
   Menu,
   X,
+  Pill,
+  Syringe,
 } from 'lucide-react'
 
 export type ActiveTab =
   | 'dashboard'
   | 'pronto_atendimento'
+  | 'farmacia'
+  | 'imunizacao'
   | 'pacientes'
   | 'profissionais'
   | 'setores_leitos'
@@ -52,6 +56,18 @@ const NAV_ITEMS: NavItem[] = [
     id: 'pronto_atendimento',
     label: 'Pronto Atendimento (PA)',
     icon: Flame,
+    allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
+  },
+  {
+    id: 'farmacia',
+    label: 'Farmácia & Estoque',
+    icon: Pill,
+    allowedRoles: ['admin', 'gestor', 'recepcao'],
+  },
+  {
+    id: 'imunizacao',
+    label: 'Imunização / Vacinas',
+    icon: Syringe,
     allowedRoles: ['admin', 'gestor', 'profissional', 'recepcao'],
   },
   {
@@ -150,7 +166,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({ activeTab, onSelec
               <div className="flex items-center gap-2">
                 <span className="font-bold text-base tracking-tight text-white">SGH Municipal</span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  Fase 1
+                  v0.0.3
                 </span>
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">

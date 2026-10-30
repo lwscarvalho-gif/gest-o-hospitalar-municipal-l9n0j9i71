@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T02:36:04.524Z",
+  "generatedAt": "2026-10-30T02:41:56.818Z",
   "collections": [
     {
       "name": "users",
@@ -981,6 +981,385 @@
       "indexes": [
         "CREATE INDEX idx_pa_paciente ON pronto_atendimento (paciente)",
         "CREATE INDEX idx_pa_status ON pronto_atendimento (status)"
+      ]
+    },
+    {
+      "name": "farmacia_itens",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["medicamento", "material"]
+        },
+        {
+          "name": "principio_ativo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "apresentacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "unidade_medida",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["comprimido", "ampola", "frasco", "unidade", "caixa", "envelope", "tubo"]
+        },
+        {
+          "name": "lote",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "validade",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estoque_atual",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estoque_minimo",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_farmacia_nome ON farmacia_itens (nome)",
+        "CREATE INDEX idx_farmacia_tipo ON farmacia_itens (tipo)"
+      ]
+    },
+    {
+      "name": "farmacia_dispensacoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "item",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "farmacia_itens"
+        },
+        {
+          "name": "quantidade",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "lote",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "prescricao_origem",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "profissional_dispensador",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_dispensacao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo_movimento",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["dispensacao_paciente", "remessa_setor"]
+        },
+        {
+          "name": "setor_destino",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_disp_paciente ON farmacia_dispensacoes (paciente)",
+        "CREATE INDEX idx_disp_item ON farmacia_dispensacoes (item)",
+        "CREATE INDEX idx_disp_data ON farmacia_dispensacoes (data_dispensacao)"
+      ]
+    },
+    {
+      "name": "vacinas",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "fabricante",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "indicacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "via_administracao",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["intramuscular", "subcutanea", "intradermica", "oral"]
+        },
+        {
+          "name": "lote_padrao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "validade_lote",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "doses_previstas",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estoque_doses",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_vacinas_nome ON vacinas (nome)"]
+    },
+    {
+      "name": "imunizacao_registros",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "vacina",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "vacinas"
+        },
+        {
+          "name": "dose",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["1a_dose", "2a_dose", "3a_dose", "reforco", "anual", "dose_unica"]
+        },
+        {
+          "name": "lote",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "validade_lote",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_aplicacao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "profissional_aplicador",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "aplicador_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "local_aplicacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_imun_paciente ON imunizacao_registros (paciente)",
+        "CREATE INDEX idx_imun_vacina ON imunizacao_registros (vacina)",
+        "CREATE INDEX idx_imun_data ON imunizacao_registros (data_aplicacao)"
       ]
     }
   ]
