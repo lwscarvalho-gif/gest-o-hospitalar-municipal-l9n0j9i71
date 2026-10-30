@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T15:20:10.388Z",
+  "generatedAt": "2026-10-30T15:53:57.057Z",
   "collections": [
     {
       "name": "users",
@@ -1953,6 +1953,63 @@
           "type": "bool",
           "required": false,
           "system": false
+        },
+        {
+          "name": "modalidade_ris",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["rx", "tc", "ecg", "us", "outro"]
+        },
+        {
+          "name": "status_ris",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "solicitado",
+            "agendado",
+            "realizado_aguardando_laudo",
+            "laudado",
+            "cancelado"
+          ]
+        },
+        {
+          "name": "tipo_execucao",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["interno", "externo"]
+        },
+        {
+          "name": "prestador_externo_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "prestador_externo_cnes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "prestador_externo_uf",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "rascunho_laudo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "modelo_laudo_id",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -1960,7 +2017,10 @@
         "CREATE INDEX idx_exames_status ON exames (status)",
         "CREATE INDEX idx_exames_data ON exames (data_solicitacao)",
         "CREATE INDEX idx_exames_prioridade ON exames (prioridade)",
-        "CREATE INDEX `idx_exames_idempotency` ON `exames` (idempotency_key)"
+        "CREATE INDEX `idx_exames_idempotency` ON `exames` (idempotency_key)",
+        "CREATE INDEX `idx_exames_status_ris` ON `exames` (status_ris)",
+        "CREATE INDEX `idx_exames_modalidade_ris` ON `exames` (modalidade_ris)",
+        "CREATE INDEX `idx_exames_tipo_execucao` ON `exames` (tipo_execucao)"
       ]
     },
     {
@@ -7386,6 +7446,326 @@
       "indexes": [
         "CREATE UNIQUE INDEX idx_tfd_lote_idemp ON tfd_viagens_lote (idempotency_key)",
         "CREATE INDEX idx_tfd_lote_proc ON tfd_viagens_lote (processo)"
+      ]
+    },
+    {
+      "name": "ris_modelos_laudo",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "view": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "titulo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "modalidade",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["rx", "tc", "ecg", "us", "outro"]
+        },
+        {
+          "name": "codigo_procedimento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "procedimento_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "texto_padrao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "versao",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "modelo_anterior_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "motivo_alteracao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "usuario_autor_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "usuario_autor_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_ris_modelos_mod ON ris_modelos_laudo (modalidade)",
+        "CREATE INDEX idx_ris_modelos_proc ON ris_modelos_laudo (codigo_procedimento)",
+        "CREATE INDEX idx_ris_modelos_ativo ON ris_modelos_laudo (ativo)"
+      ]
+    },
+    {
+      "name": "ris_agendas",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "exame",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "exames"
+        },
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "unidade_setor",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "setores"
+        },
+        {
+          "name": "sala_equipamento",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "profissional_responsavel",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "profissional_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_inicio",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_hora_fim",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["agendado", "confirmado", "realizado", "reagendado", "cancelado"]
+        },
+        {
+          "name": "motivo_cancelamento_reagendamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "agenda_anterior_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "preparo_orientacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "comprovante_snapshot",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "usuario_autor_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "usuario_autor_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_ris_agenda_exame ON ris_agendas (exame)",
+        "CREATE INDEX idx_ris_agenda_paciente ON ris_agendas (paciente)",
+        "CREATE INDEX idx_ris_agenda_horario ON ris_agendas (sala_equipamento, data_hora_inicio, data_hora_fim)",
+        "CREATE INDEX idx_ris_agenda_status ON ris_agendas (status)",
+        "CREATE INDEX idx_ris_agenda_idemp ON ris_agendas (idempotency_key)"
+      ]
+    },
+    {
+      "name": "ris_historico_transicoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "view": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "exame",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "exames"
+        },
+        {
+          "name": "status_anterior",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status_novo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "motivo_justificativa",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "usuario_autor_id",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "usuario_autor_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "usuario_cargo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "detalhes",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_ris_hist_exame ON ris_historico_transicoes (exame)",
+        "CREATE INDEX idx_ris_hist_data ON ris_historico_transicoes (data_hora)"
       ]
     }
   ]

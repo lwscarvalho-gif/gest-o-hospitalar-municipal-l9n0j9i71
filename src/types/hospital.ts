@@ -25,6 +25,212 @@ export interface TransporteTipoVeiculo {
   updated: string
 }
 
+// ----------------------------------------------------------------------------
+// MÓDULO RIS (Radiologia e Diagnóstico por Imagem)
+// Conforme DOC-02 Seção 7.4.3.4.a.i-iv e c.ii, e itens 313-316 do ANEXO I
+// ----------------------------------------------------------------------------
+
+export type ModalidadeRIS = 'rx' | 'tc' | 'ecg' | 'us' | 'outro'
+
+export type StatusFilaRIS =
+  | 'solicitado'
+  | 'agendado'
+  | 'realizado_aguardando_laudo'
+  | 'laudado'
+  | 'cancelado'
+
+export type TipoExecucaoRIS = 'interno' | 'externo'
+
+export type StatusAgendaRIS = 'agendado' | 'confirmado' | 'realizado' | 'reagendado' | 'cancelado'
+
+export interface ItemFilaRIS {
+  id: string
+  paciente_id: string
+  paciente_nome: string
+  paciente_cpf_mascarado: string
+  paciente_cns_mascarado: string
+  tipo_exame: string
+  modalidade_ris: ModalidadeRIS
+  prioridade: 'eletiva' | 'urgente'
+  data_solicitacao: string
+  solicitante_nome: string
+  status_ris: StatusFilaRIS
+  status_exame_legado?: string
+  tipo_execucao: TipoExecucaoRIS
+  prestador_externo_nome?: string
+  prestador_externo_cnes?: string
+  prestador_externo_uf?: string
+  versao_atual: number
+  tem_retificacao?: boolean
+  setor_id?: string
+  internacao_id?: string
+  atendimento_pa_id?: string
+  justificativa_clinica?: string
+  rascunho_laudo?: string
+  laudo_texto?: string
+  resultado_sumario?: string
+  created: string
+  updated: string
+}
+
+export interface RequisicaoImagemPepParams {
+  paciente_id: string
+  tipo_exame: string
+  modalidade_ris?: ModalidadeRIS
+  prioridade?: 'eletiva' | 'urgente'
+  justificativa_clinica?: string
+  internacao_id?: string
+  atendimento_pa_id?: string
+  setor_id?: string
+  tipo_execucao?: TipoExecucaoRIS
+  prestador_externo_nome?: string
+  prestador_externo_cnes?: string
+  prestador_externo_uf?: string
+  idempotency_key?: string
+}
+
+export interface FiltrosFilaRIS {
+  status?: StatusFilaRIS | 'todos'
+  modalidade?: ModalidadeRIS | 'todos'
+  setor?: string
+  tipo_execucao?: TipoExecucaoRIS | 'todos'
+  busca?: string
+  paciente?: string
+  page?: number
+  perPage?: number
+}
+
+export interface RespostaFilaRIS {
+  items: ItemFilaRIS[]
+  page: number
+  perPage: number
+  totalItems: number
+  totalPages: number
+  isolamento_clinico_aplicado: boolean
+}
+
+export interface TransitarStatusRISParams {
+  novo_status: StatusFilaRIS
+  motivo_justificativa: string
+  detalhes?: Record<string, unknown>
+}
+
+export interface AgendarExameRISParams {
+  exame_id: string
+  sala_equipamento: string
+  data_hora_inicio: string
+  data_hora_fim: string
+  unidade_setor_id?: string
+  profissional_id?: string
+  profissional_nome?: string
+  preparo_orientacoes?: string
+  idempotency_key?: string
+}
+
+export interface ComprovanteAgendamentoRISSnapshot {
+  comprovante_id: string
+  exame_id: string
+  tipo_exame: string
+  modalidade_ris: ModalidadeRIS
+  paciente_id: string
+  paciente_nome: string
+  paciente_cpf: string
+  paciente_cns: string
+  data_nascimento?: string
+  unidade_setor: string
+  sala_equipamento: string
+  data_hora_inicio: string
+  data_hora_fim: string
+  profissional_responsavel: string
+  preparo_orientacoes: string
+  motivo_reagendamento?: string
+  agenda_anterior_id?: string
+  data_hora_emissao: string
+  emissor_nome: string
+  seguranca_hash: string
+}
+
+export interface RisAgenda {
+  id: string
+  exame: string
+  paciente: string
+  unidade_setor?: string
+  sala_equipamento: string
+  profissional_responsavel?: string
+  profissional_nome?: string
+  data_hora_inicio: string
+  data_hora_fim: string
+  status: StatusAgendaRIS
+  motivo_cancelamento_reagendamento?: string
+  agenda_anterior_id?: string
+  preparo_orientacoes?: string
+  comprovante_snapshot?: ComprovanteAgendamentoRISSnapshot | string
+  idempotency_key?: string
+  usuario_autor_id?: string
+  usuario_autor_nome?: string
+  created: string
+  updated: string
+}
+
+export interface ReagendarExameRISParams {
+  motivo: string
+  nova_data_hora_inicio: string
+  nova_data_hora_fim: string
+  nova_sala_equipamento?: string
+  novo_profissional_id?: string
+  novo_profissional_nome?: string
+  preparo_orientacoes?: string
+}
+
+export interface RegistrarExameExternoRISParams {
+  prestador_externo_nome: string
+  prestador_externo_cnes?: string
+  prestador_externo_uf?: string
+  observacoes?: string
+}
+
+export interface RisModeloLaudo {
+  id: string
+  titulo: string
+  modalidade: ModalidadeRIS
+  codigo_procedimento?: string
+  procedimento_nome: string
+  texto_padrao: string
+  versao: number
+  ativo: boolean
+  modelo_anterior_id?: string
+  motivo_alteracao?: string
+  usuario_autor_id?: string
+  usuario_autor_nome?: string
+  created: string
+  updated: string
+}
+
+export interface CriarModeloLaudoRISParams {
+  titulo: string
+  modalidade: ModalidadeRIS
+  procedimento_nome: string
+  texto_padrao: string
+  codigo_procedimento?: string
+  modelo_anterior_id?: string
+  motivo_alteracao?: string
+}
+
+export interface RisHistoricoTransicao {
+  id: string
+  exame: string
+  status_anterior: string
+  status_novo: string
+  motivo_justificativa: string
+  usuario_autor_id: string
+  usuario_autor_nome: string
+  usuario_cargo?: string
+  data_hora: string
+  detalhes?: Record<string, unknown>
+  created: string
+  updated: string
+}
+
 // ============================================================================
 // MÓDULO DE TRATAMENTO FORA DO DOMICÍLIO (TFD) - SEÇÃO 7.4.4.2.e
 // ============================================================================
