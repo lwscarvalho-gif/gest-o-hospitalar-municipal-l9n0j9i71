@@ -390,10 +390,18 @@ export interface ConteudoLaudoExameAssistencial {
   observacoes?: string
 }
 
+export type TipoRegistroImpresso = 'ato_original' | 'retificacao'
+
 export interface ImpressoAssistencial {
   id: string
   tipo: TipoImpressoAssistencial
   paciente: string
+  paciente_nome_snapshot?: string
+  paciente_cpf_snapshot?: string
+  paciente_cns_snapshot?: string
+  paciente_nascimento_snapshot?: string
+  paciente_sexo_snapshot?: string
+  paciente_alergias_snapshot?: string
   profissional?: string
   profissional_nome: string
   profissional_profissao: string
@@ -409,6 +417,12 @@ export interface ImpressoAssistencial {
   cid_consentimento_data_hora?: string
   cid10_codigo?: string
   cid10_descricao?: string
+  tipo_registro?: TipoRegistroImpresso
+  documento_original?: string
+  motivo_retificacao?: string
+  numero_retificacao?: number
+  usuario_emissor_id?: string
+  idempotency_key?: string
   conteudo:
     | ConteudoReceitaAssistencial
     | ConteudoAtestadoAssistencial
@@ -422,6 +436,7 @@ export interface ImpressoAssistencial {
     atendimento_pa?: FichaProntoAtendimento
     internacao?: Internacao
     prescricao_origem?: PrescricaoMedica
+    documento_original?: ImpressoAssistencial
   }
   created: string
   updated: string

@@ -781,7 +781,20 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
               <FolhaImpressoA4
                 impresso={impressoVisualizacao}
                 paciente={
-                  pacienteAtivo || pacientes.find((p) => p.id === pacienteSelecionadoId) || null
+                  impressoVisualizacao?.paciente_nome_snapshot
+                    ? {
+                        id: impressoVisualizacao.paciente,
+                        nome: impressoVisualizacao.paciente_nome_snapshot,
+                        cpf: impressoVisualizacao.paciente_cpf_snapshot || '',
+                        cartao_sus: impressoVisualizacao.paciente_cns_snapshot || '',
+                        data_nascimento: impressoVisualizacao.paciente_nascimento_snapshot || '',
+                        sexo: (impressoVisualizacao.paciente_sexo_snapshot as any) || 'Outro',
+                        tipo_sanguineo: '',
+                        alergias: impressoVisualizacao.paciente_alergias_snapshot || '',
+                        created: '',
+                        updated: '',
+                      }
+                    : pacienteAtivo || pacientes.find((p) => p.id === pacienteSelecionadoId) || null
                 }
               />
             )}

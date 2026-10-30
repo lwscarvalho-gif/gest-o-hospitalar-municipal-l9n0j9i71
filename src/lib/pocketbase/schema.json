@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T12:12:15.358Z",
+  "generatedAt": "2026-10-30T12:31:48.357Z",
   "collections": [
     {
       "name": "users",
@@ -3334,11 +3334,11 @@
       "name": "impressos_assistenciais",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
-        "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != ''",
-        "delete": "@request.auth.id != ''"
+        "list": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "view": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": null,
+        "delete": null
       },
       "fields": [
         {
@@ -3475,6 +3475,80 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "paciente_nome_snapshot",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "paciente_cpf_snapshot",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "paciente_cns_snapshot",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "paciente_nascimento_snapshot",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "paciente_sexo_snapshot",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "paciente_alergias_snapshot",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tipo_registro",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["ato_original", "retificacao"]
+        },
+        {
+          "name": "documento_original",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "impressos_assistenciais"
+        },
+        {
+          "name": "motivo_retificacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "numero_retificacao",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "usuario_emissor_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -3482,7 +3556,9 @@
         "CREATE INDEX idx_impressos_tipo ON impressos_assistenciais (tipo)",
         "CREATE INDEX idx_impressos_data ON impressos_assistenciais (data_hora_emissao)",
         "CREATE INDEX idx_impressos_pa ON impressos_assistenciais (atendimento_pa)",
-        "CREATE INDEX idx_impressos_internacao ON impressos_assistenciais (internacao)"
+        "CREATE INDEX idx_impressos_internacao ON impressos_assistenciais (internacao)",
+        "CREATE INDEX `idx_imp_doc_original` ON `impressos_assistenciais` (documento_original)",
+        "CREATE INDEX `idx_imp_idempotency` ON `impressos_assistenciais` (idempotency_key)"
       ]
     },
     {

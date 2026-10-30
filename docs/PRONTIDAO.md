@@ -533,11 +533,11 @@ Na consolidação das Partes 1 e 2 do módulo "Exames & Laudos", o sistema trato
 
 ---
 
-## 12. Painel de Gestão Hospitalar em Tempo Real (v0.0.43): Evidências e Limites Precisos
+## 12. Painel de Gestão Hospitalar em Tempo Real (v0.0.43 / v0.0.44): Evidências e Limites Precisos
 
-Na consolidação da versão 0.0.43 (resolução da contradição apontada pelo Codex sobre agregação no servidor versus fallback paginado), foram implementadas as correções estritas de segurança, privacidade e integridade:
+Na consolidação da versão 0.0.44 (e resolução da contradição apontada pelo Codex sobre agregação no servidor versus fallback paginado na v0.0.43), foram implementadas e conferidas as correções estritas de segurança, privacidade e integridade:
 
-### 12.1. Evidências de Arquitetura e Regras Implementadas (v0.0.43)
+### 12.1. Evidências de Arquitetura e Regras Implementadas (v0.0.44)
 
 1. **Agregação Exclusiva no Servidor com Remoção Total de Fallback Clínico no Cliente (`src/services/painelGestao.ts`):**
    - A função `carregarDadosPainelGestao` consulta única e exclusivamente a rota agregada `GET /backend/v1/painel/indicadores`.
@@ -560,8 +560,8 @@ Na consolidação da versão 0.0.43 (resolução da contradição apontada pelo 
    - `PAINEL-5`: Fronteira de dia local no fuso America/Porto_Velho (UTC-4) calcula dia civil correto (02:30Z = dia anterior local).
    - `PAINEL-6`: Vazio real (zero registros) não é tratado como erro, e erro real não é tratado como conjunto vazio.
    - `PAINEL-7`: Resposta fora de ordem de filtro antigo é descartada por controle de sequência.
-   - `PAINEL-8 (NOVO v0.0.43)`: Falha/404/403/Timeout do endpoint agregado gera erro na função real `carregarDadosPainelGestao` e executa **zero chamadas** às coleções clínicas no cliente.
-   - `PAINEL-9 (NOVO v0.0.43)`: Troca de sessão/perfil limpa dados anteriores do painel (sobretudo financeiro) e descarta requisição em voo da sessão anterior.
+   - `PAINEL-8 (v0.0.44)`: Falha/404/403/Timeout do endpoint agregado gera erro na função real `carregarDadosPainelGestao` e executa **zero chamadas** às coleções clínicas no cliente.
+   - `PAINEL-9 (v0.0.44)`: Troca de sessão/perfil limpa dados anteriores do painel (sobretudo financeiro) e descarta requisição em voo da sessão anterior.
 
 ### 12.2. Limites Honestos e Precisão das Evidências (Avisos Mandatórios)
 

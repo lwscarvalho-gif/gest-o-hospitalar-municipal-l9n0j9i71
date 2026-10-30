@@ -10,6 +10,34 @@ import {
 import { registrarAuditoria } from './auditoria'
 import { formatarDataHoraFuso } from './dataFusoUnidade'
 
+export interface RetificarImpressoParams {
+  documentoOriginalId: string
+  motivoRetificacao: string
+  tipo: TipoImpressoAssistencial
+  pacienteId: string
+  profissionalId?: string
+  profissionalNome: string
+  profissionalProfissao: string
+  profissionalRegistro: string
+  unidadeNome?: string
+  municipioUf?: string
+  origem: OrigemImpressoAssistencial
+  atendimentoPaId?: string
+  internacaoId?: string
+  prescricaoOrigemId?: string
+  cidConsentimentoRegistrado?: boolean
+  cidConsentimentoDataHora?: string
+  cid10Codigo?: string
+  cid10Descricao?: string
+  conteudo:
+    | ConteudoReceitaAssistencial
+    | ConteudoAtestadoAssistencial
+    | ConteudoResumoAltaAssistencial
+    | Record<string, any>
+  observacoesGerais?: string
+  idempotencyKey?: string
+}
+
 export interface EmitirImpressoParams {
   tipo: TipoImpressoAssistencial
   pacienteId: string
@@ -33,6 +61,10 @@ export interface EmitirImpressoParams {
     | ConteudoResumoAltaAssistencial
     | Record<string, any>
   observacoesGerais?: string
+  idempotencyKey?: string
+  tipoRegistro?: 'ato_original' | 'retificacao'
+  documentoOriginalId?: string
+  motivoRetificacao?: string
 }
 
 export interface ListarImpressosFiltros {
@@ -114,11 +146,39 @@ export async function emitirImpressoAssistencial(
   if (params.prescricaoOrigemId) {
     payload.prescricao_origem = params.prescricaoOrigemId
   }
+  if (params.idempotencyKey) {
+    payload.idempotency_key = params.idempotencyKey
+  }
+  if (params.tipoRegistro) {
+    payload.tipo_registro = params.tipoRegistro
+  }
+  if (params.documentoOriginalId) {
+    payload.documento_original = params.documentoOriginalId
+  }
+  if (params.motivoRetificacao) {
+    payload.motivo_retificacao = params.motivoRetificacao.trim()
+  }
+
+  // Preenche snapshot do paciente do cliente preventivamente (o hook também assegura no servidor)
+  try {
+    const pacienteObj = await pb.collection('pacientes').getOne(params.pacienteId)
+    if (pacienteObj) {
+      payload.paciente_nome_snapshot = (pacienteObj as any).nome || ''
+      payload.paciente_cpf_snapshot = (pacienteObj as any).cpf || ''
+      payload.paciente_cns_snapshot = (pacienteObj as any).cartao_sus || ''
+      payload.paciente_nascimento_snapshot = (pacienteObj as any).data_nascimento || ''
+      payload.paciente_sexo_snapshot = (pacienteObj as any).sexo || ''
+      payload.paciente_alergias_snapshot = (pacienteObj as any).alergias || ''
+    }
+  } catch {
+    /* intentionally ignored */
+  }
 
   const record = await pb
     .collection('impressos_assistenciais')
     .create<ImpressoAssistencial>(payload, {
-      expand: 'paciente,profissional,atendimento_pa,internacao,prescricao_origem',
+      expand:
+        'paciente,profissional,atendimento_pa,internacao,prescricao_origem,documento_original',
     })
 
   // Trilha de auditoria obrigatória com detalhes do consentimento e profissional
@@ -145,11 +205,33 @@ export async function emitirImpressoAssistencial(
   await registrarAuditoria({
     acao: `EMISSAO_IMPRESSO_${params.tipo.toUpperCase()}`,
     modulo: 'Impressos Assistenciais',
-    detalhes: detalhesAuditoria,
+    detalhes: `${params.tipoRegistro === 'retificacao' ? '[RETIFICAÇÃO RASTREADA] ' : ''}${detalhesAuditoria}${params.motivoRetificacao ? ` | Motivo Retificação: ${params.motivoRetificacao}` : ''}`,
     registro_id: record.id,
   })
 
   return record
+}
+
+/**
+ * Retifica um impresso assistencial emitido gerando um NOVO documento
+ * formalmente referenciado ao original com motivo, autor e data, preservando o histórico.
+ */
+export async function retificarImpressoAssistencial(
+  params: RetificarImpressoParams,
+): Promise<ImpressoAssistencial> {
+  if (!params.documentoOriginalId) {
+    throw new Error('ID do documento original é obrigatório para retificação.')
+  }
+  if (!params.motivoRetificacao || params.motivoRetificacao.trim().length < 5) {
+    throw new Error('Motivo da retificação é obrigatório (mínimo de 5 caracteres).')
+  }
+
+  return emitirImpressoAssistencial({
+    ...params,
+    tipoRegistro: 'retificacao',
+    documentoOriginalId: params.documentoOriginalId,
+    motivoRetificacao: params.motivoRetificacao.trim(),
+  })
 }
 
 /**

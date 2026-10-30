@@ -98,6 +98,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     pb.authStore.clear()
     setUser(null)
+
+    // Limpeza de segurança: descarta chaves com conteúdo clínico sensível eventualmente presentes em storage
+    try {
+      if (typeof window !== 'undefined') {
+        const limparChavesClinicas = (storage: Storage) => {
+          const chavesParaRemover: string[] = []
+          for (let i = 0; i < storage.length; i++) {
+            const k = storage.key(i)
+            if (k) {
+              const kLower = k.toLowerCase()
+              if (
+                kLower.includes('paciente') ||
+                kLower.includes('atendimento') ||
+                kLower.includes('impresso') ||
+                kLower.includes('clinico') ||
+                kLower.includes('receita') ||
+                kLower.includes('atestado') ||
+                kLower.includes('laudo') ||
+                kLower.includes('painel') ||
+                kLower.includes('prontuario')
+              ) {
+                chavesParaRemover.push(k)
+              }
+            }
+          }
+          chavesParaRemover.forEach((k) => storage.removeItem(k))
+        }
+
+        if (window.sessionStorage) limparChavesClinicas(window.sessionStorage)
+        if (window.localStorage) limparChavesClinicas(window.localStorage)
+      }
+    } catch {
+      /* intentionally ignored */
+    }
   }
 
   const temPermissao = (perfisPermitidos: UserRole[]): boolean => {

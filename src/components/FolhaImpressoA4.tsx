@@ -66,6 +66,18 @@ export const FolhaImpressoA4: React.FC<FolhaImpressoA4Props> = ({ impresso, paci
             <h2 className="text-base sm:text-lg font-black tracking-wide uppercase text-slate-900 underline decoration-2 underline-offset-4">
               {tituloDocumento}
             </h2>
+            {impresso.tipo_registro === 'retificacao' && (
+              <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 border border-amber-300 rounded text-amber-900 text-xs font-bold uppercase">
+                <span>
+                  ⚠️ Documento Retificado (Retificação nº {impresso.numero_retificacao || 1})
+                </span>
+                {impresso.documento_original && (
+                  <span className="font-mono text-[11px] font-normal lowercase">
+                    — ref. original #{impresso.documento_original.slice(-6)}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -128,6 +140,12 @@ export const FolhaImpressoA4: React.FC<FolhaImpressoA4Props> = ({ impresso, paci
           {paciente?.alergias && (
             <div className="pt-1.5 border-t border-slate-200 text-red-700 font-semibold text-[11px]">
               ⚠️ Alergias Informadas: {paciente.alergias}
+            </div>
+          )}
+
+          {impresso.motivo_retificacao && (
+            <div className="mt-2 p-2 bg-amber-50 border border-amber-300 rounded text-[11px] text-amber-950">
+              <strong>Motivo Formal da Retificação:</strong> {impresso.motivo_retificacao}
             </div>
           )}
         </div>
