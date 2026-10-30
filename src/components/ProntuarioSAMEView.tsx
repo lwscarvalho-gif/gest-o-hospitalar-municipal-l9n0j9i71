@@ -646,7 +646,12 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
 
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100/60">
             {impressoVisualizacao && (
-              <FolhaImpressoA4 impresso={impressoVisualizacao} paciente={pacienteSelecionado} />
+              <FolhaImpressoA4
+                impresso={impressoVisualizacao}
+                paciente={
+                  pacienteAtivo || pacientes.find((p) => p.id === pacienteSelecionadoId) || null
+                }
+              />
             )}
           </div>
 

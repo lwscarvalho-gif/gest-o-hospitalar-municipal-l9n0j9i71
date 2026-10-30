@@ -137,9 +137,9 @@ const Index: React.FC = () => {
       <footer className="border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
           <span>
-            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar v0.0.12
-            (Painel de Gestão em Tempo Real, Faturamento SUS AIH/BPA, Centro Cirúrgico, Exames,
-            SAME, Prescrição & Farmácia)
+            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar v0.0.15
+            (Impressos Assistenciais SUS, Painel de Gestão, Faturamento AIH/BPA, Centro Cirúrgico,
+            Exames, SAME, Prescrição & Farmácia)
           </span>
           <span className="text-slate-400">
             Acesso em nuvem seguro • Usuário: {user?.name} ({user?.role})

@@ -646,8 +646,14 @@ export const ModalEmissaoImpresso: React.FC<ModalEmissaoImpressoProps> = ({
                       <option value="">-- Selecione ou digite abaixo --</option>
                       {profissionaisList.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.nome} ({p.profissao || 'Médico'} • {p.conselho_regional}{' '}
-                          {p.conselho_numero})
+                          {p.nome} (
+                          {p.profissao || p.especialidade || p.categoria?.toUpperCase() || 'Médico'}{' '}
+                          •{' '}
+                          {p.registro_conselho ||
+                            (p.conselho_regional && p.conselho_numero
+                              ? `${p.conselho_regional} ${p.conselho_numero}`
+                              : 'CRM/RO')}
+                          )
                         </option>
                       ))}
                     </select>

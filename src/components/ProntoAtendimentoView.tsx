@@ -65,6 +65,7 @@ import {
   Maximize2,
   Minimize2,
   Pill,
+  Printer,
 } from 'lucide-react'
 import { ModalSolicitarExame } from '@/components/ModalSolicitarExame'
 import { SecaoPrescricaoPAMedica } from '@/components/SecaoPrescricaoPAMedica'

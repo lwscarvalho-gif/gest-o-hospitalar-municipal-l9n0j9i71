@@ -410,6 +410,9 @@ export interface Profissional {
     | 'outro'
   registro_conselho: string
   especialidade: string
+  profissao?: string
+  conselho_regional?: string
+  conselho_numero?: string
   cpf?: string
   telefone?: string
   email?: string
