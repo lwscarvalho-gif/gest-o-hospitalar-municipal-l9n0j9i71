@@ -12,6 +12,192 @@ export interface AppUser {
   updated: string
 }
 
+// ============================================================================
+// MÓDULO DE GERENCIAMENTO DE APACS (SEÇÃO 7.4.4.4)
+// ============================================================================
+
+export type TipoLaudoApac =
+  | 'laudo_geral'
+  | 'medicamentos'
+  | 'nefrologia'
+  | 'quimioterapia'
+  | 'radioterapia'
+  | 'bariatrica'
+
+export type ModalidadeApac = 'inicial' | 'continuidade' | 'sem_continuidade'
+
+export type StatusSolicitacaoApac = 'solicitada' | 'em_analise' | 'autorizada' | 'cancelada'
+
+export type TipoRegistroApac = 'ato_original' | 'retificacao'
+
+export interface ApacFaixaSequencia {
+  id: string
+  ano: number
+  uf: string
+  tipo_apac: TipoLaudoApac
+  faixa_inicial: number
+  faixa_final: number
+  numero_atual: number
+  validade_inicial: string
+  validade_final: string
+  ativo: boolean
+  criado_por?: string
+  observacoes?: string
+  created: string
+  updated: string
+}
+
+export interface SnapshotPacienteApac {
+  nome: string
+  nome_mae?: string
+  cns?: string
+  cpf?: string
+  data_nascimento?: string
+  idade?: number
+  sexo?: string
+  raca_cor?: string
+  responsavel_legal?: string
+  numero_prontuario: string
+}
+
+export interface ApacSolicitacao {
+  id: string
+  paciente: string
+  internacao?: string
+  atendimento_pa?: string
+  unidade_solicitante: string
+  profissional_solicitante?: string
+  profissional_solicitante_nome: string
+  data_solicitacao: string
+  numero_laudo: string
+  numero_apac?: string
+  faixa_sequencia_origem?: string
+  tipo_laudo: TipoLaudoApac
+  modalidade: ModalidadeApac
+  apac_anterior_numero?: string
+  apac_anterior_ref?: string
+  executante_prestador_nome: string
+  executante_cnes?: string
+  cid_principal: string
+  cid_secundario?: string
+  cid_causas_associadas?: string
+  validade_inicial: string
+  validade_final: string
+  status: StatusSolicitacaoApac
+  dados_paciente_snapshot?: SnapshotPacienteApac
+  tipo_registro: TipoRegistroApac
+  solicitacao_original_ref?: string
+  numero_versao?: number
+  motivo_retificacao?: string
+  usuario_autor_id?: string
+  cancelado_por_id?: string
+  motivo_cancelamento?: string
+  data_cancelamento?: string
+  idempotency_key?: string
+  expand?: {
+    paciente?: Paciente
+    internacao?: Internacao
+    atendimento_pa?: FichaProntoAtendimento
+    profissional_solicitante?: Profissional
+    faixa_sequencia_origem?: ApacFaixaSequencia
+    apac_anterior_ref?: ApacSolicitacao
+    solicitacao_original_ref?: ApacSolicitacao
+  }
+  created: string
+  updated: string
+}
+
+export interface CriarSolicitacaoApacParams {
+  paciente: string
+  internacao?: string
+  atendimento_pa?: string
+  unidade_solicitante: string
+  profissional_solicitante?: string
+  profissional_solicitante_nome?: string
+  data_solicitacao?: string
+  numero_laudo: string
+  tipo_laudo: TipoLaudoApac
+  modalidade: ModalidadeApac
+  apac_anterior_numero?: string
+  apac_anterior_ref?: string
+  executante_prestador_nome: string
+  executante_cnes?: string
+  cid_principal: string
+  cid_secundario?: string
+  cid_causas_associadas?: string
+  validade_inicial: string
+  validade_final: string
+  idempotency_key?: string
+}
+
+export interface RetificarSolicitacaoApacParams {
+  solicitacao_original_id: string
+  motivo_retificacao: string
+  unidade_solicitante?: string
+  profissional_solicitante?: string
+  profissional_solicitante_nome?: string
+  executante_prestador_nome?: string
+  executante_cnes?: string
+  cid_principal?: string
+  cid_secundario?: string
+  cid_causas_associadas?: string
+  validade_inicial?: string
+  validade_final?: string
+  idempotency_key?: string
+}
+
+export interface ListarSolicitacoesApacFiltros {
+  pacienteId?: string
+  tipo_laudo?: TipoLaudoApac | 'todos'
+  modalidade?: ModalidadeApac | 'todos'
+  status?: StatusSolicitacaoApac | 'todos'
+  busca?: string
+  dataInicio?: string
+  dataFim?: string
+  pagina?: number
+  porPagina?: number
+}
+
+export interface ResultadoPaginadoApac {
+  items: ApacSolicitacao[]
+  page: number
+  perPage: number
+  totalItems: number
+  totalPages: number
+}
+
+export interface RascunhoApacDoPep {
+  paciente: string
+  dados_paciente_snapshot: SnapshotPacienteApac
+  internacao?: string
+  atendimento_pa?: string
+  unidade_solicitante: string
+  profissional_solicitante?: string
+  profissional_solicitante_nome: string
+  cid_principal: string
+  cid_secundario?: string
+  data_solicitacao: string
+  numero_laudo_sugerido: string
+  tipo_laudo_padrao: TipoLaudoApac
+  modalidade_padrao: ModalidadeApac
+  validade_inicial_sugerida: string
+  validade_final_sugerida: string
+  executante_prestador_sugerido: string
+  revisao_profissional_obrigatoria: true
+}
+
+export interface CriarFaixaSequenciaParams {
+  ano: number
+  uf: string
+  tipo_apac: TipoLaudoApac
+  faixa_inicial: number
+  faixa_final: number
+  validade_inicial: string
+  validade_final: string
+  ativo?: boolean
+  observacoes?: string
+}
+
 // -------------------------------------------------------------
 // FASE 8: MENSAGERIA INTERNA HOSPITALAR (SEÇÃO 7 / BLOCO 1)
 // -------------------------------------------------------------

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T13:23:15.133Z",
+  "generatedAt": "2026-10-30T14:08:13.564Z",
   "collections": [
     {
       "name": "users",
@@ -5914,6 +5914,358 @@
         "CREATE INDEX idx_msg_remetente_created ON mensagens_internas (remetente, created DESC)",
         "CREATE INDEX idx_msg_idempotency ON mensagens_internas (idempotency_key)",
         "CREATE INDEX idx_msg_tipo_dest ON mensagens_internas (tipo_destinatario, created DESC)"
+      ]
+    },
+    {
+      "name": "apac_faixas_sequencias",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor')",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "ano",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "uf",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo_apac",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "laudo_geral",
+            "medicamentos",
+            "nefrologia",
+            "quimioterapia",
+            "radioterapia",
+            "bariatrica"
+          ]
+        },
+        {
+          "name": "faixa_inicial",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "faixa_final",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "numero_atual",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "validade_inicial",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "validade_final",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criado_por",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_apac_faixas_ano_uf_tipo ON apac_faixas_sequencias (ano, uf, tipo_apac, ativo)",
+        "CREATE INDEX idx_apac_faixas_ativo ON apac_faixas_sequencias (ativo)"
+      ]
+    },
+    {
+      "name": "apac_solicitacoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "update": "@request.auth.id != '' && @request.auth.role != 'recepcao'",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "paciente",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "internacao",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "internacoes"
+        },
+        {
+          "name": "atendimento_pa",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "pronto_atendimento"
+        },
+        {
+          "name": "unidade_solicitante",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "profissional_solicitante",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "profissionais"
+        },
+        {
+          "name": "profissional_solicitante_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_solicitacao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "numero_laudo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "numero_apac",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "faixa_sequencia_origem",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "apac_faixas_sequencias"
+        },
+        {
+          "name": "tipo_laudo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "laudo_geral",
+            "medicamentos",
+            "nefrologia",
+            "quimioterapia",
+            "radioterapia",
+            "bariatrica"
+          ]
+        },
+        {
+          "name": "modalidade",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["inicial", "continuidade", "sem_continuidade"]
+        },
+        {
+          "name": "apac_anterior_numero",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "executante_prestador_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "executante_cnes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cid_principal",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "cid_secundario",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cid_causas_associadas",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "validade_inicial",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "validade_final",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["solicitada", "em_analise", "autorizada", "cancelada"]
+        },
+        {
+          "name": "dados_paciente_snapshot",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tipo_registro",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["ato_original", "retificacao"]
+        },
+        {
+          "name": "numero_versao",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "motivo_retificacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "usuario_autor_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "cancelado_por_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "motivo_cancelamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_cancelamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "apac_anterior_ref",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "apac_solicitacoes"
+        },
+        {
+          "name": "solicitacao_original_ref",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "apac_solicitacoes"
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_apac_solic_paciente ON apac_solicitacoes (paciente, created DESC)",
+        "CREATE INDEX idx_apac_solic_status ON apac_solicitacoes (status, created DESC)",
+        "CREATE INDEX idx_apac_solic_numero_apac ON apac_solicitacoes (numero_apac)",
+        "CREATE INDEX idx_apac_solic_idempotency ON apac_solicitacoes (idempotency_key)",
+        "CREATE INDEX idx_apac_solic_tipo_modalidade ON apac_solicitacoes (tipo_laudo, modalidade)"
       ]
     }
   ]
