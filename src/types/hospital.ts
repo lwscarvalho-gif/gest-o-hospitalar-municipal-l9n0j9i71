@@ -13,6 +13,82 @@ export interface AppUser {
 }
 
 // -------------------------------------------------------------
+// FASE 6: VIGILÂNCIA EM SAÚDE (CONTROLE INTERNO MUNICIPAL)
+// -------------------------------------------------------------
+export type TipoVigilancia = 'epidemiologica' | 'sanitaria' | 'saude_trabalhador'
+
+export type SituacaoCasoVigilancia =
+  | 'notificado'
+  | 'em_investigacao'
+  | 'confirmado'
+  | 'descartado'
+  | 'encerrado'
+
+export type PeriodicidadeNotificacao = 'imediata_24h' | 'semanal'
+
+export type CriterioConfirmacaoVigilancia =
+  | 'laboratorial'
+  | 'clinico_epidemiologico'
+  | 'clinico'
+  | 'em_aberto'
+
+export type EvolucaoCasoVigilancia =
+  | 'cura'
+  | 'obito_agravo'
+  | 'obito_outras_causas'
+  | 'em_tratamento'
+  | 'ignorado'
+
+export interface ItemHistoricoInvestigacao {
+  data_hora: string
+  usuario_id: string
+  usuario_nome: string
+  usuario_cargo?: string
+  situacao_anterior: SituacaoCasoVigilancia
+  situacao_nova: SituacaoCasoVigilancia
+  nota: string
+}
+
+export interface NotificacaoVigilancia {
+  id: string
+  numero_notificacao: string
+  tipo_vigilancia: TipoVigilancia
+  paciente: string
+  paciente_nome: string
+  paciente_cpf?: string
+  paciente_cartao_sus?: string
+  paciente_data_nascimento?: string
+  paciente_sexo?: string
+  paciente_municipio?: string
+  paciente_bairro?: string
+  paciente_logradouro?: string
+  paciente_telefone?: string
+  agravo_codigo: string
+  agravo_nome: string
+  cid10_codigo?: string
+  periodicidade: PeriodicidadeNotificacao
+  situacao: SituacaoCasoVigilancia
+  criterio_confirmacao?: CriterioConfirmacaoVigilancia
+  evolucao_caso?: EvolucaoCasoVigilancia
+  data_notificacao: string
+  data_primeiros_sintomas?: string
+  data_encerramento?: string
+  profissional_notificante?: string
+  profissional_nome: string
+  profissional_registro?: string
+  unidade_notificadora: string
+  municipio_notificacao: string
+  observacoes_investigacao?: string
+  historico_investigacao?: ItemHistoricoInvestigacao[] | string
+  expand?: {
+    paciente?: Paciente
+    profissional_notificante?: Profissional
+  }
+  created: string
+  updated: string
+}
+
+// -------------------------------------------------------------
 // IMPRESSOS ASSISTENCIAIS (Receita, Atestado, Resumo de Alta)
 // -------------------------------------------------------------
 export type TipoImpressoAssistencial = 'receita' | 'atestado' | 'resumo_alta'
@@ -277,6 +353,7 @@ export type TipoEventoProntuario =
   | 'impresso_receita'
   | 'impresso_atestado'
   | 'impresso_resumo_alta'
+  | 'notificacao_vigilancia'
 
 export interface EventoProntuarioUnificado {
   id: string

@@ -142,6 +142,7 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
         if (filtroTipo === 'exames' && !ev.tipo.startsWith('exame_')) return false
         if (filtroTipo === 'cirurgia' && !ev.tipo.startsWith('cirurgia_')) return false
         if (filtroTipo === 'impressos' && !ev.tipo.startsWith('impresso_')) return false
+        if (filtroTipo === 'vigilancia' && ev.tipo !== 'notificacao_vigilancia') return false
       }
 
       // Filtro período
@@ -203,6 +204,8 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
       case 'impresso_atestado':
       case 'impresso_resumo_alta':
         return <Printer className="w-4 h-4 text-emerald-700" />
+      case 'notificacao_vigilancia':
+        return <ShieldAlert className="w-4 h-4 text-amber-600" />
       default:
         return <HeartPulse className="w-4 h-4 text-blue-600" />
     }
@@ -428,6 +431,7 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
             onChange={(e) => setFiltroTipo(e.target.value)}
           >
             <option value="todos">Todos os Eventos ({eventos.length})</option>
+            <option value="vigilancia">Vigilância em Saúde (Notificações)</option>
             <option value="cirurgia">Centro Cirúrgico (Ato, SRPA, Checklist)</option>
             <option value="pa">Pronto Atendimento (PA)</option>
             <option value="internacao">Internações & Transferências</option>

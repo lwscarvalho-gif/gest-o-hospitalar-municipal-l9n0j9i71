@@ -18,6 +18,7 @@ import {
 import { listarPrescricoes, listarAdministracoesMedicamentos } from './prescricoes'
 import { listarExames } from './exames'
 import { listarCirurgias } from './centroCirurgico'
+import { NotificacaoVigilancia } from '@/types/hospital'
 
 /**
  * SERVIÇO SAME — PRONTUÁRIO ELETRÔNICO ÚNICO / CONSOLIDADO
@@ -45,6 +46,7 @@ export async function carregarProntuarioUnificado(
     atosOperatorios,
     recuperacoesSrpa,
     impressosAssistenciais,
+    notificacoesVigilancia,
   ] = await Promise.all([
     pb
       .collection('pronto_atendimento')
@@ -134,6 +136,15 @@ export async function carregarProntuarioUnificado(
         expand: 'profissional,atendimento_pa,internacao,prescricao_origem',
       })
       .catch(() => [] as any[]),
+
+    pb
+      .collection('notificacoes_vigilancia')
+      .getFullList<NotificacaoVigilancia>({
+        filter: `paciente = "${pacienteId}"`,
+        sort: '-data_notificacao,-created',
+        expand: 'profissional_notificante',
+      })
+      .catch(() => [] as NotificacaoVigilancia[]),
   ])
 
   const eventos: EventoProntuarioUnificado[] = []
@@ -750,6 +761,71 @@ export async function carregarProntuarioUnificado(
             : 'bg-emerald-800 text-white',
       icone: 'Printer',
       registroOriginal: imp,
+    })
+  })
+
+  // K. Notificações de Vigilância em Saúde (Controle Interno Municipal)
+  notificacoesVigilancia.forEach((notif) => {
+    const rotuloSituacao: Record<string, string> = {
+      notificado: 'Notificado (Aguardando)',
+      em_investigacao: 'Em Investigação Epidemiológica',
+      confirmado: 'Caso Confirmado',
+      descartado: 'Caso Descartado',
+      encerrado: 'Investigação Encerrada',
+    }
+
+    const corSituacao: Record<string, string> = {
+      notificado: 'bg-amber-600 text-white',
+      em_investigacao: 'bg-blue-600 text-white',
+      confirmado: 'bg-red-600 text-white',
+      descartado: 'bg-slate-600 text-white',
+      encerrado: 'bg-emerald-700 text-white',
+    }
+
+    const rotuloTipoVig: Record<string, string> = {
+      epidemiologica: 'Vigilância Epidemiológica',
+      sanitaria: 'Vigilância Sanitária',
+      saude_trabalhador: 'Saúde do Trabalhador',
+    }
+
+    eventos.push({
+      id: `vig-${notif.id}`,
+      tipo: 'notificacao_vigilancia',
+      dataHora: notif.data_notificacao || notif.created,
+      titulo: `Notificação de Agravo: ${notif.agravo_nome} (Nº ${notif.numero_notificacao})`,
+      subtitulo: `Notificante: ${notif.profissional_nome}${notif.profissional_registro ? ` (${notif.profissional_registro})` : ''} • ${rotuloTipoVig[notif.tipo_vigilancia] || 'Vigilância'}`,
+      descricao: `Situação do caso: ${rotuloSituacao[notif.situacao] || notif.situacao}${
+        notif.cid10_codigo ? ` • CID-10: ${notif.cid10_codigo}` : ''
+      }${
+        notif.data_primeiros_sintomas
+          ? ` • Início dos sintomas: ${notif.data_primeiros_sintomas}`
+          : ''
+      }${
+        notif.observacoes_investigacao
+          ? `\nNotas de investigação: ${notif.observacoes_investigacao}`
+          : ''
+      }\n[Aviso: Registro de controle interno municipal — exportação/envio oficial a órgãos externos não implementado]`,
+      detalhes: {
+        numero_notificacao: notif.numero_notificacao,
+        agravo_codigo: notif.agravo_codigo,
+        agravo_nome: notif.agravo_nome,
+        cid10_codigo: notif.cid10_codigo,
+        tipo_vigilancia: notif.tipo_vigilancia,
+        periodicidade: notif.periodicidade,
+        situacao: notif.situacao,
+        criterio_confirmacao: notif.criterio_confirmacao,
+        evolucao_caso: notif.evolucao_caso,
+        data_notificacao: notif.data_notificacao,
+        data_primeiros_sintomas: notif.data_primeiros_sintomas,
+        data_encerramento: notif.data_encerramento,
+        unidade_notificadora: notif.unidade_notificadora,
+        observacoes_investigacao: notif.observacoes_investigacao,
+      },
+      profissionalNome: notif.profissional_nome,
+      badgeTexto: `Vigilância • ${rotuloSituacao[notif.situacao] || notif.situacao}`,
+      badgeCor: corSituacao[notif.situacao] || 'bg-amber-600 text-white',
+      icone: 'ShieldAlert',
+      registroOriginal: notif,
     })
   })
 
