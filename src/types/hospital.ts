@@ -1,5 +1,305 @@
 export type UserRole = 'admin' | 'gestor' | 'profissional' | 'recepcao'
 
+// ============================================================================
+// MÓDULO DE TRANSPORTE SANITÁRIO INTERNO (SEÇÃO 7.4.4.2.a-b)
+// ============================================================================
+
+export type CombustivelVeiculo =
+  | 'diesel'
+  | 'gasolina'
+  | 'etanol'
+  | 'flex'
+  | 'gnv'
+  | 'eletrico'
+  | 'outro'
+
+export type StatusVeiculo = 'disponivel' | 'em_viagem' | 'manutencao' | 'indisponivel' | 'inativo'
+
+export interface TransporteTipoVeiculo {
+  id: string
+  nome: string
+  codigo?: string
+  descricao?: string
+  ativo: boolean
+  created: string
+  updated: string
+}
+
+export interface TransporteVeiculo {
+  id: string
+  descricao: string
+  tipo?: string
+  placa: string
+  marca?: string
+  numero_chassi?: string
+  ano?: number
+  capacidade_lotacao: number
+  tipo_combustivel?: CombustivelVeiculo
+  data_validade_extintor?: string
+  status: StatusVeiculo
+  motivo_indisponibilidade?: string
+  ativo: boolean
+  observacoes?: string
+  expand?: {
+    tipo?: TransporteTipoVeiculo
+  }
+  created: string
+  updated: string
+}
+
+export interface TransporteRota {
+  id: string
+  descricao: string
+  municipio_saida: string
+  ativo: boolean
+  distancia_estimada_km?: number
+  observacoes?: string
+  created: string
+  updated: string
+}
+
+export interface TransporteDestino {
+  id: string
+  nome: string
+  municipio_localizacao: string
+  telefone?: string
+  endereco?: string
+  ativo: boolean
+  created: string
+  updated: string
+}
+
+export interface TransporteMotorista {
+  id: string
+  nome: string
+  cpf: string
+  telefone?: string
+  endereco?: string
+  cep?: string
+  municipio?: string
+  complemento?: string
+  tipo_veiculo_habilitado?: string
+  cnh_numero: string
+  cnh_categoria: string
+  cnh_vencimento: string
+  ativo: boolean
+  observacoes?: string
+  created: string
+  updated: string
+}
+
+export type TipoViagemSanitaria =
+  | 'sanitario_eletivo'
+  | 'urgencia_emergencia'
+  | 'tfd_intermunicipal'
+  | 'administrativo'
+  | 'outro'
+
+export type StatusViagem = 'programada' | 'em_transito' | 'concluida' | 'cancelada'
+
+export interface TransporteViagem {
+  id: string
+  codigo_viagem: string
+  data_saida: string
+  data_retorno_previsto: string
+  data_retorno_real?: string
+  tipo_viagem: TipoViagemSanitaria
+  status: StatusViagem
+  motorista: string
+  veiculo: string
+  rota?: string
+  destino?: string
+  cidade_destino: string
+  local_destino?: string
+  auxiliar_nome?: string
+  km_inicial?: number | null
+  km_final?: number | null
+  km_rodado?: number | null
+  empresa_terceirizada?: string
+  dotacao_orcamentaria?: string
+  recurso_financeiro?: string
+  observacoes?: string
+  usuario_autor_id?: string
+  cancelado_por_id?: string
+  motivo_cancelamento?: string
+  data_cancelamento?: string
+  expand?: {
+    motorista?: TransporteMotorista
+    veiculo?: TransporteVeiculo
+    rota?: TransporteRota
+    destino?: TransporteDestino
+    usuario_autor_id?: AppUser
+    cancelado_por_id?: AppUser
+  }
+  created: string
+  updated: string
+}
+
+export type TipoPassageiro = 'paciente' | 'acompanhante'
+export type TrechoViagem = 'ida' | 'volta' | 'ida_e_volta'
+export type StatusPassageiroViagem =
+  | 'agendado'
+  | 'embarcado'
+  | 'desembarcado'
+  | 'nao_compareceu'
+  | 'cancelado'
+
+export interface TransportePassageiro {
+  id: string
+  viagem: string
+  paciente?: string
+  paciente_vinculado?: string
+  nome_completo: string
+  documento_tipo?: string
+  documento_numero?: string
+  telefone?: string
+  tipo_passageiro: TipoPassageiro
+  trecho: TrechoViagem
+  vagas_ida: number
+  vagas_volta: number
+  local_embarque?: string
+  local_desembarque?: string
+  horario_embarque_previsto?: string
+  horario_desembarque_previsto?: string
+  data_aviso_paciente?: string
+  status: StatusPassageiroViagem
+  observacoes?: string
+  usuario_autor_id?: string
+  cancelado_por_id?: string
+  motivo_cancelamento?: string
+  data_cancelamento?: string
+  idempotency_key?: string
+  expand?: {
+    viagem?: TransporteViagem
+    paciente?: Paciente
+    paciente_vinculado?: TransportePassageiro
+    usuario_autor_id?: AppUser
+  }
+  created: string
+  updated: string
+}
+
+export interface CriarVeiculoParams {
+  descricao: string
+  tipo?: string
+  placa: string
+  marca?: string
+  numero_chassi?: string
+  ano?: number
+  capacidade_lotacao: number
+  tipo_combustivel?: CombustivelVeiculo
+  data_validade_extintor?: string
+  status: StatusVeiculo
+  motivo_indisponibilidade?: string
+  ativo?: boolean
+  observacoes?: string
+}
+
+export interface CriarMotoristaParams {
+  nome: string
+  cpf: string
+  telefone?: string
+  endereco?: string
+  cep?: string
+  municipio?: string
+  complemento?: string
+  tipo_veiculo_habilitado?: string
+  cnh_numero: string
+  cnh_categoria: string
+  cnh_vencimento: string
+  ativo?: boolean
+  observacoes?: string
+}
+
+export interface CriarRotaParams {
+  descricao: string
+  municipio_saida: string
+  distancia_estimada_km?: number
+  ativo?: boolean
+  observacoes?: string
+}
+
+export interface CriarDestinoParams {
+  nome: string
+  municipio_localizacao: string
+  telefone?: string
+  endereco?: string
+  ativo?: boolean
+}
+
+export interface CriarViagemParams {
+  codigo_viagem: string
+  data_saida: string
+  data_retorno_previsto: string
+  tipo_viagem: TipoViagemSanitaria
+  motorista: string
+  veiculo: string
+  rota?: string
+  destino?: string
+  cidade_destino: string
+  local_destino?: string
+  auxiliar_nome?: string
+  km_inicial?: number | null
+  km_final?: number | null
+  empresa_terceirizada?: string
+  dotacao_orcamentaria?: string
+  recurso_financeiro?: string
+  observacoes?: string
+}
+
+export interface RegistrarRetornoViagemKmParams {
+  viagem_id: string
+  km_final: number
+  data_retorno_real?: string
+  observacoes?: string
+}
+
+export interface AcompanhanteInput {
+  nome_completo: string
+  documento_numero?: string
+  documento_tipo?: string
+  telefone?: string
+}
+
+export interface ReservarVagasParams {
+  viagem_id: string
+  paciente_id?: string
+  nome_completo?: string
+  documento_tipo?: string
+  documento_numero?: string
+  telefone?: string
+  tipo_passageiro?: TipoPassageiro
+  trecho: TrechoViagem
+  acompanhantes?: AcompanhanteInput[]
+  local_embarque?: string
+  local_desembarque?: string
+  idempotency_key?: string
+}
+
+export interface ResultadoReservaVagas {
+  sucesso: boolean
+  idempotente?: boolean
+  mensagem: string
+  reserva?: {
+    viagem_id: string
+    ids_reservas: string[]
+    vagas_ida_consumidas: number
+    vagas_volta_consumidas: number
+    vagas_restantes_ida: number
+    vagas_restantes_volta: number
+  }
+}
+
+export interface CancelarViagemParams {
+  viagem_id: string
+  motivo_cancelamento: string
+}
+
+export interface CancelarPassageiroParams {
+  passageiro_id: string
+  motivo_cancelamento: string
+}
+
 export interface AppUser {
   id: string
   email: string
