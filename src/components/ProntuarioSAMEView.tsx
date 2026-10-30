@@ -16,7 +16,6 @@ import {
   Bed,
   Stethoscope,
   Pill,
-  Syringe,
   Calendar,
   CheckCircle2,
   Filter,
@@ -125,7 +124,6 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
         if (filtroTipo === 'prescricao' && ev.tipo !== 'prescricao_medica') return false
         if (filtroTipo === 'enfermagem' && ev.tipo !== 'administracao_enfermagem') return false
         if (filtroTipo === 'farmacia' && ev.tipo !== 'dispensacao_farmacia') return false
-        if (filtroTipo === 'vacina' && ev.tipo !== 'vacina_aplicacao') return false
         if (filtroTipo === 'agendamento' && ev.tipo !== 'agendamento') return false
         if (filtroTipo === 'exames' && !ev.tipo.startsWith('exame_')) return false
       }
@@ -167,8 +165,6 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
         return <CheckCircle2 className="w-4 h-4 text-teal-600" />
       case 'dispensacao_farmacia':
         return <Pill className="w-4 h-4 text-emerald-600" />
-      case 'vacina_aplicacao':
-        return <Syringe className="w-4 h-4 text-cyan-600" />
       case 'agendamento':
         return <Calendar className="w-4 h-4 text-slate-600" />
       case 'exame_laudado':
@@ -211,7 +207,7 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
               </div>
               <p className="text-xs text-slate-500">
                 Linha do tempo única: Atendimentos PA, Internações, Evoluções, Prescrições,
-                Checagens de Enfermagem, Farmácia e Vacinas
+                Checagens de Enfermagem, Farmácia e Exames
               </p>
             </div>
           </div>
@@ -410,7 +406,6 @@ export const ProntuarioSAMEView: React.FC<ProntuarioSAMEViewProps> = ({ paciente
             <option value="assistencial">Evoluções Clínicas</option>
             <option value="exames">Exames & Laudos Complementares</option>
             <option value="farmacia">Dispensações de Medicamentos</option>
-            <option value="vacina">Vacinas & Aplicações</option>
             <option value="agendamento">Agendamentos</option>
           </select>
 

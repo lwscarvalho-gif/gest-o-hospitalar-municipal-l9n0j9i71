@@ -6,7 +6,6 @@ import {
   Internacao,
   EvolucaoClinica,
   DispensacaoFarmacia,
-  RegistroImunizacao,
   Agendamento,
   PrescricaoMedica,
   AdministracaoMedicamento,
@@ -32,7 +31,6 @@ export async function carregarProntuarioUnificado(
     internacoes,
     evolucoes,
     dispensacoes,
-    imunizacoes,
     agendamentos,
     prescricoes,
     administracoes,
@@ -73,15 +71,6 @@ export async function carregarProntuarioUnificado(
         expand: 'item,prescricao_relacionada',
       })
       .catch(() => [] as DispensacaoFarmacia[]),
-
-    pb
-      .collection('imunizacao_registros')
-      .getFullList<RegistroImunizacao>({
-        filter: `paciente = "${pacienteId}"`,
-        sort: '-created',
-        expand: 'vacina,profissional_aplicador',
-      })
-      .catch(() => [] as RegistroImunizacao[]),
 
     pb
       .collection('agendamentos')
@@ -355,33 +344,7 @@ export async function carregarProntuarioUnificado(
     })
   })
 
-  // G. Imunização / Vacinas
-  imunizacoes.forEach((vac) => {
-    const nomeVacina = vac.expand?.vacina?.nome || 'Vacina'
-    eventos.push({
-      id: `vac-${vac.id}`,
-      tipo: 'vacina_aplicacao',
-      dataHora: vac.data_aplicacao || vac.created,
-      titulo: `Imunização / Vacina: ${nomeVacina} (${vac.dose})`,
-      subtitulo: vac.aplicador_nome
-        ? `Aplicador: ${vac.aplicador_nome} • Local: ${vac.local_aplicacao || 'Sala de Vacina'}`
-        : undefined,
-      descricao: `Lote: ${vac.lote}${vac.validade_lote ? ` (Val: ${vac.validade_lote})` : ''}${vac.observacoes ? ` • ${vac.observacoes}` : ''}`,
-      detalhes: {
-        vacina: nomeVacina,
-        dose: vac.dose,
-        lote: vac.lote,
-        local: vac.local_aplicacao,
-      },
-      profissionalNome: vac.aplicador_nome,
-      badgeTexto: `Vacina • ${vac.dose}`,
-      badgeCor: 'bg-cyan-700 text-white',
-      icone: 'Syringe',
-      registroOriginal: vac,
-    })
-  })
-
-  // H. Agendamentos Ambulatoriais
+  // G. Agendamentos Ambulatoriais
   agendamentos.forEach((ag) => {
     eventos.push({
       id: `ag-${ag.id}`,
@@ -405,7 +368,7 @@ export async function carregarProntuarioUnificado(
     })
   })
 
-  // I. Ciclo de Exames & Laudos (Solicitação, Coleta, Análise e Laudo Liberado)
+  // H. Ciclo de Exames & Laudos (Solicitação, Coleta, Análise e Laudo Liberado)
   exames.forEach((ex) => {
     // 1. Evento do Laudo / Resultado Concluído
     if (ex.status === 'liberado' && (ex.laudo_texto || ex.resultado_sumario)) {

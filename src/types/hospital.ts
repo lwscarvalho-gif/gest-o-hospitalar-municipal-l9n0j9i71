@@ -152,7 +152,6 @@ export type TipoEventoProntuario =
   | 'prescricao_medica'
   | 'administracao_enfermagem'
   | 'dispensacao_farmacia'
-  | 'vacina_aplicacao'
   | 'agendamento'
   | 'exame_solicitado'
   | 'exame_coletado'
@@ -227,49 +226,6 @@ export interface DispensacaoFarmacia {
     item?: ItemFarmacia
     prescricao_relacionada?: PrescricaoMedica
     internacao?: Internacao
-  }
-  created: string
-  updated: string
-}
-
-// -------------------------------------------------------------
-// FASE 2: MÓDULO IMUNIZAÇÃO
-// -------------------------------------------------------------
-export type ViaAdministracaoVacina = 'intramuscular' | 'subcutanea' | 'intradermica' | 'oral'
-export type DoseVacina = '1a_dose' | '2a_dose' | '3a_dose' | 'reforco' | 'anual' | 'dose_unica'
-
-export interface Vacina {
-  id: string
-  nome: string
-  fabricante?: string
-  indicacao?: string
-  via_administracao: ViaAdministracaoVacina
-  lote_padrao?: string
-  validade_lote?: string
-  doses_previstas?: number
-  estoque_doses: number
-  ativo?: boolean
-  observacoes?: string
-  created: string
-  updated: string
-}
-
-export interface RegistroImunizacao {
-  id: string
-  paciente: string
-  vacina: string
-  dose: DoseVacina
-  lote: string
-  validade_lote?: string
-  data_aplicacao: string
-  profissional_aplicador?: string
-  aplicador_nome?: string
-  local_aplicacao?: string
-  observacoes?: string
-  expand?: {
-    paciente?: Paciente
-    vacina?: Vacina
-    profissional_aplicador?: Profissional
   }
   created: string
   updated: string
