@@ -168,9 +168,9 @@ const Index: React.FC = () => {
       <footer className="border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
           <span>
-            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar v0.0.24
-            (Gestão Hospitalar, Fuso IANA Operacional America/Porto_Velho [UTC-4], Relógio de Espera
-            & Consistência de Indicadores)
+            Prefeitura Municipal de Saúde • Mirante da Serra - RO • Sistema Hospitalar v0.0.27
+            (Gestão Hospitalar, Conferência de Consistência Faturamento SUS SIH/AIH & SIA/BPA, Fuso
+            IANA Operacional)
           </span>
           <span className="text-slate-400">
             Acesso em nuvem seguro • Usuário: {user?.name} ({user?.role})

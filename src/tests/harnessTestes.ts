@@ -20,6 +20,19 @@ import {
 
 import { dentroDoPeriodo } from '../services/painelGestao'
 
+import {
+  validarContaHospitalarAIH,
+  validarItemProducaoBPA,
+  executarConferenciaConsistencia,
+  ContextoValidacaoFaturamento,
+} from '../services/consistenciaFaturamento'
+import {
+  ContaFaturamento,
+  ProducaoBPAItem,
+  ProcedimentoSigtap,
+  CID10Item,
+} from '../types/hospital'
+
 /**
  * Harness de Testes Funcionais Isolados (Offline / Local)
  * Sistema de Gestão Hospitalar Municipal (v0.0.24)
@@ -777,6 +790,485 @@ export function executarHarnessLocal(): {
       cenario: '(m) Filtros de dia civil e competência respeitam os limites locais do fuso de Porto Velho sem desvio UTC',
       passou: false,
       detalhes: 'Falha no teste de limites de dia e competência',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIOS FATURAMENTO SUS: CONSISTÊNCIA DE CONTAS AIH, BPA E SIGTAP (v0.0.27)
+  // =========================================================================
+
+  // Fixtures sintéticas isoladas para testes do faturamento SUS
+  const sigtapCatalogoTeste: ProcedimentoSigtap[] = [
+    {
+      id: 'sig-01',
+      codigo: '03.03.01.003-7',
+      nome: 'Tratamento de Doenças Infecciosas (Internação)',
+      valor_sh: 280.5,
+      valor_sa: 0,
+      valor_sp: 135.2,
+      modalidade: 'hospitalar',
+      complexidade: 'media',
+      ativo: true,
+      created: '2026-10-30',
+      updated: '2026-10-30',
+    },
+    {
+      id: 'sig-02',
+      codigo: '03.01.06.008-8',
+      nome: 'Atendimento de Urgência em Pronto Atendimento',
+      valor_sh: 0,
+      valor_sa: 12.5,
+      valor_sp: 0,
+      modalidade: 'ambulatorial',
+      complexidade: 'basica',
+      ativo: true,
+      created: '2026-10-30',
+      updated: '2026-10-30',
+    },
+    {
+      id: 'sig-03',
+      codigo: '04.07.01.003-2',
+      nome: 'Apendicectomia',
+      valor_sh: 580.4,
+      valor_sa: 0,
+      valor_sp: 320.0,
+      modalidade: 'hospitalar',
+      complexidade: 'media',
+      ativo: true,
+      created: '2026-10-30',
+      updated: '2026-10-30',
+    },
+  ]
+
+  const cid10CatalogoTeste: CID10Item[] = [
+    { id: 'cid-01', codigo: 'A09', descricao: 'Diarreia e gastroenterite de origem infecciosa presumível', ativo: true, created: '', updated: '' },
+    { id: 'cid-02', codigo: 'S06.0', descricao: 'Concussão cerebral (Traumatismo intracraniano)', capitulo: 'XIX', ativo: true, created: '', updated: '' },
+    { id: 'cid-03', codigo: 'K35.8', descricao: 'Apendicite aguda', ativo: true, created: '', updated: '' },
+  ]
+
+  const contextoFaturamentoTeste: ContextoValidacaoFaturamento = {
+    competenciaAtiva: '2025-05',
+    competenciasImportadasSigtap: ['2025-05', '2025-04'],
+    catalogoSigtap: sigtapCatalogoTeste,
+    catalogoCid10: cid10CatalogoTeste,
+    cnesUnidadeCadastrado: '7823901',
+  }
+
+  // =========================================================================
+  // CENÁRIO (n): Conta AIH com campos obrigatórios ausentes
+  // =========================================================================
+  try {
+    const contaIncompleta: ContaFaturamento = {
+      id: 'conta-inc-01',
+      numero_conta: 'AIH-202505-1001',
+      paciente: '', // AUSENTE
+      data_internacao: '', // AUSENTE
+      procedimento_principal_codigo: '', // AUSENTE
+      procedimento_principal_nome: '',
+      cid_principal: '', // AUSENTE
+      competencia: '2025-05',
+      status: 'aberta',
+      created: '2026-10-30',
+      updated: '2026-10-30',
+    }
+
+    const resultadoN = validarContaHospitalarAIH(contaIncompleta, contextoFaturamentoTeste)
+
+    const temErroPaciente = resultadoN.erros.some((e) => e.campo === 'paciente' && e.fonteOficial.includes('SIH'))
+    const temErroData = resultadoN.erros.some((e) => e.campo === 'data_internacao' && e.fonteOficial.includes('SIH'))
+    const temErroProc = resultadoN.erros.some((e) => e.campo === 'procedimento_principal_codigo')
+    const temErroCid = resultadoN.erros.some((e) => e.campo === 'cid_principal')
+
+    const passouN =
+      resultadoN.valida === false &&
+      resultadoN.totalErros >= 4 &&
+      temErroPaciente &&
+      temErroData &&
+      temErroProc &&
+      temErroCid
+
+    resultados.push({
+      id: 'cenario_n_aih_campos_obrigatorios_ausentes',
+      cenario: '(n) Conta AIH com campos obrigatórios ausentes é rejeitada com indicação precisa do campo e fonte oficial',
+      passou: passouN,
+      detalhes: `Conta sem paciente, data, procedimento e CID gerou ${resultadoN.totalErros} erros com citações ao Manual SIH/DATASUS 2017 e Manual Créditos Financeiros 2025.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_n_aih_campos_obrigatorios_ausentes',
+      cenario: '(n) Conta AIH com campos obrigatórios ausentes é rejeitada com indicação precisa do campo e fonte oficial',
+      passou: false,
+      detalhes: 'Falha no teste de campos obrigatórios ausentes da AIH',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO (o): AIH com datas invertidas (alta anterior à internação)
+  // =========================================================================
+  try {
+    const contaDatasInvertidas: ContaFaturamento = {
+      id: 'conta-inv-01',
+      numero_conta: 'AIH-202505-1002',
+      paciente: 'pac-01',
+      data_internacao: '2025-05-10',
+      data_alta: '2025-05-02', // ANTERIOR À ENTRADA!
+      procedimento_principal_codigo: '03.03.01.003-7',
+      procedimento_principal_nome: 'Tratamento de Doenças Infecciosas',
+      cid_principal: 'A09',
+      competencia: '2025-05',
+      status: 'aberta',
+      created: '2026-10-30',
+      updated: '2026-10-30',
+    }
+
+    const resultadoO = validarContaHospitalarAIH(contaDatasInvertidas, contextoFaturamentoTeste)
+    const erroDataInvertida = resultadoO.erros.find((e) => e.id === 'aih_data_alta_anterior_internacao')
+
+    const passouO =
+      resultadoO.valida === false &&
+      erroDataInvertida !== undefined &&
+      erroDataInvertida.campo === 'data_alta' &&
+      erroDataInvertida.fonteOficial.includes('SIH')
+
+    resultados.push({
+      id: 'cenario_o_aih_datas_invertidas',
+      cenario: '(o) AIH com data de alta anterior à internação é bloqueada com erro de cronologia temporal',
+      passou: passouO,
+      detalhes: `Alta em 02/05 com internação em 10/05 detectada e bloqueada com regra cronológica do Manual SIH/DATASUS.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_o_aih_datas_invertidas',
+      cenario: '(o) AIH com data de alta anterior à internação é bloqueada com erro de cronologia temporal',
+      passou: false,
+      detalhes: 'Falha no teste de datas invertidas da AIH',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO (p): AIH com alta mais de 6 meses antes da competência de processamento
+  // =========================================================================
+  try {
+    // Competência 2025-05. Alta em 2024-09 (8 meses atrás!)
+    const contaAltaAntiga: ContaFaturamento = {
+      id: 'conta-antiga-01',
+      numero_conta: 'AIH-202505-1003',
+      paciente: 'pac-01',
+      data_internacao: '2024-09-01',
+      data_alta: '2024-09-10', // Mais de 6 meses antes de 2025-05
+      procedimento_principal_codigo: '03.03.01.003-7',
+      procedimento_principal_nome: 'Tratamento de Doenças Infecciosas',
+      cid_principal: 'A09',
+      competencia: '2025-05',
+      status: 'aberta',
+      created: '2026-10-30',
+      updated: '2026-10-30',
+    }
+
+    const resultadoP = validarContaHospitalarAIH(contaAltaAntiga, contextoFaturamentoTeste)
+    const advAlta6Meses = resultadoP.advertencias.find(
+      (a) => a.id === 'aih_alta_mais_de_6_meses_competencia',
+    )
+
+    const passouP =
+      advAlta6Meses !== undefined &&
+      advAlta6Meses.fonteOficial.includes('Manual Técnico Operacional SIH — Janeiro/2017') &&
+      advAlta6Meses.mensagem.includes('limite de 6 meses')
+
+    resultados.push({
+      id: 'cenario_p_aih_alta_mais_6_meses',
+      cenario: '(p) AIH com alta mais de 6 meses antes da competência recebe advertência documental expressa do Manual SIH 2017',
+      passou: passouP,
+      detalhes: `Alta ocorrida em 09/2024 na competência 05/2025 (8 meses) sinalizada com base na regra de 6 meses do Manual SIH DATASUS 2017.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_p_aih_alta_mais_6_meses',
+      cenario: '(p) AIH com alta mais de 6 meses antes da competência recebe advertência documental expressa do Manual SIH 2017',
+      passou: false,
+      detalhes: 'Falha no teste de alta com mais de 6 meses',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO (q): Procedimento inexistente na competência SIGTAP importada
+  // =========================================================================
+  try {
+    const contaProcInexistente: ContaFaturamento = {
+      id: 'conta-proc-fake',
+      numero_conta: 'AIH-202505-1004',
+      paciente: 'pac-01',
+      data_internacao: '2025-05-01',
+      data_alta: '2025-05-05',
+      procedimento_principal_codigo: '99.99.99.999-9', // CÓDIGO INEXISTENTE
+      procedimento_principal_nome: 'Procedimento Inventado',
+      cid_principal: 'A09',
+      competencia: '2025-05',
+      status: 'aberta',
+      created: '2026-10-30',
+      updated: '2026-10-30',
+    }
+
+    const resultadoQ = validarContaHospitalarAIH(contaProcInexistente, contextoFaturamentoTeste)
+    const erroProcInexistente = resultadoQ.erros.find(
+      (e) => e.id === 'aih_procedimento_inexistente_sigtap',
+    )
+
+    const passouQ =
+      resultadoQ.valida === false &&
+      erroProcInexistente !== undefined &&
+      erroProcInexistente.mensagem.includes('não foi localizado na tabela SIGTAP')
+
+    resultados.push({
+      id: 'cenario_q_procedimento_inexistente_sigtap',
+      cenario: '(q) Procedimento inexistente na competência SIGTAP importada é barrado sem inferência espúria de compatibilidade',
+      passou: passouQ,
+      detalhes: `Código 99.99.99.999-9 rejeitado como inexistente na SIGTAP municipal da competência 2025-05.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_q_procedimento_inexistente_sigtap',
+      cenario: '(q) Procedimento inexistente na competência SIGTAP importada é barrado sem inferência espúria de compatibilidade',
+      passou: false,
+      detalhes: 'Falha no teste de procedimento inexistente no SIGTAP',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO (r): Competência SIGTAP não importada: sinaliza validação manual em vez de falso erro
+  // =========================================================================
+  try {
+    // Contexto com apenas competência 2025-05 importada
+    const contextoSemComp06: ContextoValidacaoFaturamento = {
+      ...contextoFaturamentoTeste,
+      competenciasImportadasSigtap: ['2025-05'],
+    }
+
+    const contaCompNaoImportada: ContaFaturamento = {
+      id: 'conta-comp-futura',
+      numero_conta: 'AIH-202506-1005',
+      paciente: 'pac-01',
+      data_internacao: '2025-06-01',
+      data_alta: '2025-06-05',
+      procedimento_principal_codigo: '03.03.01.003-7',
+      procedimento_principal_nome: 'Tratamento de Doenças Infecciosas',
+      cid_principal: 'A09',
+      competencia: '2025-06', // NÃO IMPORTADA NO SIGTAP
+      status: 'aberta',
+      created: '2026-10-30',
+      updated: '2026-10-30',
+    }
+
+    const resultadoR = validarContaHospitalarAIH(contaCompNaoImportada, contextoSemComp06)
+    const advCompNaoImportada = resultadoR.advertencias.find(
+      (a) => a.id === 'aih_sigtap_competencia_nao_importada',
+    )
+    const teveErroFalsoProc = resultadoR.erros.some(
+      (e) => e.id === 'aih_procedimento_inexistente_sigtap',
+    )
+
+    const passouR =
+      advCompNaoImportada !== undefined &&
+      advCompNaoImportada.mensagem.includes('não importada na SIGTAP local') &&
+      teveErroFalsoProc === false
+
+    resultados.push({
+      id: 'cenario_r_sigtap_competencia_nao_importada',
+      cenario: '(r) Se competência SIGTAP não foi importada, emite advertência de validação manual sem gerar falso erro',
+      passou: passouR,
+      detalhes: `Competência 2025-06 não importada gerou advertência 'validar manualmente vigência' sem falso erro de procedimento.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_r_sigtap_competencia_nao_importada',
+      cenario: '(r) Se competência SIGTAP não foi importada, emite advertência de validação manual sem gerar falso erro',
+      passou: false,
+      detalhes: 'Falha no teste de competência não importada do SIGTAP',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO (s): Duplicidade de produção BPA (mesmo atendimento/procedimento/competência)
+  // =========================================================================
+  try {
+    const bpaItem1: ProducaoBPAItem = {
+      id: 'bpa-01',
+      paciente: 'pac-01',
+      origem_atendimento: 'pronto_atendimento',
+      atendimento_pa: 'pa-atend-888',
+      procedimento_codigo: '03.01.06.008-8',
+      procedimento_nome: 'Atendimento de Urgência em PA',
+      quantidade: 1,
+      data_atendimento: '2025-05-15',
+      competencia: '2025-05',
+      status: 'apurado',
+      created: '2026-10-30',
+      updated: '2026-10-30',
+    }
+
+    const bpaItem2Duplicado: ProducaoBPAItem = {
+      id: 'bpa-02-dup',
+      paciente: 'pac-01',
+      origem_atendimento: 'pronto_atendimento',
+      atendimento_pa: 'pa-atend-888', // MESMO ATENDIMENTO
+      procedimento_codigo: '03.01.06.008-8', // MESMO PROCEDIMENTO
+      procedimento_nome: 'Atendimento de Urgência em PA',
+      quantidade: 1,
+      data_atendimento: '2025-05-15',
+      competencia: '2025-05', // MESMA COMPETÊNCIA
+      status: 'apurado',
+      created: '2026-10-30',
+      updated: '2026-10-30',
+    }
+
+    const listaBpa = [bpaItem1, bpaItem2Duplicado]
+
+    const resultadoS = validarItemProducaoBPA(bpaItem2Duplicado, {
+      ...contextoFaturamentoTeste,
+      producaoBpaCompetencia: listaBpa,
+    })
+
+    const advDuplicidade = resultadoS.advertencias.find(
+      (a) => a.id === 'bpa_duplicidade_producao_detectada',
+    )
+
+    const passouS =
+      resultadoS.duplicidadeDetectada === true &&
+      advDuplicidade !== undefined &&
+      advDuplicidade.nivel === 'advertencia' && // Sinalizado, NÃO bloqueado com erro impeditivo
+      advDuplicidade.mensagem.includes('Duplicidade detectada')
+
+    resultados.push({
+      id: 'cenario_s_duplicidade_producao_bpa',
+      cenario: '(s) Produção BPA duplicada (mesmo atendimento/procedimento/competência) é detectada e sinalizada como advertência (sem bloqueio)',
+      passou: passouS,
+      detalhes: `Duplicidade detectada para atendimento pa-atend-888 e procedimento 03.01.06.008-8, sinalizada para revisão administrativa sem interrupção indevida.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_s_duplicidade_producao_bpa',
+      cenario: '(s) Produção BPA duplicada (mesmo atendimento/procedimento/competência) é detectada e sinalizada como advertência (sem bloqueio)',
+      passou: false,
+      detalhes: 'Falha no teste de duplicidade de produção BPA',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO (t): Checagem administrativa de causa externa (Cap. XIX/XX da CID-10)
+  // =========================================================================
+  try {
+    const contaTraumaSemCidSec: ContaFaturamento = {
+      id: 'conta-trauma-01',
+      numero_conta: 'AIH-202505-1006',
+      paciente: 'pac-01',
+      data_internacao: '2025-05-10',
+      data_alta: '2025-05-12',
+      procedimento_principal_codigo: '03.03.01.003-7',
+      procedimento_principal_nome: 'Tratamento de Doenças Infecciosas',
+      cid_principal: 'S06.0', // Traumatismo craniano / Causa externa
+      cid_secundario: '', // VAZIO
+      competencia: '2025-05',
+      status: 'aberta',
+      created: '2026-10-30',
+      updated: '2026-10-30',
+    }
+
+    const resultadoT = validarContaHospitalarAIH(contaTraumaSemCidSec, contextoFaturamentoTeste)
+    const advCausaExterna = resultadoT.advertencias.find(
+      (a) => a.id === 'aih_causa_externa_sem_cid_secundario',
+    )
+
+    const passouT =
+      advCausaExterna !== undefined &&
+      advCausaExterna.fonteOficial.includes('Portarias GM/MS 1969/2001 e SAS 579/2001') &&
+      advCausaExterna.mensagem.includes('causa externa / traumatismo')
+
+    resultados.push({
+      id: 'cenario_t_causa_externa_cid_secundario',
+      cenario: '(t) CID do capítulo S/T gera aviso administrativo de obrigatoriedade de CID secundário (Portarias GM/MS 1969/2001 e SAS 579/2001)',
+      passou: passouT,
+      detalhes: `CID S06.0 identificado administrativamente no Capítulo XIX gerando advertência para preenchimento de causa externa associada.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_t_causa_externa_cid_secundario',
+      cenario: '(t) CID do capítulo S/T gera aviso administrativo de obrigatoriedade de CID secundário (Portarias GM/MS 1969/2001 e SAS 579/2001)',
+      passou: false,
+      detalhes: 'Falha no teste de causa externa da AIH',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO (u): Execução consolidada da conferência de consistência do faturamento
+  // =========================================================================
+  try {
+    const contaCorreta: ContaFaturamento = {
+      id: 'conta-ok-01',
+      numero_conta: 'AIH-202505-2001',
+      paciente: 'pac-01',
+      data_internacao: '2025-05-10',
+      data_alta: '2025-05-15',
+      procedimento_principal_codigo: '04.07.01.003-2', // Apendicectomia
+      procedimento_principal_nome: 'Apendicectomia',
+      cid_principal: 'K35.8',
+      competencia: '2025-05',
+      status: 'aberta',
+      created: '2026-10-30',
+      updated: '2026-10-30',
+    }
+
+    const bpaCorreto: ProducaoBPAItem = {
+      id: 'bpa-ok-01',
+      paciente: 'pac-01',
+      origem_atendimento: 'pronto_atendimento',
+      atendimento_pa: 'pa-atend-ok',
+      procedimento_codigo: '03.01.06.008-8',
+      procedimento_nome: 'Atendimento de Urgência em PA',
+      quantidade: 1,
+      profissional_nome: 'Dr. Roberto',
+      data_atendimento: '2025-05-10',
+      competencia: '2025-05',
+      status: 'apurado',
+      created: '2026-10-30',
+      updated: '2026-10-30',
+    }
+
+    const resumo = executarConferenciaConsistencia({
+      competencia: '2025-05',
+      contas: [contaCorreta],
+      itensBpa: [bpaCorreto],
+      contexto: contextoFaturamentoTeste,
+    })
+
+    const passouU =
+      resumo.totalContasAihAvaliadas === 1 &&
+      resumo.contasAihValidas === 1 &&
+      resumo.contasAihComErros === 0 &&
+      resumo.totalItensBpaAvaliados === 1 &&
+      resumo.itensBpaValidos === 1 &&
+      resumo.itensBpaDuplicados === 0 &&
+      resumo.competenciaSigtapImportada === true
+
+    resultados.push({
+      id: 'cenario_u_conferencia_consolidada_faturamento',
+      cenario: '(u) Painel agregador de conferência consolida contas AIH e BPA sem alterar status nem dados retrospectivos',
+      passou: passouU,
+      detalhes: `Conferência consolidou 1 conta AIH válida e 1 BPA válido na competência 2025-05 com integridade preservada.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_u_conferencia_consolidada_faturamento',
+      cenario: '(u) Painel agregador de conferência consolida contas AIH e BPA sem alterar status nem dados retrospectivos',
+      passou: false,
+      detalhes: 'Falha no teste de conferência consolidada',
       erro: err.message,
     })
   }

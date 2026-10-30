@@ -11,6 +11,15 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/hooks/use-toast'
 import {
+  executarConferenciaConsistencia,
+  validarContaHospitalarAIH,
+  validarItemProducaoBPA,
+  ResultadoValidacaoContaAIH,
+  ResultadoValidacaoItemBPA,
+  ResumoConferenciaFaturamento,
+} from '@/services/consistenciaFaturamento'
+import { listarParametrosIntegracao } from '@/services/parametros'
+import {
   listarContasFaturamento,
   obterContaComItens,
   alterarStatusConta,
@@ -132,6 +141,15 @@ export function FaturamentoView() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadingSigtap, setUploadingSigtap] = useState(false)
 
+  // CNES parametrizado
+  const [cnesParametrizado, setCnesParametrizado] = useState<string>('7823901')
+
+  // Modal / Visualização de inconsistências específicas
+  const [contaInconsistenciasModal, setContaInconsistenciasModal] =
+    useState<ResultadoValidacaoContaAIH | null>(null)
+  const [bpaInconsistenciasModal, setBpaInconsistenciasModal] =
+    useState<ResultadoValidacaoItemBPA | null>(null)
+
   // Cadastro Manual SIGTAP
   const [modalNovoSigtap, setModalNovoSigtap] = useState(false)
   const [novoCodSigtap, setNovoCodSigtap] = useState('')
@@ -168,6 +186,21 @@ export function FaturamentoView() {
       setSigtapList(listaSig)
       setCidList(listaCid)
       setPacientes(listaPac)
+
+      // Carregar CNES parametrizado
+      try {
+        const params = await listarParametrosIntegracao()
+        const cnesParam = params.find((p) => p.codigo === 'CNES')
+        if (cnesParam) {
+          const cfg =
+            typeof cnesParam.configuracoes === 'string'
+              ? JSON.parse(cnesParam.configuracoes)
+              : cnesParam.configuracoes
+          if (cfg?.codigo_unidade) setCnesParametrizado(cfg.codigo_unidade)
+        }
+      } catch {
+        // Fallback default
+      }
 
       // Consolidar totais para a competência selecionada
       if (competenciaFiltro) {
@@ -625,6 +658,46 @@ export function FaturamentoView() {
       .slice(0, 100)
   }, [cidList, buscaCid])
 
+  // Contexto e Conferência de Consistência
+  const resumoConferencia: ResumoConferenciaFaturamento = useMemo(() => {
+    const competenciasExistentesSigtap = competencias.map((c) => c.competencia)
+    return executarConferenciaConsistencia({
+      competencia: competenciaFiltro,
+      contas,
+      itensBpa: producoesBpa,
+      contexto: {
+        competenciaAtiva: competenciaFiltro,
+        competenciasImportadasSigtap: competenciasExistentesSigtap,
+        catalogoSigtap: sigtapList,
+        catalogoCid10: cidList,
+        pacientesExistentes: pacientes,
+        cnesUnidadeCadastrado: cnesParametrizado,
+      },
+    })
+  }, [
+    competenciaFiltro,
+    contas,
+    producoesBpa,
+    competencias,
+    sigtapList,
+    cidList,
+    pacientes,
+    cnesParametrizado,
+  ])
+
+  // Mapa de validação para busca rápida na listagem
+  const mapaValidacaoContas = useMemo(() => {
+    const map = new Map<string, ResultadoValidacaoContaAIH>()
+    resumoConferencia.detalhesContas.forEach((d) => map.set(d.contaId, d))
+    return map
+  }, [resumoConferencia.detalhesContas])
+
+  const mapaValidacaoBpa = useMemo(() => {
+    const map = new Map<string, ResultadoValidacaoItemBPA>()
+    resumoConferencia.detalhesBpa.forEach((d) => map.set(d.bpaId, d))
+    return map
+  }, [resumoConferencia.detalhesBpa])
+
   const statusCompAtual =
     competencias.find((c) => c.competencia === competenciaFiltro)?.status || 'aberta'
 
@@ -766,6 +839,29 @@ export function FaturamentoView() {
       <Tabs value={abaAtiva} onValueChange={setAbaAtiva} className="space-y-4">
         <TabsList className="bg-white p-1 border border-slate-200 rounded-xl shadow-sm h-auto flex flex-wrap gap-1">
           <TabsTrigger
+            value="conferencia"
+            className="data-[state=active]:bg-emerald-700 data-[state=active]:text-white text-xs font-semibold py-2 px-3 rounded-lg flex items-center gap-1.5"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Conferência de Consistência
+            {(resumoConferencia.contasAihComErros > 0 ||
+              resumoConferencia.itensBpaComErros > 0) && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-rose-600 text-white font-black">
+                {resumoConferencia.contasAihComErros + resumoConferencia.itensBpaComErros}
+              </span>
+            )}
+            {(resumoConferencia.contasAihComAdvertencias > 0 ||
+              resumoConferencia.itensBpaComAdvertencias > 0) &&
+              resumoConferencia.contasAihComErros === 0 &&
+              resumoConferencia.itensBpaComErros === 0 && (
+                <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500 text-white font-black">
+                  {resumoConferencia.contasAihComAdvertencias +
+                    resumoConferencia.itensBpaComAdvertencias}
+                </span>
+              )}
+          </TabsTrigger>
+
+          <TabsTrigger
             value="contas"
             className="data-[state=active]:bg-emerald-700 data-[state=active]:text-white text-xs font-semibold py-2 px-3 rounded-lg"
           >
@@ -805,6 +901,342 @@ export function FaturamentoView() {
             Tabela CID-10 ({cidList.length})
           </TabsTrigger>
         </TabsList>
+
+        {/* ============================================================== */}
+        {/* ABA 0: PAINEL DE CONFERÊNCIA DE CONSISTÊNCIA PRÉ-EXPORTAÇÃO     */}
+        {/* ============================================================== */}
+        <TabsContent value="conferencia" className="space-y-4">
+          {/* Header explicativo com rotulagem documental expressa */}
+          <Card className="border-emerald-200 bg-emerald-50/40 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-700" />
+                    <h2 className="text-sm font-bold text-slate-900">
+                      Conferência de Consistência do Faturamento SUS Municipal
+                    </h2>
+                    <Badge
+                      variant="outline"
+                      className="bg-white text-[10px] text-emerald-800 border-emerald-300 font-semibold"
+                    >
+                      Validação Administrativa Interna
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    Rotina preventiva antes de qualquer exportação ou fechamento. Compara campos
+                    obrigatórios, regras de período da AIH (6 meses), catálogo SIGTAP ativo e
+                    duplicidade de BPA.
+                    <strong className="text-slate-800 ml-1">
+                      Nenhum dado retrospectivo é alterado e nenhuma conta é marcada como enviada.
+                    </strong>
+                  </p>
+                </div>
+
+                <div className="text-[11px] text-slate-500 bg-white/80 p-2.5 rounded-lg border border-emerald-200 shrink-0">
+                  <div className="font-bold text-slate-700 mb-0.5">
+                    Fontes Oficiais Consultadas:
+                  </div>
+                  <ul className="list-disc list-inside space-y-0.5 text-[10px]">
+                    <li>Manual SIH/DATASUS 2017 (Jan/2017)</li>
+                    <li>Manual Créditos Financeiros MS (2025)</li>
+                    <li>SIGTAP / SIA-SUS Oficial</li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Cards agregados de consistência */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <Card className="border-slate-200 bg-white shadow-sm">
+              <CardContent className="p-3.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      AIH: Contas Aptas
+                    </span>
+                    <div className="text-xl font-black text-emerald-700 mt-0.5">
+                      {resumoConferencia.contasAihValidas} /{' '}
+                      {resumoConferencia.totalContasAihAvaliadas}
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">
+                    AIH
+                  </div>
+                </div>
+                <div className="text-[10px] text-slate-500 mt-2">
+                  {resumoConferencia.contasAihComErros > 0 ? (
+                    <span className="text-rose-600 font-bold">
+                      {resumoConferencia.contasAihComErros} conta(s) com erros impeditivos
+                    </span>
+                  ) : (
+                    <span className="text-emerald-700 font-medium">Nenhum erro impeditivo</span>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 bg-white shadow-sm">
+              <CardContent className="p-3.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      BPA: Produções Aptas
+                    </span>
+                    <div className="text-xl font-black text-teal-700 mt-0.5">
+                      {resumoConferencia.itensBpaValidos} /{' '}
+                      {resumoConferencia.totalItensBpaAvaliados}
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-xs">
+                    BPA
+                  </div>
+                </div>
+                <div className="text-[10px] text-slate-500 mt-2">
+                  {resumoConferencia.itensBpaComErros > 0 ? (
+                    <span className="text-rose-600 font-bold">
+                      {resumoConferencia.itensBpaComErros} item(ns) com erros
+                    </span>
+                  ) : (
+                    <span className="text-teal-700 font-medium">Nenhum erro impeditivo</span>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 bg-white shadow-sm">
+              <CardContent className="p-3.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      Advertências Totais
+                    </span>
+                    <div className="text-xl font-black text-amber-600 mt-0.5">
+                      {resumoConferencia.contasAihComAdvertencias +
+                        resumoConferencia.itensBpaComAdvertencias}
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs">
+                    <AlertTriangle className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-[10px] text-slate-500 mt-2">
+                  Avisos documentais e checagens administrativas
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 bg-white shadow-sm">
+              <CardContent className="p-3.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] text-slate-500 font-medium">Duplicidades BPA</span>
+                    <div className="text-xl font-black text-indigo-700 mt-0.5">
+                      {resumoConferencia.itensBpaDuplicados}
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
+                    DUP
+                  </div>
+                </div>
+                <div className="text-[10px] text-slate-500 mt-2">
+                  Mesmo atendimento/procedimento na competência
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Alerta de competência SIGTAP não importada */}
+          {!resumoConferencia.competenciaSigtapImportada && (
+            <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-xs flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+              <div>
+                <strong>Atenção Regulatória SIGTAP:</strong> A competência {competenciaFiltro} não
+                está formalmente importada na tabela SIGTAP local. Conforme diretrizes oficiais,
+                procedimentos não são dados como erro falso, devendo ser validados manualmente
+                contra a vigência do DATASUS.
+              </div>
+            </div>
+          )}
+
+          {/* Tabela de Inconsistências Detectadas */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Bloco 1: Inconsistências em Contas AIH */}
+            <Card className="border-slate-200 bg-white shadow-sm">
+              <CardHeader className="p-3.5 border-b border-slate-100 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <Receipt className="w-4 h-4 text-emerald-700" />
+                    Consistência das Contas AIH ({resumoConferencia.detalhesContas.length})
+                  </CardTitle>
+                </div>
+                <span className="text-[10px] text-slate-500">
+                  {resumoConferencia.contasAihComErros} com erro |{' '}
+                  {resumoConferencia.contasAihComAdvertencias} com aviso
+                </span>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="max-h-96 overflow-y-auto divide-y divide-slate-100 text-xs">
+                  {resumoConferencia.detalhesContas.length === 0 ? (
+                    <div className="p-4 text-center text-slate-400">
+                      Nenhuma conta AIH nesta competência.
+                    </div>
+                  ) : (
+                    resumoConferencia.detalhesContas.map((det) => (
+                      <div key={det.contaId} className="p-3 hover:bg-slate-50/80 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="font-mono font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                            {det.numeroConta}
+                            {det.valida && det.totalAdvertencias === 0 && (
+                              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[10px]">
+                                Consistente
+                              </Badge>
+                            )}
+                            {det.totalErros > 0 && (
+                              <Badge className="bg-rose-100 text-rose-800 border-rose-200 text-[10px] flex items-center gap-1">
+                                <AlertTriangle className="w-2.5 h-2.5" />
+                                {det.totalErros} Erro(s)
+                              </Badge>
+                            )}
+                            {det.totalAdvertencias > 0 && (
+                              <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[10px]">
+                                {det.totalAdvertencias} Advertência(s)
+                              </Badge>
+                            )}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-[11px] px-2 text-slate-600 hover:text-slate-900"
+                            onClick={() => setContaInconsistenciasModal(det)}
+                          >
+                            Ver detalhes
+                          </Button>
+                        </div>
+
+                        {/* Lista rápida de mensagens */}
+                        <div className="mt-1.5 space-y-1">
+                          {det.erros.map((e, idx) => (
+                            <div
+                              key={`err-${idx}`}
+                              className="text-[11px] text-rose-700 bg-rose-50/70 p-1.5 rounded border border-rose-200/60"
+                            >
+                              <span className="font-bold">[{e.campo}]:</span> {e.mensagem}
+                              <div className="text-[9px] text-slate-500 mt-0.5">
+                                Fonte: {e.fonteOficial}
+                              </div>
+                            </div>
+                          ))}
+                          {det.advertencias.map((a, idx) => (
+                            <div
+                              key={`adv-${idx}`}
+                              className="text-[11px] text-amber-800 bg-amber-50/70 p-1.5 rounded border border-amber-200/60"
+                            >
+                              <span className="font-bold">[{a.campo}]:</span> {a.mensagem}
+                              <div className="text-[9px] text-slate-500 mt-0.5">
+                                Fonte: {a.fonteOficial}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Bloco 2: Inconsistências e Duplicidade BPA */}
+            <Card className="border-slate-200 bg-white shadow-sm">
+              <CardHeader className="p-3.5 border-b border-slate-100 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <FileSpreadsheet className="w-4 h-4 text-teal-700" />
+                    Consistência da Produção BPA ({resumoConferencia.detalhesBpa.length})
+                  </CardTitle>
+                </div>
+                <span className="text-[10px] text-slate-500">
+                  {resumoConferencia.itensBpaComErros} erro(s) |{' '}
+                  {resumoConferencia.itensBpaDuplicados} duplicado(s)
+                </span>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="max-h-96 overflow-y-auto divide-y divide-slate-100 text-xs">
+                  {resumoConferencia.detalhesBpa.length === 0 ? (
+                    <div className="p-4 text-center text-slate-400">
+                      Nenhum registro BPA nesta competência.
+                    </div>
+                  ) : (
+                    resumoConferencia.detalhesBpa.map((det) => (
+                      <div key={det.bpaId} className="p-3 hover:bg-slate-50/80 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="font-medium text-slate-800 text-xs flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-blue-700">
+                              {det.procedimentoCodigo}
+                            </span>
+                            <span className="text-slate-500 font-normal truncate max-w-[150px]">
+                              {det.pacienteNome}
+                            </span>
+                            {det.valida && det.totalAdvertencias === 0 && (
+                              <Badge className="bg-teal-100 text-teal-800 border-teal-200 text-[10px]">
+                                Válido
+                              </Badge>
+                            )}
+                            {det.duplicidadeDetectada && (
+                              <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 text-[10px]">
+                                Duplicado
+                              </Badge>
+                            )}
+                            {det.totalErros > 0 && (
+                              <Badge className="bg-rose-100 text-rose-800 border-rose-200 text-[10px]">
+                                {det.totalErros} Erro(s)
+                              </Badge>
+                            )}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-[11px] px-2 text-slate-600 hover:text-slate-900"
+                            onClick={() => setBpaInconsistenciasModal(det)}
+                          >
+                            Ver detalhes
+                          </Button>
+                        </div>
+
+                        {/* Mensagens rápidas */}
+                        <div className="mt-1.5 space-y-1">
+                          {det.erros.map((e, idx) => (
+                            <div
+                              key={`bpa-err-${idx}`}
+                              className="text-[11px] text-rose-700 bg-rose-50/70 p-1.5 rounded border border-rose-200/60"
+                            >
+                              <span className="font-bold">[{e.campo}]:</span> {e.mensagem}
+                              <div className="text-[9px] text-slate-500 mt-0.5">
+                                Fonte: {e.fonteOficial}
+                              </div>
+                            </div>
+                          ))}
+                          {det.advertencias.map((a, idx) => (
+                            <div
+                              key={`bpa-adv-${idx}`}
+                              className="text-[11px] text-amber-800 bg-amber-50/70 p-1.5 rounded border border-amber-200/60"
+                            >
+                              <span className="font-bold">[{a.campo}]:</span> {a.mensagem}
+                              <div className="text-[9px] text-slate-500 mt-0.5">
+                                Fonte: {a.fonteOficial}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
         {/* ============================================================== */}
         {/* ABA 1: FILA DE CONTAS HOSPITALARES (AIH)                       */}
@@ -867,7 +1299,38 @@ export function FaturamentoView() {
                       contasFiltradas.map((conta) => (
                         <tr key={conta.id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
-                            {conta.numero_conta}
+                            <div className="flex items-center gap-1.5">
+                              <span>{conta.numero_conta}</span>
+                              {mapaValidacaoContas.get(conta.id)?.totalErros ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setContaInconsistenciasModal(mapaValidacaoContas.get(conta.id)!)
+                                  }
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] bg-rose-100 text-rose-800 border border-rose-300 font-bold hover:bg-rose-200"
+                                  title="Ver inconsistências detectadas conforme normas SIH"
+                                >
+                                  <AlertTriangle className="w-2.5 h-2.5 text-rose-600" />
+                                  {mapaValidacaoContas.get(conta.id)!.totalErros} erro(s)
+                                </button>
+                              ) : mapaValidacaoContas.get(conta.id)?.totalAdvertencias ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setContaInconsistenciasModal(mapaValidacaoContas.get(conta.id)!)
+                                  }
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800 border border-amber-300 font-medium hover:bg-amber-200"
+                                  title="Ver avisos documentais"
+                                >
+                                  <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                                  {mapaValidacaoContas.get(conta.id)!.totalAdvertencias} aviso(s)
+                                </button>
+                              ) : (
+                                <span className="inline-flex items-center px-1 rounded text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  consistente
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2.5 px-3 font-semibold text-slate-800">
                             {conta.expand?.paciente?.nome || 'Paciente'}
@@ -1043,7 +1506,32 @@ export function FaturamentoView() {
                     ) : (
                       producoesBpaFiltradas.map((bpa) => (
                         <tr key={bpa.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="py-2.5 px-3 font-mono">{bpa.data_atendimento}</td>
+                          <td className="py-2.5 px-3 font-mono">
+                            <div>{bpa.data_atendimento}</div>
+                            {mapaValidacaoBpa.get(bpa.id)?.duplicidadeDetectada && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setBpaInconsistenciasModal(mapaValidacaoBpa.get(bpa.id)!)
+                                }
+                                className="inline-flex items-center gap-0.5 px-1 rounded text-[9px] bg-indigo-100 text-indigo-800 border border-indigo-200 font-bold mt-0.5"
+                                title="Duplicidade detectada no mesmo atendimento"
+                              >
+                                duplicado
+                              </button>
+                            )}
+                            {mapaValidacaoBpa.get(bpa.id)?.totalErros ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setBpaInconsistenciasModal(mapaValidacaoBpa.get(bpa.id)!)
+                                }
+                                className="inline-flex items-center gap-0.5 px-1 rounded text-[9px] bg-rose-100 text-rose-800 border border-rose-300 font-bold mt-0.5"
+                              >
+                                {mapaValidacaoBpa.get(bpa.id)!.totalErros} erro
+                              </button>
+                            ) : null}
+                          </td>
                           <td className="py-2.5 px-3 font-semibold text-slate-800">
                             {bpa.expand?.paciente?.nome || 'Paciente'}
                           </td>
@@ -2034,6 +2522,195 @@ export function FaturamentoView() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============================================================== */}
+      {/* MODAL: DETALHAMENTO DE INCONSISTÊNCIAS DE CONTA AIH             */}
+      {/* ============================================================== */}
+      <Dialog
+        open={contaInconsistenciasModal !== null}
+        onOpenChange={(aberto) => !aberto && setContaInconsistenciasModal(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-emerald-700" />
+              Conferência da Conta {contaInconsistenciasModal?.numeroConta}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 py-1">
+            <div className="flex items-center gap-2">
+              {contaInconsistenciasModal?.valida ? (
+                <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">
+                  Sem Erros Impeditivos
+                </Badge>
+              ) : (
+                <Badge className="bg-rose-100 text-rose-800 border-rose-200">
+                  {contaInconsistenciasModal?.totalErros} Inconsistência(s) Crítica(s)
+                </Badge>
+              )}
+              {contaInconsistenciasModal?.totalAdvertencias ? (
+                <Badge className="bg-amber-100 text-amber-800 border-amber-200">
+                  {contaInconsistenciasModal.totalAdvertencias} Advertência(s)
+                </Badge>
+              ) : null}
+            </div>
+
+            {contaInconsistenciasModal?.erros.length ? (
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-rose-800 uppercase tracking-wider">
+                  Erros Impeditivos (Exigem Correção Administrativa)
+                </h4>
+                <div className="space-y-2">
+                  {contaInconsistenciasModal.erros.map((e, idx) => (
+                    <div
+                      key={`modal-err-${idx}`}
+                      className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-900 space-y-1"
+                    >
+                      <div className="font-bold flex items-center justify-between">
+                        <span>Campo: {e.campo}</span>
+                        <span className="text-[10px] font-normal text-rose-600">Erro</span>
+                      </div>
+                      <p>{e.mensagem}</p>
+                      <div className="text-[10px] text-slate-500 pt-1 border-t border-rose-200/60">
+                        <strong>Fonte Oficial:</strong> {e.fonteOficial}
+                        <br />
+                        <strong>Regra:</strong> {e.regraReferencia}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {contaInconsistenciasModal?.advertencias.length ? (
+              <div className="space-y-2 pt-2">
+                <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider">
+                  Advertências e Recomendações Técnicas
+                </h4>
+                <div className="space-y-2">
+                  {contaInconsistenciasModal.advertencias.map((a, idx) => (
+                    <div
+                      key={`modal-adv-${idx}`}
+                      className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 space-y-1"
+                    >
+                      <div className="font-bold flex items-center justify-between">
+                        <span>Campo: {a.campo}</span>
+                        <span className="text-[10px] font-normal text-amber-600">Aviso</span>
+                      </div>
+                      <p>{a.mensagem}</p>
+                      <div className="text-[10px] text-slate-500 pt-1 border-t border-amber-200/60">
+                        <strong>Fonte Oficial:</strong> {a.fonteOficial}
+                        <br />
+                        <strong>Regra:</strong> {a.regraReferencia}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {contaInconsistenciasModal?.erros.length === 0 &&
+              contaInconsistenciasModal?.advertencias.length === 0 && (
+                <div className="p-4 text-center text-xs text-emerald-700 bg-emerald-50 rounded-lg border border-emerald-200">
+                  Nenhuma inconsistência detectada nesta conta. Todos os campos obrigatórios e
+                  prazos cronológicos estão conformes com as fontes oficiais.
+                </div>
+              )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setContaInconsistenciasModal(null)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============================================================== */}
+      {/* MODAL: DETALHAMENTO DE INCONSISTÊNCIAS DE ITEM BPA             */}
+      {/* ============================================================== */}
+      <Dialog
+        open={bpaInconsistenciasModal !== null}
+        onOpenChange={(aberto) => !aberto && setBpaInconsistenciasModal(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <FileSpreadsheet className="w-4 h-4 text-teal-700" />
+              Conferência de Item BPA ({bpaInconsistenciasModal?.procedimentoCodigo})
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 py-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-600 font-semibold">
+                Paciente: {bpaInconsistenciasModal?.pacienteNome}
+              </span>
+              {bpaInconsistenciasModal?.duplicidadeDetectada && (
+                <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                  Duplicidade de Produção
+                </Badge>
+              )}
+            </div>
+
+            {bpaInconsistenciasModal?.erros.length ? (
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-rose-800 uppercase tracking-wider">
+                  Inconsistências Críticas
+                </h4>
+                {bpaInconsistenciasModal.erros.map((e, idx) => (
+                  <div
+                    key={`bpa-modal-err-${idx}`}
+                    className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-900 space-y-1"
+                  >
+                    <div className="font-bold">[{e.campo}]</div>
+                    <p>{e.mensagem}</p>
+                    <div className="text-[10px] text-slate-500 pt-1 border-t border-rose-200/60">
+                      <strong>Fonte:</strong> {e.fonteOficial}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {bpaInconsistenciasModal?.advertencias.length ? (
+              <div className="space-y-2 pt-2">
+                <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider">
+                  Advertências & Avisos Administrativos
+                </h4>
+                {bpaInconsistenciasModal.advertencias.map((a, idx) => (
+                  <div
+                    key={`bpa-modal-adv-${idx}`}
+                    className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 space-y-1"
+                  >
+                    <div className="font-bold">[{a.campo}]</div>
+                    <p>{a.mensagem}</p>
+                    <div className="text-[10px] text-slate-500 pt-1 border-t border-amber-200/60">
+                      <strong>Fonte:</strong> {a.fonteOficial}
+                      <br />
+                      <strong>Regra:</strong> {a.regraReferencia}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {bpaInconsistenciasModal?.erros.length === 0 &&
+              bpaInconsistenciasModal?.advertencias.length === 0 && (
+                <div className="p-4 text-center text-xs text-teal-700 bg-teal-50 rounded-lg border border-teal-200">
+                  Item ambulatorial consistente conforme as regras vigentes do SIA/SUS e SIGTAP.
+                </div>
+              )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setBpaInconsistenciasModal(null)}>
+              Fechar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
