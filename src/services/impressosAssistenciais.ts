@@ -8,6 +8,7 @@ import {
   ConteudoResumoAltaAssistencial,
 } from '@/types/hospital'
 import { registrarAuditoria } from './auditoria'
+import { formatarDataHoraFuso } from './dataFusoUnidade'
 
 export interface EmitirImpressoParams {
   tipo: TipoImpressoAssistencial
@@ -66,12 +67,13 @@ export async function emitirImpressoAssistencial(
   }
 
   const agoraIso = new Date().toISOString()
-  const dataHoraFormatada = new Date().toLocaleString('pt-BR', {
+  const dataHoraFormatada = formatarDataHoraFuso(new Date(), undefined, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    second: undefined,
   })
 
   const payload: Record<string, any> = {

@@ -2361,12 +2361,13 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
           <div className="space-y-3 text-xs text-slate-700 pt-1">
             <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-lg space-y-1">
               <strong className="text-indigo-950 block">
-                1. Fuso Horário Operacional Estrito:
+                1. Fuso Horário Operacional Parametrizado:
               </strong>
               <p className="text-indigo-900 leading-relaxed text-[11px]">
-                Todas as marcações temporais e cronômetros operam no fuso{' '}
-                <strong>{FUSO_HORARIO_REGULACAO}</strong> (UTC-3), garantindo uniformidade mesmo
-                entre turnos e viradas de dia.
+                Todas as marcações temporais e cronômetros operam no fuso IANA da unidade municipal{' '}
+                <strong>{FUSO_HORARIO_REGULACAO}</strong> (Mirante da Serra/RO = UTC-4), com
+                timestamps persistidos em UTC e conversão estrita na apresentação e apuração de
+                competências.
               </p>
             </div>
 
@@ -2405,11 +2406,14 @@ export const RegulacaoView: React.FC<RegulacaoViewProps> = ({ onNavegarSAME }) =
             </div>
 
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
-              <strong className="text-slate-900 block">4. Tratamento Robusto de Bordas:</strong>
+              <strong className="text-slate-900 block">
+                4. Tratamento Robusto de Bordas e Qualidade dos Dados:
+              </strong>
               <p className="text-slate-600 leading-relaxed text-[11px]">
-                Protegido contra datas ausentes (fallback de 0 min com status indeterminado), virada
-                de dia contínua (ex: 23h50 → 00h10 = 20 min exatos) e bloqueio absoluto de valores
-                negativos mesmo com datas invertidas.
+                Datas ausentes ou inconsistentes aparecem como <strong>"indisponível"</strong> e
+                ficam estritamente <strong>FORA do cálculo de médias</strong> de indicadores, sem
+                virar zero que falseie resultados. A virada de dia permanece contínua em epoch (ex:
+                23h50 → 00h10 = 20 min) e com corte inferior a 0 para datas invertidas.
               </p>
             </div>
           </div>

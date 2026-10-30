@@ -2,18 +2,42 @@ import {
   calcularTempoEsperaIndividual,
   converterParaTimestamp,
   ordenarFilaAdministrativa,
+  FUSO_HORARIO_REGULACAO,
 } from '../services/regulacaoRelogio'
+
+import {
+  obterFusoHorarioAtivo,
+  formatarDataHoraFuso,
+  formatarDataFuso,
+  formatarHoraFuso,
+  parseDataHoraSegura,
+  extrairDataCivilFuso,
+  mesmoDiaCivilFuso,
+  mesmaCompetenciaFuso,
+  calcularMediaEstatisticaSegura,
+  definirUnidadeFusoAtiva,
+} from '../services/dataFusoUnidade'
+
+import { dentroDoPeriodo } from '../services/painelGestao'
 
 /**
  * Harness de Testes Funcionais Isolados (Offline / Local)
- * Sistema de Gestão Hospitalar Municipal
+ * Sistema de Gestão Hospitalar Municipal (v0.0.24)
  *
- * Executa simulações lógicas isoladas das invariantes transacionais:
+ * Executa verificações das invariantes transacionais e funções reais importadas do código:
  * (a) Mesma idempotency_key com payload diferente dá CONFLITO.
  * (b) Chave gerada por outro usuário NÃO devolve dados da operação original.
  * (c) Duplicações simultâneas geram UMA SÓ baixa de estoque.
  * (d) Falha parcial entre gravações reverte tudo (Rollback / Sem órfãos).
  * (e) Inventário com conflito de concorrência NÃO ajusta estoque.
+ * (f) Cálculo de espera com datas ausentes/corrompidas: 'indisponível', dataInvalidaOuAusente=true, status 'indeterminado'.
+ * (g) Datas invertidas: Math.max(0, ...), não gera valores negativos.
+ * (h) Virada de dia (23h50 -> 00h10): cálculo contínuo em epoch absoluto.
+ * (i) Pausa técnica amortiza o tempo e retomada recompõe o saldo líquido.
+ * (j) Cancelamento congela o relógio no timestamp da interrupção.
+ * (k) Fuso IANA da unidade municipal (America/Porto_Velho = UTC-4 vs America/Sao_Paulo = UTC-3).
+ * (l) Datas ausentes/inconsistentes FORA do cálculo de média (sem virar zero que falseie indicadores).
+ * (m) Limite de dia civil e competência mensal no fuso da unidade (sem desvio por virada UTC).
  *
  * NÃO utiliza credenciais reais e NÃO toca no banco de dados compartilhado.
  */
@@ -180,7 +204,6 @@ export function executarHarnessLocal(): {
       const encontrada = dispensacoesStore.find((d) => d.idempotency_key === idempotencyKey)
       if (!encontrada) return null
 
-      // Bloqueio de isolamento entre usuários
       if (
         encontrada.usuario_id &&
         encontrada.usuario_id !== usuarioSolicitanteId
@@ -201,14 +224,12 @@ export function executarHarnessLocal(): {
       return encontrada
     }
 
-    // 1. Usuário Alice consulta a própria chave -> autorizada
     const resAlice = consultarOuReutilizarDispensacao(
       'chave-segura-user-alice',
       'user-alice-id',
       'Alice Silva',
     )
 
-    // 2. Usuário Bob tenta usar ou consultar a chave da Alice -> BLOQUEADO
     let bloqueioBob = false
     try {
       consultarOuReutilizarDispensacao(
@@ -248,14 +269,12 @@ export function executarHarnessLocal(): {
     const chaveIdemp = 'chave-concorrente-simultanea-123'
     const tabelaDispensacoes = new Map<string, TestDispensacao>()
 
-    // Simula motor transacional com lock de idempotência por chave
     function dispensarComIdempotenciaAtomica(req: {
       paciente: string
       item: string
       quantidade: number
       idempotency_key: string
     }) {
-      // Checagem se chave já existe
       if (tabelaDispensacoes.has(req.idempotency_key)) {
         return {
           sucesso: true,
@@ -268,7 +287,6 @@ export function executarHarnessLocal(): {
         throw new Error('Estoque insuficiente.')
       }
 
-      // Baixa única
       estoqueAtual -= req.quantidade
       const nova: TestDispensacao = {
         id: `disp-atom-${Date.now()}`,
@@ -288,7 +306,6 @@ export function executarHarnessLocal(): {
       }
     }
 
-    // Execução sequencial rápida / simultânea com mesma chave
     const res1 = dispensarComIdempotenciaAtomica({
       paciente: 'pac-1',
       item: 'med-dipirona',
@@ -307,7 +324,7 @@ export function executarHarnessLocal(): {
       res1.reutilizado === false &&
       res2.reutilizado === true &&
       res1.dispensacao.id === res2.dispensacao.id &&
-      estoqueAtual === 80 // apenas uma baixa de 20 (de 100 para 80)
+      estoqueAtual === 80
 
     resultados.push({
       id: 'cenario_c',
@@ -341,7 +358,6 @@ export function executarHarnessLocal(): {
       movimentos: [],
     }
 
-    // Simulação de transação ACID com rollback
     function transacaoDispensacaoComFalhaIntermediaria(simularFalha: boolean) {
       const snapshot: DBState = {
         itens: { ...db.itens },
@@ -350,21 +366,13 @@ export function executarHarnessLocal(): {
       }
 
       try {
-        // Passo 1: Salvar dispensação
         db.dispensacoes.push('disp-temp-01')
-
-        // Passo 2: Baixar estoque
         db.itens['med-antibiotico'] -= 10
-
-        // Passo 3: Falha simulada antes de salvar movimento/auditoria
         if (simularFalha) {
           throw new Error('ERRO_CONEXAO_OU_VALIDACAO_INTERMEDIARIA')
         }
-
-        // Passo 4: Salvar movimento
         db.movimentos.push('mov-01')
       } catch (err) {
-        // Rollback completo
         db.itens = snapshot.itens
         db.dispensacoes = snapshot.dispensacoes
         db.movimentos = snapshot.movimentos
@@ -411,20 +419,17 @@ export function executarHarnessLocal(): {
     const itemInventario: TestInventarioItem = {
       id: 'inv-item-01',
       item: 'med-soro',
-      quantidade_sistema_base: 50, // snapshot na abertura do inventário
-      quantidade_contada: 48, // gestor contou 48 física (-2 divergência)
+      quantidade_sistema_base: 50,
+      quantidade_contada: 48,
     }
 
-    // Simula movimentação concorrente no meio do processo:
-    // Uma saída de 10 unidades ocorreu no catálogo enquanto o inventário estava aberto
-    estoqueCatalogo -= 10 // agora catálogo tem 40, divergindo da base 50!
+    estoqueCatalogo -= 10
 
     function tentarFecharInventario(
       invItem: TestInventarioItem,
       estoqueAtualReal: number,
       reconciliarForcado: boolean,
     ) {
-      // Checagem estrita de concorrência:
       if (estoqueAtualReal !== invItem.quantidade_sistema_base && !reconciliarForcado) {
         return {
           sucesso: false,
@@ -435,7 +440,6 @@ export function executarHarnessLocal(): {
         }
       }
 
-      // Se não houver concorrência ou reconciliado:
       const diferenca = invItem.quantidade_contada - estoqueAtualReal
       estoqueAtualReal = invItem.quantidade_contada
       return {
@@ -447,10 +451,8 @@ export function executarHarnessLocal(): {
       }
     }
 
-    // Tentativa 1: fechar sem reconciliação forçada -> deve ser REJEITADO
     const resFechamento1 = tentarFecharInventario(itemInventario, estoqueCatalogo, false)
-
-    const estoqueAposTentativa1 = estoqueCatalogo // Não deve mudar de 40
+    const estoqueAposTentativa1 = estoqueCatalogo
 
     const passouE =
       resFechamento1.sucesso === false &&
@@ -475,10 +477,10 @@ export function executarHarnessLocal(): {
   }
 
   // =========================================================================
-  // CENÁRIOS REGULAÇÃO (f, g, h, i, j): CÁLCULO DE TEMPO DE ESPERA & RELÓGIO
+  // CENÁRIOS REGULAÇÃO (f, g, h, i, j): CÁLCULO DE TEMPO DE ESPERA & RELÓGIO (FUNÇÃO REAL)
   // =========================================================================
 
-  // CENÁRIO (f): Datas ausentes/nulas não quebram e retornam 0 min com status indeterminado
+  // CENÁRIO (f): Datas ausentes/nulas não quebram, retornam tempoFormatado 'indisponível' e dataInvalidaOuAusente=true
   try {
     const resVazia = calcularTempoEsperaIndividual({
       situacao: 'solicitada',
@@ -492,21 +494,23 @@ export function executarHarnessLocal(): {
     })
 
     const passouF =
-      resVazia.minutosEsperaLiquida === 0 &&
       resVazia.statusRelogio === 'indeterminado' &&
-      resInvalida.minutosEsperaLiquida === 0 &&
-      resInvalida.statusRelogio === 'indeterminado'
+      resVazia.tempoFormatado === 'indisponível' &&
+      resVazia.dataInvalidaOuAusente === true &&
+      resInvalida.statusRelogio === 'indeterminado' &&
+      resInvalida.tempoFormatado === 'indisponível' &&
+      resInvalida.dataInvalidaOuAusente === true
 
     resultados.push({
       id: 'cenario_f_relogio_datas_ausentes',
-      cenario: '(f) Cálculo de espera com datas ausentes ou corrompidas não quebra e retorna 0 min',
+      cenario: '(f) Cálculo de espera com datas ausentes ou corrompidas sinaliza "indisponível" e dataInvalidaOuAusente',
       passou: passouF,
-      detalhes: `Com data null ou string inválida o cálculo tratou a borda com fallback seguro: minutos = 0, statusRelogio = 'indeterminado'.`,
+      detalhes: `Com data null ou string inválida a função real retornou tempoFormatado = 'indisponível', dataInvalidaOuAusente = true e statusRelogio = 'indeterminado'.`,
     })
   } catch (err: any) {
     resultados.push({
       id: 'cenario_f_relogio_datas_ausentes',
-      cenario: '(f) Cálculo de espera com datas ausentes ou corrompidas não quebra e retorna 0 min',
+      cenario: '(f) Cálculo de espera com datas ausentes ou corrompidas sinaliza "indisponível" e dataInvalidaOuAusente',
       passou: false,
       detalhes: 'Falha no teste de datas ausentes',
       erro: err.message,
@@ -515,7 +519,6 @@ export function executarHarnessLocal(): {
 
   // CENÁRIO (g): Datas invertidas (fim antes do início) não geram valor negativo (Math.max 0)
   try {
-    // Solicitada em 10/10/2026 15:00 e com "dataHoraEfetivacao" gravada erroneamente no passado (10/10/2026 14:00)
     const resInvertida = calcularTempoEsperaIndividual({
       situacao: 'efetivada',
       dataHoraSolicitacao: '10/10/2026 15:00:00',
@@ -545,7 +548,6 @@ export function executarHarnessLocal(): {
 
   // CENÁRIO (h): Virada de dia (23h50 -> 00h10 do dia seguinte) calcula exatamente 20 minutos
   try {
-    // 23:50 do dia 15/10/2026 até 00:10 do dia 16/10/2026
     const tInicio = '15/10/2026 23:50:00'
     const tFim = '16/10/2026 00:10:00'
     const agoraRef = converterParaTimestamp(tFim)
@@ -579,9 +581,6 @@ export function executarHarnessLocal(): {
 
   // CENÁRIO (i): Pausa técnica amortiza o tempo e retomada recompõe o saldo líquido
   try {
-    // Solicitada às 10:00. Às 10:30 pausa por aguardar laudo externo. Às 11:00 retomada. Agora = 11:30.
-    // Tempo total decorrido: 90 minutos (10:00 às 11:30). Pausa: 30 minutos (10:30 às 11:00).
-    // Espera líquida esperada: 60 minutos (1h 0m).
     const t10h00 = '10/10/2026 10:00:00'
     const t10h30 = '10/10/2026 10:30:00'
     const t11h00 = '10/10/2026 11:00:00'
@@ -662,6 +661,122 @@ export function executarHarnessLocal(): {
       cenario: '(j) Cancelamento congela o relógio na data exata sem continuar correndo',
       passou: false,
       detalhes: 'Falha no teste de cancelamento de relógio',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO (k): Fuso IANA parametrizado da unidade municipal (America/Porto_Velho = UTC-4)
+  // =========================================================================
+  try {
+    definirUnidadeFusoAtiva('mirante_da_serra')
+    const fusoAtivo = obterFusoHorarioAtivo()
+
+    // 2026-10-15T16:00:00Z em UTC:
+    // Em America/Sao_Paulo (UTC-3) é 13:00:00
+    // Em America/Porto_Velho (UTC-4) é 12:00:00
+    const dataUtcIso = '2026-10-15T16:00:00Z'
+    const horaPortoVelho = formatarHoraFuso(dataUtcIso, 'America/Porto_Velho')
+    const horaSaoPaulo = formatarHoraFuso(dataUtcIso, 'America/Sao_Paulo')
+
+    const passouK =
+      fusoAtivo === 'America/Porto_Velho' &&
+      horaPortoVelho === '12:00' &&
+      horaSaoPaulo === '13:00'
+
+    resultados.push({
+      id: 'cenario_k_fuso_iana_unidade',
+      cenario: '(k) Fuso IANA da unidade municipal opera em America/Porto_Velho (UTC-4) divergindo de São Paulo (UTC-3)',
+      passou: passouK,
+      detalhes: `Timestamp UTC 16:00Z formatado como 12:00 no fuso de Mirante da Serra/RO (UTC-4) e 13:00 em SP (UTC-3). Fuso ativo: ${fusoAtivo}.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_k_fuso_iana_unidade',
+      cenario: '(k) Fuso IANA da unidade municipal opera em America/Porto_Velho (UTC-4) divergindo de São Paulo (UTC-3)',
+      passou: false,
+      detalhes: 'Falha no teste de fuso horário da unidade',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO (l): Datas ausentes/inconsistentes FORA da média (sem virar zero que falseie indicador)
+  // =========================================================================
+  try {
+    // Conjunto de 3 registros válidos (10, 20, 30 min) e 2 registros com datas nulas/inválidas
+    const amostraComNulos = [10, null, 20, undefined, 30]
+    const mediaCalculada = calcularMediaEstatisticaSegura(amostraComNulos)
+
+    // Se nulos virassem 0, a média seria (10+0+20+0+30)/5 = 12 (FALSEADA).
+    // A média estrita correta é (10+20+30)/3 = 20.
+    const mediaNenhumValido = calcularMediaEstatisticaSegura([null, undefined])
+
+    const passouL =
+      mediaCalculada === 20 &&
+      mediaNenhumValido === null
+
+    resultados.push({
+      id: 'cenario_l_datas_ausentes_fora_da_media',
+      cenario: '(l) Registros sem data ficam estritamente FORA da média sem virar zero falseador',
+      passou: passouL,
+      detalhes: `Amostra [10, null, 20, undefined, 30] gerou média 20 min (não 12 min). Amostra [null, undefined] retornou null (não 0 min).`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_l_datas_ausentes_fora_da_media',
+      cenario: '(l) Registros sem data ficam estritamente FORA da média sem virar zero falseador',
+      passou: false,
+      detalhes: 'Falha no teste de médias sem zeros falsos',
+      erro: err.message,
+    })
+  }
+
+  // =========================================================================
+  // CENÁRIO (m): Filtros por dia/competência respeitam limites no fuso da unidade
+  // =========================================================================
+  try {
+    // 2026-10-15T02:30:00Z em UTC:
+    // Em UTC já é dia 15.
+    // Em America/Porto_Velho (UTC-4), 02:30Z é 22:30 do dia 14/10/2026 (dia anterior!).
+    const tsUtcMadrugada = '2026-10-15T02:30:00Z'
+    const civilPortoVelho = extrairDataCivilFuso(tsUtcMadrugada, 'America/Porto_Velho')
+
+    // Data de referência: 14/10/2026 23:00 em Porto Velho
+    const refDia14 = new Date('2026-10-15T03:00:00Z') // 23h do dia 14 em Porto Velho
+    const pertenceAoDia14EmRO = dentroDoPeriodo(
+      tsUtcMadrugada,
+      undefined,
+      'hoje',
+      'America/Porto_Velho',
+      refDia14,
+    )
+
+    // Checagem de virada de mês/competência:
+    // 2026-11-01T02:00:00Z em UTC é novembro, mas em Porto Velho (UTC-4) é 22:00 do dia 31/10/2026 (outubro!)
+    const tsViradaMes = '2026-11-01T02:00:00Z'
+    const eOutubroEmRO = mesmaCompetenciaFuso(tsViradaMes, '2026-10', 'America/Porto_Velho')
+    const eNovembroEmRO = mesmaCompetenciaFuso(tsViradaMes, '2026-11', 'America/Porto_Velho')
+
+    const passouM =
+      civilPortoVelho?.dia === 14 &&
+      civilPortoVelho?.mes === 10 &&
+      pertenceAoDia14EmRO === true &&
+      eOutubroEmRO === true &&
+      eNovembroEmRO === false
+
+    resultados.push({
+      id: 'cenario_m_limites_dia_competencia_fuso',
+      cenario: '(m) Filtros de dia civil e competência respeitam os limites locais do fuso de Porto Velho sem desvio UTC',
+      passou: passouM,
+      detalhes: `02:30Z de 15/10 classificado corretamente no dia civil 14 em Porto Velho; 02:00Z de 01/11 classificado na competência 2026-10 em Porto Velho.`,
+    })
+  } catch (err: any) {
+    resultados.push({
+      id: 'cenario_m_limites_dia_competencia_fuso',
+      cenario: '(m) Filtros de dia civil e competência respeitam os limites locais do fuso de Porto Velho sem desvio UTC',
+      passou: false,
+      detalhes: 'Falha no teste de limites de dia e competência',
       erro: err.message,
     })
   }

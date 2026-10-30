@@ -224,7 +224,7 @@ export const SecoesPainelGestao: React.FC<SecoesPainelGestaoProps> = ({
                 <strong className="text-slate-800 text-sm">
                   {pa.tempoMedioEsperaTriagemMin !== null
                     ? `${pa.tempoMedioEsperaTriagemMin} minutos`
-                    : 'Sem histórico suficiente'}
+                    : 'indisponível'}
                 </strong>
               </div>
             </div>
@@ -238,7 +238,7 @@ export const SecoesPainelGestao: React.FC<SecoesPainelGestaoProps> = ({
                 <strong className="text-slate-800 text-sm">
                   {pa.tempoMedioEsperaAtendimentoMin !== null
                     ? `${pa.tempoMedioEsperaAtendimentoMin} minutos`
-                    : 'Sem histórico suficiente'}
+                    : 'indisponível'}
                 </strong>
               </div>
             </div>
@@ -252,7 +252,7 @@ export const SecoesPainelGestao: React.FC<SecoesPainelGestaoProps> = ({
                 <strong className="text-slate-800 text-sm">
                   {pa.tempoMedioAtendimentoMin !== null
                     ? `${pa.tempoMedioAtendimentoMin} minutos`
-                    : 'Sem histórico suficiente'}
+                    : 'indisponível'}
                 </strong>
               </div>
             </div>
@@ -462,7 +462,7 @@ export const SecoesPainelGestao: React.FC<SecoesPainelGestaoProps> = ({
                   <strong className="text-slate-800 text-sm">
                     {internacoes.mediaPermanenciaDiasEstimada !== null
                       ? `${internacoes.mediaPermanenciaDiasEstimada} dias`
-                      : 'Em apuração'}
+                      : 'indisponível'}
                   </strong>
                 </div>
                 <Clock className="w-5 h-5 text-slate-400" />
@@ -577,7 +577,7 @@ export const SecoesPainelGestao: React.FC<SecoesPainelGestaoProps> = ({
               <strong className="text-slate-800 font-mono">
                 {exames.tempoMedioLiberacaoHoras !== null
                   ? `${exames.tempoMedioLiberacaoHoras} horas`
-                  : 'Em apuração'}
+                  : 'indisponível'}
               </strong>
             </div>
 

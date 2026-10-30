@@ -6,6 +6,7 @@ import {
   atualizarStatusAgendamento,
 } from '@/services/agendamentos'
 import { listarPacientes, listarProfissionais, listarSetores } from '@/services/cadastros'
+import { formatarDataHoraFuso } from '@/services/dataFusoUnidade'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -170,20 +171,15 @@ export const AgendamentosView: React.FC = () => {
   }
 
   const formatarDataHora = (iso: string) => {
-    if (!iso) return ''
-    try {
-      const d = new Date(iso)
-      if (isNaN(d.getTime())) return iso
-      return d.toLocaleString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    } catch {
-      return iso
-    }
+    if (!iso) return 'indisponível'
+    return formatarDataHoraFuso(iso, undefined, {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: undefined,
+    })
   }
 
   const renderBadgeStatus = (status: string) => {

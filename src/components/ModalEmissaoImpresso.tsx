@@ -41,6 +41,7 @@ import {
 } from '@/types/hospital'
 import { emitirImpressoAssistencial } from '@/services/impressosAssistenciais'
 import { FolhaImpressoA4 } from './FolhaImpressoA4'
+import { formatarDataHoraFuso } from '@/services/dataFusoUnidade'
 
 interface ModalEmissaoImpressoProps {
   aberto: boolean
@@ -300,7 +301,14 @@ export const ModalEmissaoImpresso: React.FC<ModalEmissaoImpressoProps> = ({
   const alternarConsentimentoCid = (ativar: boolean) => {
     setCidConsentimento(ativar)
     if (ativar) {
-      const agora = new Date().toLocaleString('pt-BR')
+      const agora = formatarDataHoraFuso(new Date(), undefined, {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: undefined,
+      })
       setCidConsentimentoHora(agora)
       toast({
         title: 'Consentimento de CID registrado',
@@ -326,7 +334,14 @@ export const ModalEmissaoImpresso: React.FC<ModalEmissaoImpressoProps> = ({
     origem,
     atendimento_pa: atendimentoPaId,
     internacao: internacaoId,
-    data_hora_emissao: new Date().toLocaleString('pt-BR'),
+    data_hora_emissao: formatarDataHoraFuso(new Date(), undefined, {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: undefined,
+    }),
     cid_consentimento_registrado: cidConsentimento,
     cid_consentimento_data_hora: cidConsentimentoHora,
     cid10_codigo: cid10Codigo,

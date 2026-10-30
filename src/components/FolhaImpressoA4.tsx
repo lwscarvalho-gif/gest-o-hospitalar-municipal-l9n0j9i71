@@ -6,6 +6,7 @@ import {
   ConteudoResumoAltaAssistencial,
   Paciente,
 } from '@/types/hospital'
+import { formatarDataHoraFuso } from '@/services/dataFusoUnidade'
 
 interface FolhaImpressoA4Props {
   impresso: Partial<ImpressoAssistencial>
@@ -114,7 +115,7 @@ export const FolhaImpressoA4: React.FC<FolhaImpressoA4Props> = ({ impresso, paci
             <div>
               <span className="font-semibold text-slate-600">Data de Emissão: </span>
               <strong className="font-mono">
-                {impresso.data_hora_emissao || new Date().toLocaleString('pt-BR')}
+                {impresso.data_hora_emissao || formatarDataHoraFuso(new Date())}
               </strong>
             </div>
           </div>

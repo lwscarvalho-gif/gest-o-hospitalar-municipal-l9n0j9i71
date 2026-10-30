@@ -1398,6 +1398,7 @@ export interface CalculoTempoEspera {
   dataFimIso?: string
   statusRelogio: 'ativo' | 'pausado' | 'concluido' | 'cancelado' | 'indeterminado'
   alertaAtraso?: boolean
+  dataInvalidaOuAusente?: boolean
   detalhesCalculo: string
 }
 

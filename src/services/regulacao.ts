@@ -868,14 +868,17 @@ export function calcularIndicadoresRegulacao(
       historicoTransicoes: (s as any).historico_transicoes,
     })
 
-    if (s.situacao === 'solicitada') {
-      temposAguardandoAval.push(calc.minutosEsperaLiquida)
-    } else if (s.situacao === 'em_avaliacao') {
-      temposEmAnalise.push(calc.minutosEsperaLiquida)
-    } else if (s.situacao === 'aceita') {
-      temposAguardandoEfet.push(calc.minutosEsperaLiquida)
-    } else if (s.situacao === 'efetivada') {
-      temposCicloCompleto.push(calc.minutosEsperaLiquida)
+    // Registros com data ausente ou inválida são SINALIZADOS e mantidos estritamente FORA da média
+    if (!calc.dataInvalidaOuAusente && calc.statusRelogio !== 'indeterminado') {
+      if (s.situacao === 'solicitada') {
+        temposAguardandoAval.push(calc.minutosEsperaLiquida)
+      } else if (s.situacao === 'em_avaliacao') {
+        temposEmAnalise.push(calc.minutosEsperaLiquida)
+      } else if (s.situacao === 'aceita') {
+        temposAguardandoEfet.push(calc.minutosEsperaLiquida)
+      } else if (s.situacao === 'efetivada') {
+        temposCicloCompleto.push(calc.minutosEsperaLiquida)
+      }
     }
   })
 
@@ -889,10 +892,10 @@ export function calcularIndicadoresRegulacao(
         etapaNome,
         quantidadeCasos: 0,
         tempoMedioMinutos: 0,
-        tempoMedioFormatado: '0 min',
+        tempoMedioFormatado: 'indisponível',
         tempoMaximoMinutos: 0,
-        tempoMaximoFormatado: '0 min',
-        criterioCalculo: criterio,
+        tempoMaximoFormatado: 'indisponível',
+        criterioCalculo: `${criterio} (Nenhum registro com data válida no período — dados ausentes excluídos da média)`,
       }
     }
     const soma = tempos.reduce((a, b) => a + b, 0)

@@ -21,14 +21,31 @@
 
 import { CalculoTempoEspera, SituacaoRegulacao, ItemTransicaoRegulacao } from '@/types/hospital'
 
-export const FUSO_HORARIO_REGULACAO = 'America/Sao_Paulo'
+import {
+  obterFusoHorarioAtivo,
+  formatarDataHoraFuso,
+  formatarHoraFuso,
+  parseDataHoraSegura,
+} from './dataFusoUnidade'
+
+/**
+ * Fuso horário da unidade parametrizável.
+ * Default seguro de Mirante da Serra/RO: America/Porto_Velho (UTC-4).
+ */
+export const FUSO_HORARIO_REGULACAO = obterFusoHorarioAtivo()
 
 /**
  * Converte data em formato brasileiro (DD/MM/AAAA, HH:mm:ss ou DD/MM/AAAA HH:mm)
  * ou formato ISO (YYYY-MM-DDTHH:mm:ssZ) para timestamp epoch em milissegundos.
+ * NUNCA altera timestamps históricos persistidos.
  * Retorna null se for inválida ou vazia.
  */
 export function converterParaTimestamp(dataStr?: string | null): number | null {
+  const d = parseDataHoraSegura(dataStr)
+  return d ? d.getTime() : null
+}
+
+export function converterParaTimestampLegado(dataStr?: string | null): number | null {
   if (!dataStr || typeof dataStr !== 'string') return null
   const limpa = dataStr.trim()
   if (!limpa) return null
@@ -105,12 +122,14 @@ export function calcularTempoEsperaIndividual(params: ParametrosCalculoEspera): 
   if (!tsOrigem) {
     return {
       minutosEsperaTotal: 0,
-      minutosEsperaLiquida: 0,
-      tempoFormatado: 'Sem data de registro',
+      minutosEsperaLiquida: 0, // mantido 0 mas com status 'indeterminado' que deve ser excluído de médias
+      tempoFormatado: 'indisponível',
       dataOrigemIso: '',
       statusRelogio: 'indeterminado',
       alertaAtraso: false,
-      detalhesCalculo: 'Data de solicitação ausente ou inválida. Relógio não pôde ser iniciado.',
+      dataInvalidaOuAusente: true,
+      detalhesCalculo:
+        'Data de solicitação ausente ou inválida (indisponível). Excluído de médias de espera.',
     }
   }
 
@@ -202,6 +221,9 @@ export function calcularTempoEsperaIndividual(params: ParametrosCalculoEspera): 
   const tempoAlvo = params.tempoAlvoMinutos || 120 // padrão 2 horas se não parametrizado
   const alertaAtraso = statusRelogio === 'ativo' && minutosLiquidos > tempoAlvo
 
+  const fusoAtivo = obterFusoHorarioAtivo()
+  const horaOrigemFormatada = formatarHoraFuso(tsOrigem, fusoAtivo, true)
+
   return {
     minutosEsperaTotal: minutosBrutos,
     minutosEsperaLiquida: minutosLiquidos,
@@ -210,7 +232,8 @@ export function calcularTempoEsperaIndividual(params: ParametrosCalculoEspera): 
     dataFimIso: new Date(tsFim).toISOString(),
     statusRelogio,
     alertaAtraso,
-    detalhesCalculo: `Origem: ${new Date(tsOrigem).toLocaleTimeString('pt-BR')} (fuso ${FUSO_HORARIO_REGULACAO}) • ${motivoFim} • Pausas: ${minutosPausados} min`,
+    dataInvalidaOuAusente: false,
+    detalhesCalculo: `Origem: ${horaOrigemFormatada} (fuso ${fusoAtivo}) • ${motivoFim} • Pausas: ${minutosPausados} min`,
   }
 }
 

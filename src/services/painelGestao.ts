@@ -14,6 +14,13 @@ import {
   Cirurgia,
 } from '@/types/hospital'
 import { registrarAuditoria } from './auditoria'
+import {
+  obterFusoHorarioAtivo,
+  formatarDataHoraFuso,
+  parseDataHoraSegura,
+  mesmoDiaCivilFuso,
+  calcularMediaEstatisticaSegura,
+} from './dataFusoUnidade'
 
 export type PeriodoApuracao = 'hoje' | '7dias' | '30dias' | 'geral'
 
@@ -234,75 +241,41 @@ export const CRITERIOS_INDICADORES: Record<string, CriterioIndicador> = {
 /**
  * Utilitário de parsing de data flexível para timestamps gravados no sistema
  */
-function parseDataHoraGenerica(str?: string): Date | null {
-  if (!str) return null
-  const s = str.trim()
-
-  // Formato ISO direto "2026-10-30T08:30" ou "2026-10-30 08:30"
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-    const d = new Date(s.replace(' ', 'T'))
-    if (!isNaN(d.getTime())) return d
-  }
-
-  // Formato brasileiro "DD/MM/YYYY, HH:mm:ss" ou "DD/MM/YYYY HH:mm"
-  const brMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})[,\s]+(\d{1,2}):(\d{2})(:(\d{2}))?/)
-  if (brMatch) {
-    const [, dia, mes, ano, hora, min, , sec] = brMatch
-    const d = new Date(
-      parseInt(ano, 10),
-      parseInt(mes, 10) - 1,
-      parseInt(dia, 10),
-      parseInt(hora, 10),
-      parseInt(min, 10),
-      sec ? parseInt(sec, 10) : 0,
-    )
-    if (!isNaN(d.getTime())) return d
-  }
-
-  // Formato date-only BR "DD/MM/YYYY"
-  const brDateOnly = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (brDateOnly) {
-    const [, dia, mes, ano] = brDateOnly
-    const d = new Date(parseInt(ano, 10), parseInt(mes, 10) - 1, parseInt(dia, 10), 12, 0, 0)
-    if (!isNaN(d.getTime())) return d
-  }
-
-  const fallback = new Date(s)
-  return isNaN(fallback.getTime()) ? null : fallback
+export function parseDataHoraGenerica(str?: string): Date | null {
+  return parseDataHoraSegura(str)
 }
 
 /**
  * Verifica se um registro pertence ao período de apuração selecionado
+ * respeitando os limites de dia civil no fuso da unidade (America/Porto_Velho).
  */
-function dentroDoPeriodo(
+export function dentroDoPeriodo(
   dataStr: string | undefined,
   createdIso: string | undefined,
   periodo: PeriodoApuracao,
+  fusoIana: string = obterFusoHorarioAtivo(),
+  agoraReferencia?: Date,
 ): boolean {
   if (periodo === 'geral') return true
 
-  const dataRef = parseDataHoraGenerica(dataStr) || (createdIso ? new Date(createdIso) : null)
-  if (!dataRef) return true // se não tiver data, não descarta para não ocultar dados legados
+  const dataRef = parseDataHoraSegura(dataStr) || parseDataHoraSegura(createdIso)
+  if (!dataRef) return false // Registros sem data ficam fora do filtro temporal estrito
 
-  const agora = new Date()
+  const agora = agoraReferencia || new Date()
   const diffMs = agora.getTime() - dataRef.getTime()
   const diffHoras = diffMs / (1000 * 60 * 60)
 
   if (periodo === 'hoje') {
-    // Mesmo dia civil ou menos de 24h
-    const mesmoDia =
-      dataRef.getDate() === agora.getDate() &&
-      dataRef.getMonth() === agora.getMonth() &&
-      dataRef.getFullYear() === agora.getFullYear()
-    return mesmoDia || diffHoras <= 24
+    // Limite exato do dia civil no fuso da unidade
+    return mesmoDiaCivilFuso(dataRef, agora, fusoIana)
   }
 
   if (periodo === '7dias') {
-    return diffHoras <= 24 * 7
+    return diffHoras >= 0 && diffHoras <= 24 * 7
   }
 
   if (periodo === '30dias') {
-    return diffHoras <= 24 * 30
+    return diffHoras >= 0 && diffHoras <= 24 * 30
   }
 
   return true
@@ -463,8 +436,9 @@ export async function carregarDadosPainelGestao(
     }
   })
 
-  const media = (arr: number[]) =>
-    arr.length > 0 ? Math.round(arr.reduce((acc, v) => acc + v, 0) / arr.length) : null
+  const mediaCalculadaTriagem = calcularMediaEstatisticaSegura(temposTriagemMin)
+  const mediaCalculadaAtendimento = calcularMediaEstatisticaSegura(temposAtendimentoMin)
+  const mediaCalculadaConclusao = calcularMediaEstatisticaSegura(temposAtendimentoConclusaoMin)
 
   const indicadoresPA: IndicadoresFilaPA = {
     totalAguardando: aguardandoTriagem + aguardandoAtendimento,
@@ -473,9 +447,12 @@ export async function carregarDadosPainelGestao(
     emAtendimento,
     finalizadosPeriodo,
     porClassificacao,
-    tempoMedioEsperaTriagemMin: media(temposTriagemMin),
-    tempoMedioEsperaAtendimentoMin: media(temposAtendimentoMin),
-    tempoMedioAtendimentoMin: media(temposAtendimentoConclusaoMin),
+    tempoMedioEsperaTriagemMin:
+      mediaCalculadaTriagem !== null ? Math.round(mediaCalculadaTriagem) : null,
+    tempoMedioEsperaAtendimentoMin:
+      mediaCalculadaAtendimento !== null ? Math.round(mediaCalculadaAtendimento) : null,
+    tempoMedioAtendimentoMin:
+      mediaCalculadaConclusao !== null ? Math.round(mediaCalculadaConclusao) : null,
     casosCriticosAlerta,
   }
 
@@ -571,12 +548,8 @@ export async function carregarDadosPainelGestao(
       (distribuicaoPorEspecialidadeSetor[setorNome] || 0) + 1
   })
 
-  const mediaPermanenciaDiasEstimada =
-    permanenciasDias.length > 0
-      ? Math.round(
-          (permanenciasDias.reduce((acc, v) => acc + v, 0) / permanenciasDias.length) * 10,
-        ) / 10
-      : null
+  const mediaPerm = calcularMediaEstatisticaSegura(permanenciasDias)
+  const mediaPermanenciaDiasEstimada = mediaPerm !== null ? Math.round(mediaPerm * 10) / 10 : null
 
   const indicadoresInternacoes: IndicadoresInternacoes = {
     internacoesAtivas,
@@ -635,12 +608,8 @@ export async function carregarDadosPainelGestao(
     }
   })
 
-  const tempoMedioLiberacaoHoras =
-    temposLiberacaoHoras.length > 0
-      ? Math.round(
-          (temposLiberacaoHoras.reduce((acc, v) => acc + v, 0) / temposLiberacaoHoras.length) * 10,
-        ) / 10
-      : null
+  const mediaLib = calcularMediaEstatisticaSegura(temposLiberacaoHoras)
+  const tempoMedioLiberacaoHoras = mediaLib !== null ? Math.round(mediaLib * 10) / 10 : null
 
   const indicadoresExames: IndicadoresExames = {
     totalExamesPeriodo: examesPeriodo.length,
@@ -793,14 +762,7 @@ export async function carregarDadosPainelGestao(
     canceladasPeriodo,
   }
 
-  const agoraDataHora = new Date().toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
+  const agoraDataHora = formatarDataHoraFuso(new Date(), obterFusoHorarioAtivo())
 
   // 8. INDICADORES DA CENTRAL DE REGULAÇÃO INTERNA MUNICIPAL
   const regFiltradosPeriodo = solicitacoesRegulacao.filter((r) =>
