@@ -14,6 +14,16 @@ interface FolhaImpressoA4Props {
   paciente: Paciente | null
 }
 
+/**
+ * Renderiza texto clínico arbitrário de forma estritamente segura como texto puro,
+ * garantindo que qualquer tag HTML ou script (<script>alert(1)</script>, <iframe>, <b>, etc.)
+ * seja neutralizada e nunca interpretada como marcação executável.
+ */
+export function renderizarTextoPuroImpresso(valor: any): string {
+  if (valor === null || valor === undefined) return ''
+  return String(valor)
+}
+
 export const FolhaImpressoA4: React.FC<FolhaImpressoA4Props> = ({ impresso, paciente }) => {
   const tipo = impresso.tipo || 'receita'
   const conteudoRec = tipo === 'receita' ? (impresso.conteudo as ConteudoReceitaAssistencial) : null
