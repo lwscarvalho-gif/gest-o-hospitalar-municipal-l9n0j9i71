@@ -71,12 +71,14 @@ import {
   Eye,
 } from 'lucide-react'
 import { EditorFormatadoRIS } from '@/components/EditorFormatadoRIS'
+import { TabEntregasRIS } from '@/components/TabEntregasRIS'
+import { ModalEntregaLaudoRIS } from '@/components/ModalEntregaLaudoRIS'
 
 interface RisViewProps {
   onNavegarSAME?: (pacienteId?: string) => void
 }
 
-type TabRIS = 'fila' | 'agendamentos' | 'modelos'
+type TabRIS = 'fila' | 'agendamentos' | 'modelos' | 'entregas'
 
 export const RisView: React.FC<RisViewProps> = ({ onNavegarSAME }) => {
   const { user } = useAuth()
@@ -208,6 +210,10 @@ export const RisView: React.FC<RisViewProps> = ({ onNavegarSAME }) => {
   // Comprovante em Snapshot Seguro para visualização/impressão
   const [comprovanteAtivo, setComprovanteAtivo] =
     useState<ComprovanteAgendamentoRISSnapshot | null>(null)
+
+  // Modal de Entrega Formal de Laudos Liberados (7.4.3.4.c.i)
+  const [modalEntregaAberto, setModalEntregaAberto] = useState(false)
+  const [exameParaEntrega, setExameParaEntrega] = useState<ItemFilaRIS | null>(null)
 
   // Transição de Status Manual
   const [transitandoStatus, setTransitandoStatus] = useState(false)
@@ -907,6 +913,18 @@ export const RisView: React.FC<RisViewProps> = ({ onNavegarSAME }) => {
         </button>
 
         <button
+          onClick={() => setActiveTab('entregas')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+            activeTab === 'entregas'
+              ? 'bg-sky-700 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <FileCheck className="w-4 h-4" />
+          Entrega Formal de Laudos (DOC-02)
+        </button>
+
+        <button
           onClick={() => setActiveTab('modelos')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
             activeTab === 'modelos'
@@ -1274,6 +1292,19 @@ export const RisView: React.FC<RisViewProps> = ({ onNavegarSAME }) => {
                                         Retificar
                                       </Button>
                                     )}
+                                    {/* Botão de Entrega Formal Presencial */}
+                                    <Button
+                                      size="sm"
+                                      onClick={() => {
+                                        setExameParaEntrega(item)
+                                        setModalEntregaAberto(true)
+                                      }}
+                                      className="h-7 text-[11px] px-2 bg-emerald-700 hover:bg-emerald-600 text-white shadow-sm"
+                                      title="Registrar Entrega Presencial ao Paciente/Destinatário"
+                                    >
+                                      <FileCheck className="w-3.5 h-3.5 mr-1" />
+                                      Entregar Laudo
+                                    </Button>
                                   </>
                                 )}
 
@@ -1331,7 +1362,21 @@ export const RisView: React.FC<RisViewProps> = ({ onNavegarSAME }) => {
       )}
 
       {/* ==================================================================== */}
-      {/* ABA 2: MODELOS DE LAUDO VERSIONADOS */}
+      {/* ABA 2: ENTREGA FORMAL DE RESULTADOS RIS (DOC-02 7.4.3.4.c.i) */}
+      {/* ==================================================================== */}
+      {activeTab === 'entregas' && (
+        <TabEntregasRIS
+          examesFila={itensFila}
+          onAbrirEntregaExame={(ex) => {
+            setExameParaEntrega(ex)
+            setModalEntregaAberto(true)
+          }}
+          onAtualizarFilaGeral={carregarFila}
+        />
+      )}
+
+      {/* ==================================================================== */}
+      {/* ABA 3: MODELOS DE LAUDO VERSIONADOS */}
       {/* ==================================================================== */}
       {activeTab === 'modelos' && (
         <Card className="border-slate-200 shadow-sm bg-white">
@@ -2539,6 +2584,21 @@ export const RisView: React.FC<RisViewProps> = ({ onNavegarSAME }) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Registro de Entrega Formal */}
+      {modalEntregaAberto && exameParaEntrega && (
+        <ModalEntregaLaudoRIS
+          aberto={modalEntregaAberto}
+          onOpenChange={(ab) => {
+            setModalEntregaAberto(ab)
+            if (!ab) setExameParaEntrega(null)
+          }}
+          exame={exameParaEntrega}
+          onSucesso={() => {
+            carregarFila()
+          }}
+        />
+      )}
     </div>
   )
 }

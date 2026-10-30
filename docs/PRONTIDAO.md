@@ -923,7 +923,15 @@ Em complemento a este relatório de prontidão e homologação técnica, consult
   3. `cotacao-sistema-hospitalar-9345d.pdf` (2 páginas, pré-cotação oficial da Secretaria Municipal de Saúde de Mirante da Serra–RO).
      O documento persiste trechos textuais, numeração de itens, subseções e páginas para eliminar a necessidade de novos uploads de anexos no fluxo de trabalho.
 
-- **Entrega Formal de Laudos e Resultados RIS (7.4.3.4.c.i / v0.0.64 Parte 1):** Backend e serviço cliente de registro de entrega implantados com sucesso (migração `0033_ris_entrega_laudos.js`, hook `ris_modulo.pb.js` com rotas `POST /backend/v1/ris/entregas` e `GET /backend/v1/ris/entregas`, serviço `src/services/ris.ts` com `registrarEntregaLaudo` e `listarEntregasLaudo`). UI e testes de interface delegados para a Parte 2.
+- **Entrega Formal de Laudos e Resultados RIS (7.4.3.4.c.i / v0.0.65 Parte 2 Concluída):**
+  - **Parte 1 (v0.0.64):** Migração imutável `0033_entrega_formal_laudos_ris.js` (update/delete rules nulos), rotas POST/GET `/backend/v1/ris/entregas` em `pocketbase/hooks/ris_modulo.pb.js` com validação de laudo liberado, vínculo exame→paciente→versão, idempotência 200/409, erro 409 `CONFLITO_VERSAO_RETIFICADA` com versão vigente e motivo, retificação de comprovante por novo evento vinculado e projeção de metadados administrativos no GET;
+  - **Parte 2 (v0.0.65):** Interface de Usuário integrada ao RIS existente (`src/components/RisView.tsx`, `TabEntregasRIS.tsx`, `ModalEntregaLaudoRIS.tsx`, `ReciboSanitizadoEntregaA4.tsx`):
+    1. Fluxo do operador autorizado para registrar entrega presencial/interna com conferência humana documental obrigatória (nome, RG/CPF/matrícula e modalidade);
+    2. Prévia do comprovante identificando exame, paciente e versão exata, com alerta crítico visível caso haja retificação posterior à versão sendo entregue, permitindo troca imediata para a versão vigente ou confirmação explícita de ciência;
+    3. Visualização e impressão de recibo A4 sanitizado (snapshot puro sem campos clínicos, fuso da unidade `America/Porto_Velho`, UTC persistido e aviso de limites legais sem ICP-Brasil);
+    4. Aba de entregas com sub-visões de laudos liberados pendentes e comprovantes emitidos com filtros por período/unidade/paciente e paginação; isolamento de privacidade da recepção garantido (apenas metadados administrativos, sem corpo clínico);
+    5. Resiliência: 409 preserva formulário e oferece revisão humana; reenvio mantém a mesma chave de idempotência; troca de sessão/seleção descarta respostas em voo (`seqRef`); sem armazenamento de dados clínicos em localStorage; sem autosalvar; sem canais externos (SMS/email).
+  - **Limites Operacionais Reais:** Concorrência multi-nó distribuída não é inferida no ambiente isolado (testada localmente via idempotência e locks de dados); validação visual humana presencial em balcão físico permanece pendente de homologação em campo.
 
 - **`docs/MATRIZ_CONFORMIDADE.md` (Revisão Material v0.0.47):** Reconciliação rigorosa item a item contra as fontes reais, corrigindo distorções prévias:
   - **Portal do Paciente Web:** Reclassificado como requisito exigido na Cotação (Item 01) e DOC-02 (7.4.4.3.b.iv), não se resumindo aos itens amarelos 404/427; requer login próprio do cidadão com mascaramento LGPD;

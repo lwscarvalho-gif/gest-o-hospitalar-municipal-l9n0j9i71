@@ -375,6 +375,11 @@ export type FormaRecebimentoEntregaRIS =
   | 'presencial_balcao'
   | 'setor_interno'
   | 'entrega_ambulatorial'
+  | 'presencial_proprio_paciente'
+  | 'presencial_responsavel_legal'
+  | 'interno_setor_clinico'
+  | 'interno_medico_assistente'
+  | 'outro_autorizado'
 
 export interface RisEntregaLaudo {
   id: string
