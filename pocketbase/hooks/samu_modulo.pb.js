@@ -26,13 +26,37 @@
  */
 
 // ============================================================================
-// 1. Bloqueio de Exclusão Física (samu_ocorrencias e samu_historico_estados)
+// 1. Bloqueio de Exclusão Física e Bypass de Criação/Atualização via Coleção
 // ============================================================================
+onRecordCreate((e) => {
+  throw new BadRequestError(
+    'OPERACAO_NEGADA_BYPASS: Criação direta de ocorrência via API de coleção proibida. Utilize a rota transacional /backend/v1/samu/ocorrencias/abrir.',
+  )
+}, 'samu_ocorrencias')
+
+onRecordUpdate((e) => {
+  throw new BadRequestError(
+    'OPERACAO_NEGADA_BYPASS: Alteração direta de ocorrência via API de coleção proibida. Utilize as rotas operacionais transacionais do SAMU.',
+  )
+}, 'samu_ocorrencias')
+
 onRecordDelete((e) => {
   throw new BadRequestError(
     'OPERACAO_NEGADA_IMUTABILIDADE: Ocorrências do SAMU não podem ser excluídas fisicamente. Cancele ou conclua a ocorrência preservando a trilha.',
   )
 }, 'samu_ocorrencias')
+
+onRecordCreate((e) => {
+  throw new BadRequestError(
+    'OPERACAO_NEGADA_BYPASS: Registros de histórico do SAMU não podem ser criados diretamente via API de coleção. São gerados exclusivamente pelo backend.',
+  )
+}, 'samu_historico_estados')
+
+onRecordUpdate((e) => {
+  throw new BadRequestError(
+    'OPERACAO_NEGADA_IMUTABILIDADE: Registros de histórico de estados do SAMU são estritamente imutáveis e não permitem alteração.',
+  )
+}, 'samu_historico_estados')
 
 onRecordDelete((e) => {
   throw new BadRequestError(
@@ -417,20 +441,6 @@ routerAdd('POST', '/backend/v1/samu/ocorrencias/{id}/atribuir-unidade', (c) => {
   var authCargo = auth.getString('cargo') || authRole
 
   var ocorrenciaId = c.request.pathValue('id')
-  var ocoRec
-  try {
-    ocoRec = c.app.findRecordById('samu_ocorrencias', ocorrenciaId)
-  } catch (_) {
-    return c.json(404, { erro: 'Ocorrência SAMU não encontrada.' })
-  }
-
-  var statusAtual = ocoRec.getString('status_fluxo')
-  if (statusAtual === 'concluida' || statusAtual === 'cancelada') {
-    return c.json(400, {
-      erro: 'Não é permitido atribuir unidade móvel a uma ocorrência já concluída ou cancelada.',
-    })
-  }
-
   var body = {}
   try {
     body = c.requestInfo().body || {}
@@ -443,132 +453,167 @@ routerAdd('POST', '/backend/v1/samu/ocorrencias/{id}/atribuir-unidade', (c) => {
     return c.json(400, { erro: 'ID da unidade móvel (veículo) é obrigatório.' })
   }
 
-  // Valida veículo no banco de dados existente de transporte
-  var veiculoRec
-  try {
-    veiculoRec = c.app.findRecordById('transporte_veiculos', veiculoId)
-  } catch (_) {
-    return c.json(404, { erro: 'Unidade móvel não localizada no cadastro de veículos.' })
-  }
-
-  if (!veiculoRec.getBool('ativo')) {
-    return c.json(400, { erro: 'A unidade móvel selecionada está inativa no sistema.' })
-  }
-
-  var statusVeic = veiculoRec.getString('status')
-  if (statusVeic === 'manutencao' || statusVeic === 'indisponivel' || statusVeic === 'inativo') {
-    return c.json(400, {
-      erro:
-        'A unidade móvel ' +
-        veiculoRec.getString('placa') +
-        ' está em manutenção ou indisponível (Situação: ' +
-        statusVeic.toUpperCase() +
-        ').',
-    })
-  }
-
-  // Validação de Conflito de Ocupação Server-Side:
-  // Verifica se a unidade móvel já está alocada em outra ocorrência ativa que ainda não concluiu nem cancelou
-  try {
-    var ativas = c.app.findRecordsByFilter(
-      'samu_ocorrencias',
-      'id != {:ocoId} && unidade_movel_id = {:vId} && status_fluxo != "concluida" && status_fluxo != "cancelada"',
-      '-created',
-      5,
-      0,
-      { ocoId: ocorrenciaId, vId: veiculoId },
-    )
-    if (ativas && ativas.length > 0) {
-      var conflito = ativas[0]
-      return c.json(409, {
-        codigo: 'UNIDADE_MOVEL_OCUPADA',
-        erro:
-          'CONFLITO DE ATRIBUIÇÃO: A unidade móvel (' +
-          veiculoRec.getString('placa') +
-          ') já está empenhada na ocorrência ativa ' +
-          conflito.getString('numero_ocorrencia') +
-          ' (Status: ' +
-          conflito.getString('status_fluxo') +
-          '). Desocupe-a ou conclua a ocorrência anterior antes de nova atribuição.',
-      })
-    }
-  } catch (_) {}
-
-  // Validação opcional de destino de saúde
   var destinoId = sanitizar(body.unidade_saude_destino_id)
   var destinoNome = sanitizar(body.unidade_saude_destino_nome)
   var destinoExterna = sanitizar(body.unidade_saude_destino_externa)
 
-  if (destinoId) {
-    try {
-      var setorRec = c.app.findRecordById('setores', destinoId)
-      if (!destinoNome) {
-        destinoNome = setorRec.getString('nome')
-      }
-    } catch (_) {}
-  }
-
   var agoraUtc = new Date().toISOString()
-  var placaVeic = veiculoRec.getString('placa')
-  var descVeic = veiculoRec.getString('descricao') || placaVeic
+  var resultadoAtribuicao = null
 
-  ocoRec.set('unidade_movel_id', veiculoId)
-  ocoRec.set('unidade_movel_placa', placaVeic)
-  ocoRec.set('unidade_movel_descricao', descVeic)
-  if (destinoId) ocoRec.set('unidade_saude_destino_id', destinoId)
-  if (destinoNome) ocoRec.set('unidade_saude_destino_nome', destinoNome)
-  if (destinoExterna) ocoRec.set('unidade_saude_destino_externa', destinoExterna)
-  ocoRec.set('ultimo_alterador_id', authId)
-
-  // Se a ocorrência ainda estava 'aberta', avança para 'em_deslocamento'
-  var novoStatus = statusAtual
-  if (statusAtual === 'aberta') {
-    novoStatus = 'em_deslocamento'
-    ocoRec.set('status_fluxo', novoStatus)
-  }
-
-  c.app.save(ocoRec)
-
-  // Grava histórico
   try {
-    var histCol = c.app.findCollectionByNameOrId('samu_historico_estados')
-    var histRec = new Record(histCol)
-    histRec.set('ocorrencia', ocoRec.id)
-    histRec.set('status_anterior', statusAtual)
-    histRec.set('status_novo', novoStatus)
-    histRec.set(
-      'motivo_transicao',
-      'Atribuição da unidade móvel ' +
-        placaVeic +
-        (destinoNome ? ' com destino a ' + destinoNome : ''),
-    )
-    histRec.set('unidade_movel_id', veiculoId)
-    histRec.set('unidade_destino_nome', destinoNome || destinoExterna)
-    histRec.set('autor_id', authId)
-    histRec.set('autor_nome', authNome)
-    histRec.set('autor_cargo', authCargo)
-    histRec.set('autor_perfil', authRole)
-    histRec.set('data_hora_utc', agoraUtc)
-    histRec.set(
-      'detalhes',
-      JSON.stringify({
-        unidade_movel_id: veiculoId,
-        placa: placaVeic,
-        destino: destinoNome || destinoExterna,
-      }),
-    )
-    c.app.save(histRec)
-  } catch (_) {}
+    c.app.runInTransaction((txApp) => {
+      // 1. Busca ocorrência atual na transação
+      var ocoRec = txApp.findRecordById('samu_ocorrencias', ocorrenciaId)
+      var statusAtual = ocoRec.getString('status_fluxo')
+      if (statusAtual === 'concluida' || statusAtual === 'cancelada') {
+        var errTerminal = new Error(
+          'Não é permitido atribuir unidade móvel a uma ocorrência já concluída ou cancelada.',
+        )
+        errTerminal.statusCode = 400
+        throw errTerminal
+      }
 
-  return c.json(200, {
-    sucesso: true,
-    mensagem: 'Unidade móvel atribuída à ocorrência com sucesso.',
-    ocorrencia_id: ocoRec.id,
-    unidade_movel_id: veiculoId,
-    unidade_movel_placa: placaVeic,
-    status_fluxo: novoStatus,
-    data_hora: agoraUtc,
-  })
+      // 2. Busca e valida veículo de transporte sanitário
+      var veiculoRec = txApp.findRecordById('transporte_veiculos', veiculoId)
+      if (!veiculoRec.getBool('ativo')) {
+        var errInativo = new Error('A unidade móvel selecionada está inativa no sistema.')
+        errInativo.statusCode = 400
+        throw errInativo
+      }
+
+      var statusVeic = veiculoRec.getString('status')
+      if (
+        statusVeic === 'manutencao' ||
+        statusVeic === 'indisponivel' ||
+        statusVeic === 'inativo'
+      ) {
+        var errIndisp = new Error(
+          'A unidade móvel ' +
+            veiculoRec.getString('placa') +
+            ' está em manutenção ou indisponível (Situação: ' +
+            statusVeic.toUpperCase() +
+            ').',
+        )
+        errIndisp.statusCode = 400
+        throw errIndisp
+      }
+
+      // 3. Checagem atômica de conflito de ocupação NO MESMO CONTEXTO TRANSAÇÃO
+      var ativas = txApp.findRecordsByFilter(
+        'samu_ocorrencias',
+        'id != {:ocoId} && unidade_movel_id = {:vId} && status_fluxo != "concluida" && status_fluxo != "cancelada"',
+        '-created',
+        5,
+        0,
+        { ocoId: ocorrenciaId, vId: veiculoId },
+      )
+      if (ativas && ativas.length > 0) {
+        var conflito = ativas[0]
+        var errConflito = new Error(
+          'CONFLITO DE ATRIBUIÇÃO: A unidade móvel (' +
+            veiculoRec.getString('placa') +
+            ') já está empenhada na ocorrência ativa ' +
+            conflito.getString('numero_ocorrencia') +
+            ' (Status: ' +
+            conflito.getString('status_fluxo') +
+            '). Desocupe-a ou conclua a ocorrência anterior antes de nova atribuição.',
+        )
+        errConflito.statusCode = 409
+        errConflito.codigo = 'UNIDADE_MOVEL_OCUPADA'
+        throw errConflito
+      }
+
+      // 4. Resolve destino de saúde se aplicável
+      if (destinoId && !destinoNome) {
+        try {
+          var setorRec = txApp.findRecordById('setores', destinoId)
+          destinoNome = setorRec.getString('nome')
+        } catch (_) {}
+      }
+
+      var placaVeic = veiculoRec.getString('placa')
+      var descVeic = veiculoRec.getString('descricao') || placaVeic
+
+      ocoRec.set('unidade_movel_id', veiculoId)
+      ocoRec.set('unidade_movel_placa', placaVeic)
+      ocoRec.set('unidade_movel_descricao', descVeic)
+      if (destinoId) ocoRec.set('unidade_saude_destino_id', destinoId)
+      if (destinoNome) ocoRec.set('unidade_saude_destino_nome', destinoNome)
+      if (destinoExterna) ocoRec.set('unidade_saude_destino_externa', destinoExterna)
+      ocoRec.set('ultimo_alterador_id', authId)
+
+      // Se a ocorrência ainda estava 'aberta', avança para 'em_deslocamento'
+      var novoStatus = statusAtual
+      if (statusAtual === 'aberta') {
+        novoStatus = 'em_deslocamento'
+        ocoRec.set('status_fluxo', novoStatus)
+      }
+
+      txApp.save(ocoRec)
+
+      // 5. Grava histórico de transição atômico
+      var histCol = txApp.findCollectionByNameOrId('samu_historico_estados')
+      var histRec = new Record(histCol)
+      histRec.set('ocorrencia', ocoRec.id)
+      histRec.set('status_anterior', statusAtual)
+      histRec.set('status_novo', novoStatus)
+      histRec.set(
+        'motivo_transicao',
+        'Atribuição da unidade móvel ' +
+          placaVeic +
+          (destinoNome ? ' com destino a ' + destinoNome : ''),
+      )
+      histRec.set('unidade_movel_id', veiculoId)
+      histRec.set('unidade_destino_nome', destinoNome || destinoExterna)
+      histRec.set('autor_id', authId)
+      histRec.set('autor_nome', authNome)
+      histRec.set('autor_cargo', authCargo)
+      histRec.set('autor_perfil', authRole)
+      histRec.set('data_hora_utc', agoraUtc)
+      histRec.set(
+        'detalhes',
+        JSON.stringify({
+          unidade_movel_id: veiculoId,
+          placa: placaVeic,
+          destino: destinoNome || destinoExterna,
+        }),
+      )
+      txApp.save(histRec)
+
+      resultadoAtribuicao = {
+        ocorrencia_id: ocoRec.id,
+        unidade_movel_id: veiculoId,
+        unidade_movel_placa: placaVeic,
+        status_fluxo: novoStatus,
+      }
+    })
+
+    return c.json(200, {
+      sucesso: true,
+      mensagem: 'Unidade móvel atribuída à ocorrência com sucesso em transação atômica.',
+      ocorrencia_id: resultadoAtribuicao.ocorrencia_id,
+      unidade_movel_id: resultadoAtribuicao.unidade_movel_id,
+      unidade_movel_placa: resultadoAtribuicao.unidade_movel_placa,
+      status_fluxo: resultadoAtribuicao.status_fluxo,
+      data_hora: agoraUtc,
+    })
+  } catch (err) {
+    var msg = err.message || String(err)
+    var st = err.statusCode || 500
+    if (msg.indexOf('no rows in result set') !== -1 || msg.indexOf('não encontrada') !== -1) {
+      st = 404
+      msg = 'Ocorrência SAMU ou unidade móvel não localizada.'
+    } else if (
+      err.codigo === 'UNIDADE_MOVEL_OCUPADA' ||
+      msg.indexOf('CONFLITO DE ATRIBUIÇÃO') !== -1
+    ) {
+      st = 409
+    }
+    return c.json(st, {
+      codigo: err.codigo || 'ERRO_ATRIBUICAO_UNIDADE',
+      erro: msg,
+    })
+  }
 })
 
 // ============================================================================
@@ -696,70 +741,77 @@ routerAdd('POST', '/backend/v1/samu/ocorrencias/{id}/transicao', (c) => {
     } catch (_) {}
   }
 
-  ocoRec.set('status_fluxo', statusNovo)
-  ocoRec.set('ultimo_alterador_id', authId)
-
-  if (statusNovo === 'cancelada') {
-    ocoRec.set('motivo_cancelamento', motivo)
-    ocoRec.set('data_cancelamento', agoraUtc)
-    ocoRec.set('cancelado_por_id', authId)
-  } else if (statusNovo === 'concluida') {
-    ocoRec.set('data_hora_conclusao', agoraUtc)
-    var desfecho = sanitizar(body.desfecho_encaminhamento)
-    if (desfecho) {
-      ocoRec.set('desfecho_encaminhamento', desfecho)
-    }
-    // NOTA OBRIGATÓRIA CODEX: Encerramento do SAMU NÃO gera consulta/alta/internação automática.
-  }
-
-  // Atualização opcional de unidade destino durante o transporte
-  var unidDestinoNome = sanitizar(body.unidade_saude_destino_nome)
-  if (unidDestinoNome) {
-    ocoRec.set('unidade_saude_destino_nome', unidDestinoNome)
-  }
-
-  c.app.save(ocoRec)
-
-  // Grava histórico
   try {
-    var histCol = c.app.findCollectionByNameOrId('samu_historico_estados')
-    var histRec = new Record(histCol)
-    histRec.set('ocorrencia', ocoRec.id)
-    histRec.set('status_anterior', statusAntigo)
-    histRec.set('status_novo', statusNovo)
-    histRec.set('motivo_transicao', motivo || 'Transição de status operacional')
-    if (ocoRec.getString('unidade_movel_id')) {
-      histRec.set('unidade_movel_id', ocoRec.getString('unidade_movel_id'))
-    }
-    histRec.set(
-      'unidade_destino_nome',
-      ocoRec.getString('unidade_saude_destino_nome') ||
-        ocoRec.getString('unidade_saude_destino_externa'),
-    )
-    histRec.set('autor_id', authId)
-    histRec.set('autor_nome', authNome)
-    histRec.set('autor_cargo', authCargo)
-    histRec.set('autor_perfil', authRole)
-    histRec.set('data_hora_utc', agoraUtc)
-    histRec.set(
-      'detalhes',
-      JSON.stringify({
-        idempotency_key: idempKey,
-        hash_payload: hashTransicao,
-        motivo: motivo,
-      }),
-    )
-    c.app.save(histRec)
-  } catch (_) {}
+    c.app.runInTransaction((txApp) => {
+      var ocoTrans = txApp.findRecordById('samu_ocorrencias', ocoRec.id)
+      ocoTrans.set('status_fluxo', statusNovo)
+      ocoTrans.set('ultimo_alterador_id', authId)
 
-  return c.json(200, {
-    sucesso: true,
-    mensagem: 'Status da ocorrência atualizado para "' + statusNovo + '".',
-    ocorrencia_id: ocoRec.id,
-    status_anterior: statusAntigo,
-    status_novo: statusNovo,
-    data_hora: agoraUtc,
-  })
+      if (statusNovo === 'cancelada') {
+        ocoTrans.set('motivo_cancelamento', motivo)
+        ocoTrans.set('data_cancelamento', agoraUtc)
+        ocoTrans.set('cancelado_por_id', authId)
+      } else if (statusNovo === 'concluida') {
+        ocoTrans.set('data_hora_conclusao', agoraUtc)
+        var desfecho = sanitizar(body.desfecho_encaminhamento)
+        if (desfecho) {
+          ocoTrans.set('desfecho_encaminhamento', desfecho)
+        }
+        // NOTA OBRIGATÓRIA CODEX: Encerramento do SAMU NÃO gera consulta/alta/internação automática.
+      }
+
+      // Atualização opcional de unidade destino durante o transporte
+      var unidDestinoNome = sanitizar(body.unidade_saude_destino_nome)
+      if (unidDestinoNome) {
+        ocoTrans.set('unidade_saude_destino_nome', unidDestinoNome)
+      }
+
+      txApp.save(ocoTrans)
+
+      // Grava histórico atômico
+      var histCol = txApp.findCollectionByNameOrId('samu_historico_estados')
+      var histRec = new Record(histCol)
+      histRec.set('ocorrencia', ocoTrans.id)
+      histRec.set('status_anterior', statusAntigo)
+      histRec.set('status_novo', statusNovo)
+      histRec.set('motivo_transicao', motivo || 'Transição de status operacional')
+      if (ocoTrans.getString('unidade_movel_id')) {
+        histRec.set('unidade_movel_id', ocoTrans.getString('unidade_movel_id'))
+      }
+      histRec.set(
+        'unidade_destino_nome',
+        ocoTrans.getString('unidade_saude_destino_nome') ||
+          ocoTrans.getString('unidade_saude_destino_externa'),
+      )
+      histRec.set('autor_id', authId)
+      histRec.set('autor_nome', authNome)
+      histRec.set('autor_cargo', authCargo)
+      histRec.set('autor_perfil', authRole)
+      histRec.set('data_hora_utc', agoraUtc)
+      histRec.set(
+        'detalhes',
+        JSON.stringify({
+          idempotency_key: idempKey,
+          hash_payload: hashTransicao,
+          motivo: motivo,
+        }),
+      )
+      txApp.save(histRec)
+    })
+
+    return c.json(200, {
+      sucesso: true,
+      mensagem: 'Status da ocorrência atualizado para "' + statusNovo + '".',
+      ocorrencia_id: ocoRec.id,
+      status_anterior: statusAntigo,
+      status_novo: statusNovo,
+      data_hora: agoraUtc,
+    })
+  } catch (err) {
+    return c.json(500, {
+      erro: 'Falha ao atualizar status da ocorrência: ' + (err.message || String(err)),
+    })
+  }
 })
 
 // ============================================================================

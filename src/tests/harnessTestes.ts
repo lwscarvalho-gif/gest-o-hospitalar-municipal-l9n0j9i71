@@ -148,6 +148,7 @@ import {
 import { SamuOcorrencia } from '@/types/hospital'
 import { gerarSnapshotRelatorioSAMU } from '@/components/samu/RelatorioSanitizadoSamuA4'
 import pb from '@/lib/pocketbase/client'
+import { testarRegrasReaisHooksSAMU } from './testesRegrasReaisSamu'
 
 /**
  * Harness de Testes Funcionais Isolados (Offline / Local)
@@ -12243,11 +12244,13 @@ export async function executarHarnessLocal(): Promise<{
   }
 
   // =========================================================================
-  // CENÁRIOS SAMU-08 A SAMU-16 (PARTE 2: SERVIÇOS REAIS DE samu.ts COM FETCH MOCKADO EXPLICITAMENTE)
+  // CENÁRIOS SAMU-08 A SAMU-16 (PARTE 2: CONTRATOS E CLIENTE SIMULADO COM FETCH MOCKADO EXPLICITAMENTE)
+  // NOTA DE AUDITORIA: Os cenários SAMU-08 a 16 interceptam globalThis.fetch; portanto, comprovam
+  // contratos de cliente e tratamento simulado em tela/serviço, e NÃO a recusa real do servidor backend.
   // =========================================================================
 
-  // Mocks e adaptadores locais explícitos para exercitar as funções reais de src/services/samu.ts
-  // sem chamadas externas de rede e sem gravar dados na base compartilhada
+  // Mocks e adaptadores locais explícitos para exercitar as funções de src/services/samu.ts
+  // em ambiente isolado (cliente simulado), sem chamadas de rede e sem gravar dados reais.
   const fetchOriginal = globalThis.fetch
 
   try {
@@ -12841,6 +12844,31 @@ export async function executarHarnessLocal(): Promise<{
   } finally {
     // Restaura o fetch original do ambiente
     globalThis.fetch = fetchOriginal
+  }
+
+  // =========================================================================
+  // CENÁRIOS SAMU-REG-01 A 06: EXECUÇÃO DIRETA DOS HANDLERS/REGRAS DOS HOOKS SAMU
+  // Adaptadores e mocks de banco explicitados sem recusa simulada por fetch pronto
+  // =========================================================================
+  try {
+    const resultadosRegrasHooks = await testarRegrasReaisHooksSAMU()
+    for (const r of resultadosRegrasHooks) {
+      resultados.push({
+        id: r.id,
+        cenario: `(SAMU-REG) ${r.cenario}`,
+        passou: r.passou,
+        detalhes: r.detalhes,
+        erro: r.erro,
+      })
+    }
+  } catch (err: any) {
+    resultados.push({
+      id: 'samu_regras_hooks_falha',
+      cenario: '(SAMU-REG) Execução das regras reais dos hooks SAMU',
+      passou: false,
+      detalhes: 'Falha global ao executar os handlers dos hooks SAMU',
+      erro: err.message,
+    })
   }
 
   const todosPassaram = resultados.every((r) => r.passou)

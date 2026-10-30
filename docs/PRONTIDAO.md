@@ -2,7 +2,7 @@
 
 **Sistema:** Gestão Hospitalar Municipal  
 **Stack:** React 19 + TypeScript + Tailwind CSS (Frontend) / Skip Cloud PocketBase v0.36 (Backend)  
-**Versão Atual:** 0.0.71 (Módulo SAMU Básico Parte 1 Concluída: Migração 0037, Hook de Integridade Server-Side, Rotas Transacionais /backend/v1/samu/..., Serviço Cliente samu.ts, Proteção SeqRef, Bloqueio de Bypass, Testes Locais SAMU-01 a SAMU-07 e Invariantes)  
+**Versão Atual:** 0.0.74 (Módulo SAMU Básico Completo e Fechamento da Auditoria de Integridade: Migração 0037, Hook Server-Side com Bloqueio de Bypass e Transações Atômicas, UI Integrada, Reclassificação de Testes SAMU-08 a 16 e Testes de Regras Reais SAMU-REG-01 a 06)  
 **Data de Consolidação:** Outubro de 2026  
 **Status Operacional:** **PROTÓTIPO AVANÇADO / AMBIENTE DE HOMOLOGAÇÃO CONTROLADA**  
 \*(ATENÇÃO: Este sistema NÃO está autorizado nem pronto para assistência médica real em ambiente de produção sem a resolução integral das lacunas normativas e regulatórias listadas abaixo).\_
@@ -62,6 +62,7 @@
 | **0.0.60** | Editor Formatado de Laudos RIS (Parte 1: Backend e Correção de Escopo JSVM)                 | Migração 0032 (`editor_formatado_laudos_ris`: `ris_imagens_anexas`, campos de rascunho em `exames` e enriquecimento de `laudos_versoes` e `ris_modelos_laudo`), hook `ris_modulo.pb.js` expandido com endpoints transacionais de rascunho, publicação, retificação e prévia oficial, e correção de escopo do JSVM (sanitizador movido para dentro dos callbacks de rota).                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **0.0.61** | Módulo RIS (Parte 1 Finalizada: Serviço Cliente TS, Testes Reais e Prontidão)               | Serviço cliente TypeScript em `src/services/ris.ts` (`salvarRascunhoLaudoRIS`, `publicarLaudoRIS`, `retificarLaudoRIS`, `obterPreviaLaudoRIS`) cobrindo concorrência otimista (409), token da sessão, descarte por `seqRef` e idempotência; testes de funções reais do sanitizador servidor e regras do contrato (cenários RIS-8 a RIS-14 no harness com 100% de aprovação); estado confirmado da migração 0032 (`APLICADA`) e registro formal de prontidão e pendências da Parte 2 (UI).                                                                                                                                                                                                                                                                                                                                                             |
 | **0.0.71** | Módulo SAMU Básico (Parte 1: Backend, Migração 0037, Hook e Serviço Cliente)                | Migração `0037_modulo_samu_basico.js` (coleções `samu_ocorrencias` e `samu_historico_estados` com índices de idempotência); hook server-side `samu_modulo.pb.js` com bloqueio de bypass de coleção (`createRule=null`, `updateRule=null`, `deleteRule=null`), bloqueio de exclusão física (`OPERACAO_NEGADA_IMUTABILIDADE`), autoria derivada da sessão, classificação de risco humana restrita a profissional autorizado (403 para recepção), atribuição de viatura com bloqueio de duplicidade/ocupação (`409 UNIDADE_MOVEL_OCUPADA`), vínculo posterior com confirmação humana preservando identidade informada original, rotas `/backend/v1/samu/...`; serviço cliente `src/services/samu.ts` com proteção `seqRef` e cenários SAMU-01 a SAMU-07 no harness local.                                                                                |
+| **0.0.74** | Fechamento da Auditoria SAMU (Bypass, Transação Atômica, Reclassificação e Regras Reais)    | Blindagem do hook `samu_modulo.pb.js` com interceptadores `onRecordCreate`, `onRecordUpdate` e `onRecordDelete` (`OPERACAO_NEGADA_BYPASS`), transação atômica server-side (`runInTransaction`) para atribuição e transição de viaturas contra concorrência; reclassificação formal de SAMU-08 a 16 como contratos simulados de cliente e adição de SAMU-REG-01 a 06 com execução real dos handlers/regras do hook sob adaptadores explicitados; matriz e PRONTIDAO atualizados.                                                                                                                                                                                                                                                                                                                                                                       |
 
 ---
 
@@ -966,29 +967,32 @@ Em complemento a este relatório de prontidão e homologação técnica, consult
        - Testes unitários/locais provam os contratos e regras de serviço sob mocks/adaptadores, mas NÃO provam concorrência real multi-nó sob carga massiva distribuída (nenhuma topologia de cluster multi-nó é afirmada sem infraestrutura provada);
        - Assinatura digital ICP-Brasil (7.4.3.5.b.ii) permanece pendente de autoridade certificadora credenciada e infraestrutura governamental;
        - Validação visual e ergonômica em operação hospitalar real permanece pendente de homologação assistencial humana.
-  - **v0.0.71 / v0.0.73 (Módulo SAMU 192 Básico Municipal — Itens 407 a 417 do ANEXO I e Seção 7.4.5.1.e.i):**
+  - **v0.0.71 / v0.0.74 (Módulo SAMU 192 Básico Municipal — Itens 407 a 417 do ANEXO I e Seção 7.4.5.1.e.i):**
     1. **Parte 1 Backend (v0.0.71 - Entregue e Implantada):**
        - Migração 0037 (`0037_modulo_samu_basico.js`): coleções `samu_ocorrencias` e `samu_historico_estados` com update/delete bloqueados para clientes (`null`), interceptadores server-side de integridade, índices de unicidade e idempotência;
        - Hook server-side `pocketbase/hooks/samu_modulo.pb.js`: rotas transacionais `/backend/v1/samu/ocorrencias/abrir`, `/classificar-risco`, `/atribuir-unidade`, `/transicao`, `/vincular-paciente`, `/backend/v1/samu/ocorrencias` (listagem) e detalhe com histórico imutável;
        - Tipos (`src/types/hospital.ts`) e serviço cliente (`src/services/samu.ts`) com tratamento de exceções tipadas: `ConflitoUnidadeMovelOcupadaError` (409), `IdempotenciaConflitoPayloadError` (409), `RespostaSessaoObsoletaError`;
        - Casos SAMU-01 a SAMU-07 no harness local;
-    2. **Parte 2 UI, Testes Reais e Fechamento (v0.0.73 - IMPLEMENTADO COM UI):**
+    2. **Parte 2 UI, Testes e Fechamento de Integridade (v0.0.74 - FECHAMENTO DA AUDITORIA):**
        - Componentes dedicados em `src/components/samu/`:
          - `SamuView.tsx`: visão principal integrada na barra de navegação (`NavigationBar.tsx` e `Index.tsx`), com listagem paginada, filtros (tipo, período, município, unidade móvel, status), indicadores operacionais rápidos e visualização de chamados;
          - `ModalAberturaOcorrencia.tsx`: abertura de ocorrência com aceitação explícita de vítima desconhecida sem exigir CPF/CNS, preservação de formulário preenchido em conflito de idempotência 409;
          - `ModalAcoesOperacionaisSAMU.tsx`: classificação de risco regulatória humana (exclusiva para profissionais autorizados com parecer obrigatório, sem decisão automatizada por software), atribuição de viatura com validação e aviso claro se ocupada (409 `UNIDADE_MOVEL_OCUPADA`), transição de status com justificativa obrigatória e vínculo posterior de paciente com confirmação humana explícita;
          - `ModalDetalhesOcorrenciaSAMU.tsx`: visualização auditada completa com histórico imutável de transições e detalhes operacionais;
          - `RelatorioSanitizadoSamuA4.tsx`: folha operacional A4 sanitizada no fuso oficial da unidade (`America/Porto_Velho`), sem exposição de dados clínicos confidenciais e com filtros expressos (Itens 414 a 417);
-       - Harness de Testes Locais (`src/tests/harnessTestes.ts`): Casos SAMU-08 a SAMU-16 exercitando as funções reais de `samu.ts` com fetch/mocks explicitados:
-         - SAMU-08: Abertura com vítima desconhecida sem CPF/CNS via `abrirOcorrenciaSAMU`;
-         - SAMU-09: Vínculo posterior inválido recusado (404) via `vincularPacienteSAMU`;
-         - SAMU-10: Classificação de risco por perfil indevido recusada (403) via `classificarRiscoSAMU`;
-         - SAMU-11: Viatura ocupada dispara `ConflitoUnidadeMovelOcupadaError` (409) via `atribuirUnidadeMovelSAMU`;
-         - SAMU-12: Conflito de payload na mesma chave gera `IdempotenciaConflitoPayloadError` (409);
-         - SAMU-13: Listagem paginada e consulta de detalhe com histórico imutável (`listarOcorrenciasSAMU` e `obterOcorrenciaSAMUPorId`);
-         - SAMU-14: Descarte seguro de resposta assíncrona antiga via `RespostaSessaoObsoletaError`;
-         - SAMU-15: Transição e cancelamento com justificativa e retry idempotente via `transitarStatusSAMU`;
-         - SAMU-16: Emissão do snapshot sanitizado A4 consolidando filtros por tipo, período, cidade e unidade móvel (Itens 414–417);
+       - **Auditoria de Integridade do Backend (v0.0.74):**
+         - Bloqueio de bypass via API de coleção: `onRecordCreate`, `onRecordUpdate` e `onRecordDelete` barram manipulação direta de `samu_ocorrencias` e `samu_historico_estados` com erro `OPERACAO_NEGADA_BYPASS` / `OPERACAO_NEGADA_IMUTABILIDADE`;
+         - Transação atômica server-side (`runInTransaction`): checagem e gravação de conflito de ocupação de viatura na mesma transação, eliminando risco de race condition em concorrência local;
+         - Limitação de frota sanitária: IDs exatos validados em `transporte_veiculos` com checagem de inatividade e manutenção; sem fabricação de vínculos por placa/nome aproximado;
+       - **Reclassificação da Matriz de Testes (Harness Local):**
+         - **SAMU-08 a SAMU-16:** Reclassificados formalmente como **TESTE DE CLIENTE / CONTRATO SIMULADO** (interceptam `globalThis.fetch` para provar tratamento de tela, preservação de dados e erros tipados, NÃO constituindo prova de recusa física do servidor);
+         - **SAMU-REG-01 a 06:** Bateria complementar (`src/tests/testesRegrasReaisSamu.ts`) executando diretamente os **HANDLERS E REGRAS REAIS DOS HOOKS** com adaptadores e mocks de banco explicitados (sem recusa simulada por resposta fetch pronta):
+           - Perfil indevido de recepção barrado com 403 para risco;
+           - Vínculo com paciente inexistente ou sem confirmação humana rejeitado;
+           - Bloqueio de bypass de criação e alteração via API de coleção;
+           - Duas atribuições concorrentes da mesma unidade no mesmo contexto transacional gerando 409 `UNIDADE_MOVEL_OCUPADA`;
+           - Cancelamento repetido e retry idempotente com liberação correta;
+           - Payload administrativo sanitizado sem conteúdo clínico restrito.
     3. **Limitações Honestas e Parciais Explícitas (SAMU):**
        - **Simulação Local vs. Topologia Multi-Nó Real:** Testes locais exercitam isoladamente funções e contratos cliente/servidor com adaptadores e mocks atômicos, mas NÃO provam concorrência real distribuída em múltiplos nós simultâneos de backend (não se presume topologia multi-nó sem cluster físico testado sob carga real);
        - **Homologação Humana Assistencial Pendente:** A ergonomia de acolhimento e a usabilidade visual e assistencial em plantão de urgência real dependem de homologação presencial de médicos e enfermeiros reguladores da rede municipal;
