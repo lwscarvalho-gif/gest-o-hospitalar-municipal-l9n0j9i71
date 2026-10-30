@@ -169,6 +169,150 @@ export interface ItemMapaCozinhaSanitizado {
 }
 
 // ----------------------------------------------------------------------------
+// SND: COMPOSIÇÃO OPERACIONAL E BAIXA DE ESTOQUE (REQUISITO 7.4.3.5.c.i)
+// ----------------------------------------------------------------------------
+
+export interface ItemComposicaoReceitaSND {
+  item_estoque_id: string
+  item_nome: string
+  unidade_consumo: string
+  quantidade_consumo: number
+  unidade_estoque: string
+  fator_conversao: number
+  quantidade_baixa_estoque: number
+}
+
+export interface ComposicaoRefeicaoSND {
+  id: string
+  codigo: string
+  refeicao_codigo: string
+  dieta_catalogo_ref?: string
+  dieta_codigo?: string
+  descricao?: string
+  versao: number
+  ativo: boolean
+  versao_anterior_id?: string
+  motivo_alteracao?: string
+  itens_composicao: ItemComposicaoReceitaSND[]
+  autor_id?: string
+  autor_nome?: string
+  created: string
+  updated: string
+}
+
+export interface SnapshotItemBaixaSND {
+  item_id: string
+  item_nome: string
+  unidade_consumo: string
+  quantidade_consumo: number
+  unidade_estoque: string
+  fator_conversao: number
+  quantidade_baixa_estoque: number
+  saldo_anterior: number
+  saldo_posterior: number
+  lote?: string
+  validade?: string
+}
+
+export interface BaixaEstoqueDistribuicaoSND {
+  id: string
+  distribuicao_ref: string
+  composicao_ref_id?: string
+  composicao_codigo_snapshot: string
+  composicao_versao_snapshot: number
+  snapshot_itens_consumidos: SnapshotItemBaixaSND[]
+  ponto_estoque: string
+  setor_ref?: string
+  data_hora_baixa_utc: string
+  movimentos_estoque_ids?: string[]
+  estornado: boolean
+  estorno_motivo?: string
+  estorno_autor_id?: string
+  estorno_autor_nome?: string
+  estorno_data_utc?: string
+  estorno_movimentos_ids?: string[]
+  autor_id: string
+  autor_nome: string
+  idempotency_key: string
+  hash_payload?: string
+  created: string
+  updated: string
+}
+
+export interface PreviaInsumosBaixaSND {
+  refeicao_codigo: string
+  dieta_codigo: string
+  composicao_encontrada: boolean
+  composicao_codigo?: string
+  composicao_versao?: number
+  pode_baixar: boolean
+  motivos_bloqueio?: string[]
+  itens: Array<{
+    item_id: string
+    item_nome: string
+    unidade_consumo: string
+    quantidade_consumo: number
+    unidade_estoque: string
+    fator_conversao: number
+    quantidade_necessaria: number
+    saldo_disponivel: number
+    saldo_suficiente: boolean
+    lote?: string
+    validade?: string
+    vencido: boolean
+  }>
+}
+
+export interface ConfirmarDistribuicaoComBaixaParams {
+  idempotency_key: string
+  prescricao_dietetica_ref: string
+  refeicao_codigo: string
+  data_operacional?: string
+  horario_previsto?: string
+  status_operacional?: StatusDistribuicaoRefeicao
+  motivo_nao_distribuido?: string
+  ponto_estoque?: string
+  responsavel_entrega_nome?: string
+  temperatura_afericao?: string
+  observacoes_operacionais?: string
+  distribuicao_id?: string
+}
+
+export interface RespostaConfirmarDistribuicaoComBaixa {
+  sucesso: boolean
+  baixa_executada?: boolean
+  idempotente?: boolean
+  codigo?: string
+  mensagem: string
+  status_operacional?: StatusDistribuicaoRefeicao
+  distribuicao_id?: string
+  dados?: {
+    baixa_id: string
+    distribuicao_id: string
+    composicao_codigo: string
+    composicao_versao: number
+    data_hora_baixa_utc: string
+    movimentos_estoque_ids: string[]
+    snapshot_itens: SnapshotItemBaixaSND[]
+  }
+}
+
+export interface EstornarBaixaSNDParams {
+  baixa_id: string
+  motivo: string
+}
+
+export interface RespostaEstornoBaixaSND {
+  sucesso: boolean
+  baixa_id: string
+  estornado: boolean
+  estorno_data_utc: string
+  estorno_autor_nome: string
+  movimentos_compensatorios_ids: string[]
+  mensagem: string
+}
+
+// ----------------------------------------------------------------------------
 // MÓDULO RIS (Radiologia e Diagnóstico por Imagem)
 // Conforme DOC-02 Seção 7.4.3.4.a.i-iv e c.ii, e itens 313-316 do ANEXO I
 // ----------------------------------------------------------------------------

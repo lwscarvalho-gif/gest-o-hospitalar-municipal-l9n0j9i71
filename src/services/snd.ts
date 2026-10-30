@@ -6,6 +6,15 @@ import {
   DistribuicaoRefeicaoSND,
   ItemMapaCozinhaSanitizado,
   CategoriaDietaSND,
+  StatusDistribuicaoRefeicao,
+  ComposicaoRefeicaoSND,
+  ItemComposicaoReceitaSND,
+  BaixaEstoqueDistribuicaoSND,
+  PreviaInsumosBaixaSND,
+  ConfirmarDistribuicaoComBaixaParams,
+  RespostaConfirmarDistribuicaoComBaixa,
+  EstornarBaixaSNDParams,
+  RespostaEstornoBaixaSND,
 } from '@/types/hospital'
 import { registrarAuditoria } from './auditoria'
 
@@ -411,6 +420,313 @@ export async function listarDistribuicoesRefeicoes(
 
   return {
     items: result.items as unknown as DistribuicaoRefeicaoSND[],
+    page: result.page,
+    perPage: result.perPage,
+    totalItems: result.totalItems,
+    totalPages: result.totalPages,
+  }
+}
+
+// ============================================================================
+// 8. Fichas de Composição Operacional Versionadas (Requisito 7.4.3.5.c.i)
+// ============================================================================
+
+export interface SalvarComposicaoParams {
+  codigo: string
+  refeicao_codigo: string
+  dieta_catalogo_ref?: string
+  dieta_codigo?: string
+  descricao?: string
+  itens_composicao: ItemComposicaoReceitaSND[]
+  motivo_alteracao?: string
+}
+
+/**
+ * Cadastra ou versiona uma ficha de composição operacional por refeição e tipo de dieta.
+ * Insumo, unidade e quantidade definidos por operador autorizado com validação de fator de conversão.
+ */
+export async function salvarComposicaoOperacional(
+  params: SalvarComposicaoParams,
+): Promise<ComposicaoRefeicaoSND> {
+  const codigoSanitizado = params.codigo.trim().toLowerCase()
+  const refeicaoCodigo = params.refeicao_codigo.trim().toLowerCase()
+  const dietaCodigo = params.dieta_codigo?.trim() || ''
+
+  if (!params.itens_composicao || params.itens_composicao.length === 0) {
+    throw new Error('A ficha de composição operacional deve conter ao menos um insumo do estoque.')
+  }
+
+  // Validação estrita de cada insumo e conversão
+  for (const it of params.itens_composicao) {
+    if (!it.item_estoque_id) throw new Error('Insumo sem item_estoque_id vinculado.')
+    if (it.quantidade_consumo <= 0)
+      throw new Error(`Quantidade do insumo ${it.item_nome} deve ser positiva.`)
+    if (
+      it.unidade_consumo !== it.unidade_estoque &&
+      (!it.fator_conversao || it.fator_conversao <= 0)
+    ) {
+      throw new Error(
+        `Fator de conversão explícito obrigatório para insumo ${it.item_nome} (${it.unidade_consumo} -> ${it.unidade_estoque}).`,
+      )
+    }
+  }
+
+  // Busca versões existentes do código
+  let versaoNova = 1
+  let versaoAnteriorId: string | undefined
+
+  try {
+    const existentes = await pb.collection('snd_composicoes_refeicoes').getList(1, 1, {
+      filter: `codigo = "${codigoSanitizado}"`,
+      sort: '-versao',
+    })
+    if (existentes.items.length > 0) {
+      const ultima = existentes.items[0]
+      versaoNova = Number(ultima.versao || 1) + 1
+      versaoAnteriorId = ultima.id
+
+      // Inativa versão anterior
+      await pb.collection('snd_composicoes_refeicoes').update(ultima.id, {
+        ativo: false,
+      })
+    }
+  } catch {
+    /* intentionally ignored */
+  }
+
+  const autorId = pb.authStore.model?.id || ''
+  const autorNome = pb.authStore.model?.name || pb.authStore.model?.email || 'Operador SND'
+
+  const record = await pb.collection('snd_composicoes_refeicoes').create({
+    codigo: codigoSanitizado,
+    refeicao_codigo: refeicaoCodigo,
+    dieta_catalogo_ref: params.dieta_catalogo_ref || null,
+    dieta_codigo: dietaCodigo,
+    descricao: params.descricao || '',
+    versao: versaoNova,
+    ativo: true,
+    versao_anterior_id: versaoAnteriorId || null,
+    motivo_alteracao:
+      params.motivo_alteracao ||
+      (versaoNova === 1 ? 'Versão inicial homologada' : 'Atualização de ficha'),
+    itens_composicao: params.itens_composicao,
+    autor_id: autorId,
+    autor_nome: autorNome,
+  })
+
+  await registrarAuditoria({
+    acao: 'salvar_composicao_operacional_snd',
+    modulo: 'snd',
+    detalhes: `Ficha de composição ${codigoSanitizado} criada/versionada para v${versaoNova} (${refeicaoCodigo} / ${dietaCodigo || 'geral'}).`,
+    registro_id: record.id,
+  })
+
+  return record as unknown as ComposicaoRefeicaoSND
+}
+
+/**
+ * Lista fichas de composição operacional cadastradas
+ */
+export async function listarComposicoesOperacionais(
+  refeicaoCodigo?: string,
+  dietaCodigo?: string,
+): Promise<ComposicaoRefeicaoSND[]> {
+  const filterParts: string[] = ['ativo = true']
+  if (refeicaoCodigo) filterParts.push(`refeicao_codigo = "${refeicaoCodigo}"`)
+  if (dietaCodigo)
+    filterParts.push(
+      `(dieta_codigo = "${dietaCodigo}" || dieta_codigo = "" || dieta_codigo = "todas")`,
+    )
+
+  const records = await pb.collection('snd_composicoes_refeicoes').getFullList({
+    filter: filterParts.join(' && '),
+    sort: '-versao',
+  })
+
+  return records as unknown as ComposicaoRefeicaoSND[]
+}
+
+// ============================================================================
+// 9. Prévia de Insumos e Validação de Estoque antes da Confirmação
+// ============================================================================
+
+/**
+ * Obtém prévia calculada no cliente com validação de estoque, lote, validade e conversões.
+ * Permite ao operador inspecionar o impacto antes de confirmar a distribuição.
+ */
+export async function obterPreviaInsumosDistribuicao(
+  refeicaoCodigo: string,
+  dietaCodigo: string,
+): Promise<PreviaInsumosBaixaSND> {
+  const composicoes = await listarComposicoesOperacionais(refeicaoCodigo, dietaCodigo)
+
+  if (!composicoes || composicoes.length === 0) {
+    return {
+      refeicao_codigo: refeicaoCodigo,
+      dieta_codigo: dietaCodigo,
+      composicao_encontrada: false,
+      pode_baixar: false,
+      motivos_bloqueio: [
+        `Ficha de composição não encontrada para refeição "${refeicaoCodigo}" e dieta "${dietaCodigo}".`,
+      ],
+      itens: [],
+    }
+  }
+
+  const composicao = composicoes[0]
+  const motivosBloqueio: string[] = []
+  const itensResultado: PreviaInsumosBaixaSND['itens'] = []
+  const agora = new Date()
+
+  for (const it of composicao.itens_composicao) {
+    let itemEstoque: any = null
+    try {
+      itemEstoque = await pb.collection('farmacia_itens').getOne(it.item_estoque_id)
+    } catch (_) {
+      motivosBloqueio.push(
+        `Insumo "${it.item_nome}" (ID ${it.item_estoque_id}) não encontrado no estoque.`,
+      )
+      continue
+    }
+
+    const saldo = Number(itemEstoque.estoque_atual) || 0
+    const fator = it.fator_conversao || 1.0
+    const qtdBaixa = Number((it.quantidade_consumo * fator).toFixed(4))
+    const validadeStr = itemEstoque.validade || ''
+
+    let vencido = false
+    if (validadeStr) {
+      const dVal = new Date(validadeStr)
+      if (!isNaN(dVal.getTime()) && dVal.getTime() < agora.getTime()) {
+        vencido = true
+        motivosBloqueio.push(
+          `Insumo "${itemEstoque.nome}" vencido em ${validadeStr}. Proibido consumo humano.`,
+        )
+      }
+    }
+
+    const saldoSuficiente = saldo >= qtdBaixa
+    if (!saldoSuficiente) {
+      motivosBloqueio.push(
+        `Estoque insuficiente para "${itemEstoque.nome}". Disponível: ${saldo} ${itemEstoque.unidade_medida}, necessário: ${qtdBaixa} ${itemEstoque.unidade_medida}.`,
+      )
+    }
+
+    itensResultado.push({
+      item_id: it.item_estoque_id,
+      item_nome: itemEstoque.nome,
+      unidade_consumo: it.unidade_consumo,
+      quantidade_consumo: it.quantidade_consumo,
+      unidade_estoque: itemEstoque.unidade_medida,
+      fator_conversao: fator,
+      quantidade_necessaria: qtdBaixa,
+      saldo_disponivel: saldo,
+      saldo_suficiente: saldoSuficiente,
+      lote: itemEstoque.lote,
+      validade: validadeStr,
+      vencido,
+    })
+  }
+
+  return {
+    refeicao_codigo: refeicaoCodigo,
+    dieta_codigo: dietaCodigo,
+    composicao_encontrada: true,
+    composicao_codigo: composicao.codigo,
+    composicao_versao: composicao.versao,
+    pode_baixar: motivosBloqueio.length === 0,
+    motivos_bloqueio: motivosBloqueio.length > 0 ? motivosBloqueio : undefined,
+    itens: itensResultado,
+  }
+}
+
+// ============================================================================
+// 10. Confirmação Transacional de Distribuição com Baixa Integrada (Servidor)
+// ============================================================================
+
+/**
+ * Confirma distribuição e efetua a baixa atômica de insumos no estoque pelo servidor.
+ * - Idempotência com chave persistente e detecção de conflito 409
+ * - Reenvio após timeout retorna resultado persistido sem nova baixa
+ * - Rollback completo em caso de falha
+ */
+export async function confirmarDistribuicaoComBaixa(
+  params: ConfirmarDistribuicaoComBaixaParams,
+): Promise<RespostaConfirmarDistribuicaoComBaixa> {
+  const url = '/backend/v1/snd/distribuicao/confirmar-com-baixa'
+  const response = await pb.send<RespostaConfirmarDistribuicaoComBaixa>(url, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
+
+  return response
+}
+
+// ============================================================================
+// 11. Estorno Compensatório de Baixa (Servidor)
+// ============================================================================
+
+/**
+ * Registra estorno compensatório explícito de baixa de estoque.
+ * Devolve o saldo, audita motivo/autor e bloqueia duplo estorno sem exclusão física.
+ */
+export async function estornarBaixaSND(
+  params: EstornarBaixaSNDParams,
+): Promise<RespostaEstornoBaixaSND> {
+  const url = '/backend/v1/snd/baixa/estornar'
+  const response = await pb.send<RespostaEstornoBaixaSND>(url, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
+
+  return response
+}
+
+// ============================================================================
+// 12. Consulta de Consumo e Baixas de Insumos por Período / Refeição / Ponto
+// ============================================================================
+
+export interface FiltrosConsultaConsumoSND {
+  data_inicio?: string
+  data_fim?: string
+  refeicao_codigo?: string
+  ponto_estoque?: string
+  estornado?: boolean
+  page?: number
+  perPage?: number
+}
+
+export interface ResultadoConsultaConsumoSND {
+  items: BaixaEstoqueDistribuicaoSND[]
+  page: number
+  perPage: number
+  totalItems: number
+  totalPages: number
+}
+
+/**
+ * Consulta histórico auditável de baixas de estoque do SND
+ */
+export async function consultarConsumoInsumosSND(
+  filtros: FiltrosConsultaConsumoSND = {},
+): Promise<ResultadoConsultaConsumoSND> {
+  const page = filtros.page || 1
+  const perPage = filtros.perPage || 20
+  const filterParts: string[] = []
+
+  if (filtros.data_inicio) filterParts.push(`data_hora_baixa_utc >= "${filtros.data_inicio}"`)
+  if (filtros.data_fim) filterParts.push(`data_hora_baixa_utc <= "${filtros.data_fim}"`)
+  if (filtros.ponto_estoque) filterParts.push(`ponto_estoque ~ "${filtros.ponto_estoque}"`)
+  if (typeof filtros.estornado === 'boolean') filterParts.push(`estornado = ${filtros.estornado}`)
+
+  const result = await pb.collection('snd_baixas_estoque_distribuicoes').getList(page, perPage, {
+    filter: filterParts.join(' && '),
+    sort: '-data_hora_baixa_utc,-created',
+    expand: 'distribuicao_ref,setor_ref',
+  })
+
+  return {
+    items: result.items as unknown as BaixaEstoqueDistribuicaoSND[],
     page: result.page,
     perPage: result.perPage,
     totalItems: result.totalItems,

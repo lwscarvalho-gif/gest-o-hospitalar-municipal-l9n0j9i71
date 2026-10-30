@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T19:33:30.144Z",
+  "generatedAt": "2026-10-30T19:52:22.633Z",
   "collections": [
     {
       "name": "users",
@@ -8643,6 +8643,251 @@
         "CREATE INDEX idx_snd_dist_status ON snd_distribuicoes_refeicoes (status_operacional)",
         "CREATE UNIQUE INDEX idx_snd_dist_idemp_uk ON snd_distribuicoes_refeicoes (idempotency_key)"
       ]
+    },
+    {
+      "name": "snd_composicoes_refeicoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "codigo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "refeicao_codigo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "dieta_catalogo_ref",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "snd_dietas_catalogo"
+        },
+        {
+          "name": "dieta_codigo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "versao",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "versao_anterior_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "motivo_alteracao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "itens_composicao",
+          "type": "json",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "autor_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "autor_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "name": "snd_baixas_estoque_distribuicoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "distribuicao_ref",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "snd_distribuicoes_refeicoes"
+        },
+        {
+          "name": "composicao_ref_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "composicao_codigo_snapshot",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "composicao_versao_snapshot",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "snapshot_itens_consumidos",
+          "type": "json",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "ponto_estoque",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "setor_ref",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "setores"
+        },
+        {
+          "name": "data_hora_baixa_utc",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "movimentos_estoque_ids",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estornado",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estorno_motivo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estorno_autor_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estorno_autor_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estorno_data_utc",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estorno_movimentos_ids",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "autor_id",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "autor_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "hash_payload",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": []
     }
   ]
 }
