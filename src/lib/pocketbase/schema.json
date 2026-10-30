@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T19:03:53.145Z",
+  "generatedAt": "2026-10-30T19:10:17.695Z",
   "collections": [
     {
       "name": "users",
@@ -8055,6 +8055,593 @@
         "CREATE INDEX idx_ris_entregas_data ON ris_entregas_laudos (data_hora_entrega)",
         "CREATE INDEX idx_ris_entregas_idemp ON ris_entregas_laudos (idempotency_key)",
         "CREATE INDEX idx_ris_entregas_protocolo ON ris_entregas_laudos (protocolo_entrega)"
+      ]
+    },
+    {
+      "name": "snd_cardapio_refeicoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "codigo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "horario_padrao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "ordem_dia",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "versao",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "motivo_inativacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "autor_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "autor_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_snd_ref_codigo ON snd_cardapio_refeicoes (codigo)",
+        "CREATE INDEX idx_snd_ref_versao ON snd_cardapio_refeicoes (versao)",
+        "CREATE INDEX idx_snd_ref_ativo ON snd_cardapio_refeicoes (ativo)",
+        "CREATE INDEX idx_snd_ref_ordem ON snd_cardapio_refeicoes (ordem_dia)"
+      ]
+    },
+    {
+      "name": "snd_dietas_catalogo",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "codigo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "categoria",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["oral", "rotina", "enteral", "parenteral", "especial"]
+        },
+        {
+          "name": "consistencia",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "composicao_descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "indicacao_padrao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "refeicoes_permitidas",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "versao",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "versao_anterior_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "motivo_alteracao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "autor_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "autor_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_snd_dietas_codigo ON snd_dietas_catalogo (codigo)",
+        "CREATE INDEX idx_snd_dietas_versao ON snd_dietas_catalogo (versao)",
+        "CREATE INDEX idx_snd_dietas_categoria ON snd_dietas_catalogo (categoria)",
+        "CREATE INDEX idx_snd_dietas_ativo ON snd_dietas_catalogo (ativo)"
+      ]
+    },
+    {
+      "name": "snd_prescricoes_dieteticas",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gestor' || @request.auth.role = 'profissional')",
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "paciente_ref",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "internacao_ref",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "internacoes"
+        },
+        {
+          "name": "atendimento_pa_ref",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "pronto_atendimento"
+        },
+        {
+          "name": "leito_ref",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "leitos"
+        },
+        {
+          "name": "setor_ref",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "setores"
+        },
+        {
+          "name": "dieta_catalogo_ref",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "snd_dietas_catalogo"
+        },
+        {
+          "name": "dieta_codigo_snapshot",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "dieta_nome_snapshot",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "dieta_versao_snapshot",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "categoria_dieta",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["oral", "rotina", "enteral", "parenteral", "especial"]
+        },
+        {
+          "name": "consistencia",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "via_administracao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "quantidade",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "unidade_medida",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "fracionamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "horarios_refeicoes",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "vigencia_inicio",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "vigencia_fim",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["ativa", "alterada", "suspensa", "encerrada"]
+        },
+        {
+          "name": "restricoes_alimentares",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "alergias_verificadas",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes_profissionais",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "diagnostico_justificativa_clinica",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "versao_numero",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "prescricao_anterior_ref",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "motivo_alteracao_suspensao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "prescritor_id",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "prescritor_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "prescritor_perfil",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "prescritor_conselho",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_prescricao_utc",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "hash_payload",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "name": "snd_distribuicoes_refeicoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "prescricao_dietetica_ref",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "snd_prescricoes_dieteticas"
+        },
+        {
+          "name": "paciente_ref",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "pacientes"
+        },
+        {
+          "name": "leito_ref",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "leitos"
+        },
+        {
+          "name": "setor_ref",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "setores"
+        },
+        {
+          "name": "refeicao_codigo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_operacional",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "horario_previsto",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status_operacional",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["planejado", "em_preparo", "distribuido", "nao_distribuido"]
+        },
+        {
+          "name": "motivo_nao_distribuido",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes_operacionais",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "temperatura_afericao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "responsavel_entrega_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_hora_registro_utc",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "autor_id",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "autor_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "autor_perfil",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "hash_payload",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_snd_dist_presc ON snd_distribuicoes_refeicoes (prescricao_dietetica_ref)",
+        "CREATE INDEX idx_snd_dist_paciente ON snd_distribuicoes_refeicoes (paciente_ref)",
+        "CREATE INDEX idx_snd_dist_leito ON snd_distribuicoes_refeicoes (leito_ref)",
+        "CREATE INDEX idx_snd_dist_data ON snd_distribuicoes_refeicoes (data_operacional)",
+        "CREATE INDEX idx_snd_dist_status ON snd_distribuicoes_refeicoes (status_operacional)",
+        "CREATE UNIQUE INDEX idx_snd_dist_idemp_uk ON snd_distribuicoes_refeicoes (idempotency_key)"
       ]
     }
   ]

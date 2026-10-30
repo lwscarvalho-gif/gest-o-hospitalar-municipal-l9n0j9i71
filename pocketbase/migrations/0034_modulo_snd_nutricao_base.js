@@ -107,7 +107,7 @@ migrate(
           { name: 'updated', type: 'autodate', onCreate: true, onUpdate: true },
         ],
         indexes: [
-          'CREATE INDEX idx_snd_ref_codigo ON snd_cardapio_refeicoes (codigo)',
+          'CREATE UNIQUE INDEX idx_snd_ref_codigo ON snd_cardapio_refeicoes (codigo)',
           'CREATE INDEX idx_snd_ref_versao ON snd_cardapio_refeicoes (versao)',
           'CREATE INDEX idx_snd_ref_ativo ON snd_cardapio_refeicoes (ativo)',
           'CREATE INDEX idx_snd_ref_ordem ON snd_cardapio_refeicoes (ordem_dia)',
@@ -157,7 +157,7 @@ migrate(
           { name: 'updated', type: 'autodate', onCreate: true, onUpdate: true },
         ],
         indexes: [
-          'CREATE INDEX idx_snd_dietas_codigo ON snd_dietas_catalogo (codigo)',
+          'CREATE UNIQUE INDEX idx_snd_dietas_codigo ON snd_dietas_catalogo (codigo)',
           'CREATE INDEX idx_snd_dietas_versao ON snd_dietas_catalogo (versao)',
           'CREATE INDEX idx_snd_dietas_categoria ON snd_dietas_catalogo (categoria)',
           'CREATE INDEX idx_snd_dietas_ativo ON snd_dietas_catalogo (ativo)',
@@ -289,7 +289,7 @@ migrate(
         updateRule: null, // Imutável por padrão: alterações e suspensões geram nova versão/evento
         deleteRule: null, // Imutável: nunca excluir histórico
         fields: fields,
-        indexes: [,],
+        indexes: [],
       })
       app.save(prescricoesDieteticasCol)
     }
@@ -373,7 +373,7 @@ migrate(
           'CREATE INDEX idx_snd_dist_leito ON snd_distribuicoes_refeicoes (leito_ref)',
           'CREATE INDEX idx_snd_dist_data ON snd_distribuicoes_refeicoes (data_operacional)',
           'CREATE INDEX idx_snd_dist_status ON snd_distribuicoes_refeicoes (status_operacional)',
-          'CREATE INDEX idx_snd_dist_idemp ON snd_distribuicoes_refeicoes (idempotency_key)',
+          'CREATE UNIQUE INDEX idx_snd_dist_idemp_uk ON snd_distribuicoes_refeicoes (idempotency_key)',
         ],
       })
       app.save(distribuicoesCol)

@@ -25,6 +25,149 @@ export interface TransporteTipoVeiculo {
   updated: string
 }
 
+// ============================================================================
+// Módulo SND - Serviço de Nutrição e Dietética (Requisitos 7.4.3.5.a.i–ii e 7.4.3.5.b.i)
+// ============================================================================
+
+export type CategoriaDietaSND = 'oral' | 'rotina' | 'enteral' | 'parenteral' | 'especial'
+export type StatusPrescricaoDietetica = 'ativa' | 'alterada' | 'suspensa' | 'encerrada'
+export type StatusDistribuicaoRefeicao =
+  | 'planejado'
+  | 'em_preparo'
+  | 'distribuido'
+  | 'nao_distribuido'
+
+export interface ItemCardapioRefeicao {
+  id: string
+  codigo: string
+  nome: string
+  descricao?: string
+  horario_padrao: string
+  ordem_dia: number
+  ativo: boolean
+  versao: number
+  motivo_inativacao?: string
+  autor_id?: string
+  autor_nome?: string
+  created: string
+  updated: string
+}
+
+export interface DietaCatalogoSND {
+  id: string
+  codigo: string
+  nome: string
+  categoria: CategoriaDietaSND
+  consistencia?: string
+  composicao_descricao?: string
+  indicacao_padrao?: string
+  refeicoes_permitidas?: string[]
+  ativo: boolean
+  versao: number
+  versao_anterior_id?: string
+  motivo_alteracao?: string
+  autor_id?: string
+  autor_nome?: string
+  created: string
+  updated: string
+}
+
+export interface PrescricaoDieteticaSND {
+  id: string
+  paciente_ref: string
+  internacao_ref?: string
+  atendimento_pa_ref?: string
+  leito_ref?: string
+  setor_ref?: string
+  dieta_catalogo_ref: string
+  dieta_codigo_snapshot: string
+  dieta_nome_snapshot: string
+  dieta_versao_snapshot: number
+  categoria_dieta: CategoriaDietaSND
+  consistencia?: string
+  via_administracao?: string
+  quantidade?: number
+  unidade_medida?: string
+  fracionamento?: string
+  horarios_refeicoes?: Array<{ refeicao_codigo: string; horario: string }>
+  vigencia_inicio: string
+  vigencia_fim?: string
+  status: StatusPrescricaoDietetica
+  restricoes_alimentares?: string
+  alergias_verificadas?: string
+  observacoes_profissionais?: string
+  diagnostico_justificativa_clinica?: string // RESTRITO: mascarado para cozinha
+  versao_numero: number
+  prescricao_anterior_ref?: string
+  motivo_alteracao_suspensao?: string
+  prescritor_id: string
+  prescritor_nome: string
+  prescritor_perfil: string
+  prescritor_conselho?: string
+  data_hora_prescricao_utc: string
+  idempotency_key?: string
+  hash_payload?: string
+  expand?: {
+    paciente_ref?: Paciente
+    internacao_ref?: Internacao
+    leito_ref?: Leito
+    setor_ref?: Setor
+    dieta_catalogo_ref?: DietaCatalogoSND
+  }
+  created: string
+  updated: string
+}
+
+export interface DistribuicaoRefeicaoSND {
+  id: string
+  prescricao_dietetica_ref: string
+  paciente_ref: string
+  leito_ref?: string
+  setor_ref?: string
+  refeicao_codigo: string
+  data_operacional: string
+  horario_previsto?: string
+  status_operacional: StatusDistribuicaoRefeicao
+  motivo_nao_distribuido?: string
+  observacoes_operacionais?: string
+  temperatura_afericao?: string
+  responsavel_entrega_nome?: string
+  data_hora_registro_utc: string
+  autor_id: string
+  autor_nome: string
+  autor_perfil: string
+  idempotency_key?: string
+  hash_payload?: string
+  created: string
+  updated: string
+}
+
+/**
+ * Projeção Operacional Sanitizada para a Cozinha / Copa (LGPD e Sigilo Clínico):
+ * Sem CID, sem diagnóstico detalhado, sem prontuário clínico nem justificativa assistencial restrita.
+ */
+export interface ItemMapaCozinhaSanitizado {
+  prescricao_id: string
+  paciente_id: string
+  paciente_nome: string
+  leito_id?: string
+  leito_codigo?: string
+  setor_id?: string
+  setor_nome?: string
+  dieta_codigo: string
+  dieta_nome: string
+  dieta_versao: number
+  categoria_dieta: CategoriaDietaSND
+  consistencia?: string
+  via_administracao?: string
+  quantidade?: number
+  unidade_medida?: string
+  fracionamento?: string
+  restricoes_alimentares?: string
+  alergias_alimentares?: string
+  observacoes_operacionais?: string
+}
+
 // ----------------------------------------------------------------------------
 // MÓDULO RIS (Radiologia e Diagnóstico por Imagem)
 // Conforme DOC-02 Seção 7.4.3.4.a.i-iv e c.ii, e itens 313-316 do ANEXO I
